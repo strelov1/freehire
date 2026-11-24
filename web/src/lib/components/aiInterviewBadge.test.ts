@@ -59,7 +59,7 @@ describe('AIInterviewBadge', () => {
 // Nothing about the badge itself can catch that, which is why it is pinned here.
 describe('JobRow signal row', () => {
   const ROW = readFileSync(join(process.cwd(), 'src/lib/components/JobRow.svelte'), 'utf8');
-  const GUARD = ROW.split('\n').find((line) => line.includes('{#if reality ||')) ?? '';
+  const GUARD = ROW.split('\n').find((line) => line.includes('{#if sponsoredUrl || reality ||')) ?? '';
 
   it('lists the AI-interview count among the conditions that open it', () => {
     expect(GUARD).not.toBe('');

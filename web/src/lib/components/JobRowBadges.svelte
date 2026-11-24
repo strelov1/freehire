@@ -7,12 +7,14 @@
   import DirectApplyBadge from './DirectApplyBadge.svelte';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
+  import SponsoredBadge from './SponsoredBadge.svelte';
 
   // The signals at the head of a job card's badge row: on-site application, the reader's
   // earlier application to the employer, the posting's reality (or the ghost verdict that
   // supersedes it), AI-interview reports and freshness.
   let {
     job,
+    sponsored = false,
     directApply,
     appliedToCompany,
     ghost,
@@ -20,6 +22,7 @@
     freshness,
   }: {
     job: Job | JobCard;
+    sponsored?: boolean;
     directApply: boolean;
     appliedToCompany: boolean;
     ghost: Job['ghost'] | undefined;
@@ -31,6 +34,9 @@
 <!-- evergreen_posting IS the reality verdict, so showing both chips states one
    fact twice, the second time louder. The ghost chip carries it inside its
    checklist; where ghost is silent, reality renders exactly as before. -->
+{#if sponsored}
+  <SponsoredBadge />
+{/if}
 {#if directApply}
   <DirectApplyBadge />
 {/if}

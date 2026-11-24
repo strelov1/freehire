@@ -164,6 +164,7 @@ func Register(app *fiber.App, cfg Config) {
 	planH := newPlanHandlers(plans, queries)
 	catalogueH := newCatalogueHandlers(queries, cfg.Export)
 	billingSvc := billing.New(cfg.Billing, queries)
+	sponsoredH := wireSponsored(cfg.Pool, queries, billingSvc)
 	// The store provider reads its own environment: it is enabled and credentialed
 	// independently of Stripe.
 	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)
@@ -251,6 +252,7 @@ func Register(app *fiber.App, cfg Config) {
 	searchH.seen = tracking
 	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
 	searchH.removals = queries
+	searchH.enableSponsored(cfg, queries)
 	timelineH := newTimelineHandlers(queries)
 	feedH := newFeedHandlers(cfg.MeFeedEnabled, jobSearch, profileSvc, tracking, plans, cvStore, feedStateDB{q: queries}, cfg.TypesafeAPIKey, cfg.Cache, []byte(cfg.JWTSecret))
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
@@ -383,6 +385,7 @@ func Register(app *fiber.App, cfg Config) {
 		employerHandlers:             employerH,
 		referralHandlers:             referralsH,
 		billingHandlers:              billingH,
+		sponsoredHandlers:            sponsoredH,
 		planHandlers:                 planH,
 		catalogueHandlers:            catalogueH,
 		directApplyHandlers:          directApplyH,

@@ -152,6 +152,17 @@ for the ingest-time coverage gate and was dropped when that gate moved to Postgr
 stops asking for it first, and the live index keeps a harmless declaration until the next
 rebuild. Only a binary that asks for an attribute the live index has not declared breaks.
 
+### Sponsored fields
+
+`sponsored` (filterable, true-or-absent) and `sponsored_cpc` (sortable, cents) are written by
+the drain and `cmd/reindex` from `ListServingSponsoredCampaigns`: a campaign that is active,
+has budget left and has not reached today's daily cap (UTC). Both must be live BEFORE a binary
+that asks for them; unlike a feed filter, the failure here is harmless, because the sponsored
+lookup is a second query whose error is logged and dropped (`internal/api/handler/search_sponsored.go`).
+A cap resets at UTC midnight, so `cmd/billing-sync` requeues capped campaigns' jobs in the
+first hours of each day. The served flag `jobview.Job.Sponsored` is distinct from the document
+field of the same JSON key and is set only on a hit the handler places as an ad.
+
 ## Adding a sortable attribute
 
 Same window, same rule, one worse detail. Meili answers `invalid_search_sort`, which the

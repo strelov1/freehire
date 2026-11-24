@@ -16,6 +16,7 @@ Base URL: `https://freehire.me/api/v1`
 - [What is not here](#what-is-not-here)
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [Filtering jobs](#filtering-jobs)
+- [Sponsored](#sponsored)
 - [Booking links](#booking-links)
 - [Jobs](#jobs)
 - [Company feedback](#company-feedback)
@@ -340,6 +341,193 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **Jobs stating Secret or Top Secret clearance** — `clearance_levels=secret,top_secret`
 
 - **Only jobs that need a security clearance** — `requires_clearance=true`
+
+## Sponsored
+
+### `GET /sponsored/campaigns`
+
+**Auth:** Session only
+
+List your sponsored campaigns.
+
+The caller's campaigns, newest first.
+
+```bash
+curl "https://freehire.me/api/v1/sponsored/campaigns" -b cookies.txt
+```
+
+### `POST /sponsored/campaigns`
+
+**Auth:** Session only
+
+Create a sponsored campaign.
+
+Opens a draft campaign for an open, public job. 422 for a cost per click under the
+minimum (`SPONSORED_MIN_CPC_CENTS`, 10 by default), a daily cap under the click cost, or a
+job that is closed, private or unknown.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `job_slug` | string | no | The job's public slug (the one in its page URL). |
+| `cpc_cents` | integer (int64) | no |  |
+| `daily_cap_cents` | integer (int64) | no | Optional; at least `cpc_cents` when set. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/campaigns" -b cookies.txt
+```
+
+### `GET /sponsored/campaigns/{id}`
+
+**Auth:** Session only
+
+Read a sponsored campaign and its stats.
+
+One of the caller's campaigns with its delivery and spend. Another user's id answers 404.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl "https://freehire.me/api/v1/sponsored/campaigns/<id>" -b cookies.txt
+```
+
+### `POST /sponsored/campaigns/{id}/end`
+
+**Auth:** Session only
+
+End a sponsored campaign.
+
+Ends the campaign for good; unused budget stays recorded. 409 when it is already over.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/campaigns/<id>/end" -b cookies.txt
+```
+
+### `POST /sponsored/campaigns/{id}/pause`
+
+**Auth:** Session only
+
+Pause a sponsored campaign.
+
+`active` to `paused`. 409 when the campaign is in another state.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/campaigns/<id>/pause" -b cookies.txt
+```
+
+### `POST /sponsored/campaigns/{id}/resume`
+
+**Auth:** Session only
+
+Resume a sponsored campaign.
+
+`paused` to `active`. 409 when the campaign is in another state.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/campaigns/<id>/resume" -b cookies.txt
+```
+
+### `POST /sponsored/campaigns/{id}/topup`
+
+**Auth:** Session only
+
+Start a sponsored campaign top-up.
+
+Returns a Stripe Checkout URL that pays `amount_cents` into the campaign. 422 under the
+minimum top-up, 409 for a rejected or ended campaign, 404 when payments are not configured.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `amount_cents` | integer (int64) | no |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/campaigns/<id>/topup" -b cookies.txt
+```
+
+### `GET /sponsored/review`
+
+**Auth:** Moderator
+
+List sponsored campaigns waiting for review.
+
+Moderators only, oldest first.
+
+```bash
+curl "https://freehire.me/api/v1/sponsored/review" -b cookies.txt
+```
+
+### `POST /sponsored/review/{id}/approve`
+
+**Auth:** Moderator
+
+Approve a sponsored campaign.
+
+Moderators only. 409 when the campaign is not in review.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/review/<id>/approve" -b cookies.txt
+```
+
+### `POST /sponsored/review/{id}/reject`
+
+**Auth:** Moderator
+
+Reject a sponsored campaign.
+
+Moderators only. Refunds what was paid; answers 200 with `refund_pending` when the refund is still to retry.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `reason` | string | no | Required and non-empty; shown to the buyer. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/sponsored/review/<id>/reject" -b cookies.txt
+```
 
 ## Booking links
 

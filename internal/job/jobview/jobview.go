@@ -124,10 +124,16 @@ type Job struct {
 	// nil and omitted when no form was captured (most postings). 0 is a real answer and is
 	// serialized; the two must never read alike. Not set by FromRow, which sees only the
 	// jobs row: the search-index writers and the detail endpoint attach it from apply_forms.
-	ApplyQuestions *int    `json:"apply_questions,omitempty"`
-	PostedAt       *string `json:"posted_at"`
-	CreatedAt      *string `json:"created_at"`
-	UpdatedAt      *string `json:"updated_at"`
+	ApplyQuestions *int `json:"apply_questions,omitempty"`
+	// Sponsored marks a search hit placed as a paid slot (never an organic one), and
+	// SponsoredURL is the click-tracking redirect the "Sponsored" card must link to
+	// (/api/v1/sponsored/go/<token>); URL stays the organic link for crawlers. Both are set
+	// by the search handler only, never by FromRow or the index.
+	Sponsored    bool    `json:"sponsored,omitempty"`
+	SponsoredURL string  `json:"sponsored_url,omitempty"`
+	PostedAt     *string `json:"posted_at"`
+	CreatedAt    *string `json:"created_at"`
+	UpdatedAt    *string `json:"updated_at"`
 	// LastSeenAt is when a re-crawl last confirmed the posting live (see
 	// docs/agents/job-lifecycle.md). The SPA uses it to estimate a rolling
 	// JobPosting.validThrough (seo.ts) for sources with no expiry date.

@@ -39,3 +39,6 @@ func isBot(ua string) bool {
 	}
 	return strings.HasSuffix(lower, "bot")
 }
+
+// IsBot is isBot for callers outside the package (the sponsored click filter).
+func IsBot(ua string) bool { return isBot(ua) }

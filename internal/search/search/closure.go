@@ -46,25 +46,28 @@ func (c *Client) markJobs(ctx context.Context, ids []int64, marker string) error
 	return c.awaitTask(ctx, c.facet, task.TaskUID)
 }
 
-// withOpenJobs adds the open-jobs predicate without changing the caller's AND/OR groups
+// withOpenJobs adds the open-jobs predicate to filter; see AndFragment.
+func withOpenJobs(filter any) any { return AndFragment(filter, openJobsFilter) }
+
+// AndFragment ANDs a filter fragment onto filter without changing the caller's AND/OR groups
 // or mutating a filter shared by concurrent requests.
-func withOpenJobs(filter any) any {
+func AndFragment(filter any, frag string) any {
 	switch f := filter.(type) {
 	case nil:
-		return openJobsFilter
+		return frag
 	case string:
 		if f == "" {
-			return openJobsFilter
+			return frag
 		}
-		return "(" + f + ") AND " + openJobsFilter
+		return "(" + f + ") AND " + frag
 	case [][]string:
-		return append(slices.Clone(f), []string{openJobsFilter})
+		return append(slices.Clone(f), []string{frag})
 	case []string:
-		return append(slices.Clone(f), openJobsFilter)
+		return append(slices.Clone(f), frag)
 	case []any:
-		return append(slices.Clone(f), openJobsFilter)
+		return append(slices.Clone(f), frag)
 	default:
 		// Keep an unsupported shape so the engine rejects it instead of dropping constraints.
-		return []any{filter, openJobsFilter}
+		return []any{filter, frag}
 	}
 }

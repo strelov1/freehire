@@ -40,19 +40,23 @@ type Config struct {
 	// SiteURL is where a customer returns after paying or managing their subscription (read
 	// from FRONTEND_ORIGIN). Empty disables checkout.
 	SiteURL string
+	// SponsoredMinTopupCents is the smallest sponsored top-up sold (SPONSORED_MIN_TOPUP_CENTS);
+	// zero means the default, 2900.
+	SponsoredMinTopupCents int64
 }
 
 // ConfigFromEnv reads the configuration. It never fails: absent credentials mean billing is
 // switched off.
 func ConfigFromEnv() Config {
 	return Config{
-		APIKey:        strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
-		WebhookSecret: strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
-		Prices:        priceList(os.Getenv("STRIPE_PRICE_IDS")),
-		UltraPrices:   priceList(os.Getenv("STRIPE_ULTRA_PRICE_IDS")),
-		APIPrices:     priceList(os.Getenv("STRIPE_API_PRICE_IDS")),
-		APIDataPrices: priceList(os.Getenv("STRIPE_API_DATA_PRICE_IDS")),
-		SiteURL:       strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN")), "/"),
+		APIKey:                 strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY")),
+		WebhookSecret:          strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
+		Prices:                 priceList(os.Getenv("STRIPE_PRICE_IDS")),
+		UltraPrices:            priceList(os.Getenv("STRIPE_ULTRA_PRICE_IDS")),
+		APIPrices:              priceList(os.Getenv("STRIPE_API_PRICE_IDS")),
+		APIDataPrices:          priceList(os.Getenv("STRIPE_API_DATA_PRICE_IDS")),
+		SiteURL:                strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN")), "/"),
+		SponsoredMinTopupCents: sponsoredMinTopupFromEnv(),
 	}
 }
 

@@ -112,6 +112,8 @@ export const accountNav = [
   // Open to every signed-in user — the claim step is what gates real access, not the nav.
   { href: '/my/employer', label: 'Company profile', workspace: 'employer', group: 'main' },
   { href: '/my/employer/vacancies', label: 'Vacancies', workspace: 'employer', group: 'main' },
+  // Paid campaigns that promote the member's jobs in search (pay per click).
+  { href: '/my/sponsored', label: 'Sponsored jobs', workspace: 'employer', group: 'main' },
   // The plan's daily allowances and what they were spent on (analyses, CV editing,
   // contribution rewards), plus a tab with the account's own invite link and what it has
   // earned. The tab is named "Invite" and not "Referrals" because that word is taken above

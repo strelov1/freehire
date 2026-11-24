@@ -210,7 +210,7 @@ func run() int {
 	}
 	log.Printf("reindex: target=facet scope=full mode=swap facetd=%t facetd_only=%t", facetdURL != "", *facetdOnly)
 	done = worker.Stage("index and swap")
-	indexed, skipped, err := reindexFull(ctx, reader, rb, lookup, geo, q, time.Now())
+	indexed, skipped, err := reindexFull(ctx, reader, rb, lookup, geo, q, q, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -225,7 +225,7 @@ func run() int {
 		// Meilisearch is done: the drain need not wait out facetd's second pass.
 		releaseDrain()
 		retry := func(ctx context.Context, b rebuilder) error {
-			_, _, err := reindexFull(ctx, reader, b, lookup, geo, q, time.Now())
+			_, _, err := reindexFull(ctx, reader, b, lookup, geo, q, q, time.Now())
 			return err
 		}
 		if !retryFacetd(ctx, t, retry) {
@@ -325,7 +325,7 @@ type rebuilder interface {
 // reindexFull rebuilds the index from scratch and swaps it in. It streams ONLY open jobs into the fresh index;
 // closed jobs are simply absent. fetch pages by keyset (id > last seen) so rows inserted or re-ordered
 // during the run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, sponsored search.ServingReader, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -345,7 +345,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		}
 	}()
 
-	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, forms, now, b.Push)
+	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, forms, sponsored, now, b.Push)
 	if err != nil {
 		return indexed, skipped, err
 	}
@@ -361,8 +361,8 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // returning the running indexed/skipped totals.
 //
 // forms supplies each batch's application-form question counts in one query per batch;
-// nil writes none.
-func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
+// nil writes none. sponsored supplies each batch's serving campaigns the same way.
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, forms applyform.FormLister, sponsored search.ServingReader, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -389,8 +389,13 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 			if err != nil {
 				return int(indexed.Load()), skipped, err
 			}
+			serving, err := search.ServingCampaigns(ctx, sponsored, pageIDs(jobs), now)
+			if err != nil {
+				return int(indexed.Load()), skipped, err
+			}
 			for i := range docs {
 				docs[i].AttachApplyQuestions(questions)
+				docs[i].AttachSponsored(serving)
 			}
 			if err := push(ctx, docs); err != nil {
 				return int(indexed.Load()), skipped, err

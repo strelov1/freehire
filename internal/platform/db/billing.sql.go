@@ -137,7 +137,7 @@ func (q *Queries) ListSubscribersNearProExpiryRevenueCat(ctx context.Context, ar
 }
 
 const listUnprocessedBillingEvents = `-- name: ListUnprocessedBillingEvents :many
-SELECT id, provider, event_id, app_user_id, user_id, event_type, received_at
+SELECT id, provider, event_id, app_user_id, user_id, event_type, payload, received_at
 FROM billing_events
 WHERE processed_at IS NULL
   AND provider = $1::text
@@ -157,6 +157,7 @@ type ListUnprocessedBillingEventsRow struct {
 	AppUserID  string             `json:"app_user_id"`
 	UserID     pgtype.Int8        `json:"user_id"`
 	EventType  string             `json:"event_type"`
+	Payload    []byte             `json:"payload"`
 	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
@@ -189,6 +190,7 @@ func (q *Queries) ListUnprocessedBillingEvents(ctx context.Context, arg ListUnpr
 			&i.AppUserID,
 			&i.UserID,
 			&i.EventType,
+			&i.Payload,
 			&i.ReceivedAt,
 		); err != nil {
 			return nil, err

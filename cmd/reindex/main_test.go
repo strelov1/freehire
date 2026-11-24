@@ -275,7 +275,7 @@ func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: page}}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, nil, time.Now())
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestReindexFull_CleansUpOnAbort(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}}}}
 	f := &fakeRebuilder{pushErr: errors.New("push boom")}
 
-	_, _, err := reindexFull(context.Background(), reader, f, nil, nil, nil, time.Now())
+	_, _, err := reindexFull(context.Background(), reader, f, nil, nil, nil, nil, time.Now())
 	if err == nil {
 		t.Fatal("expected reindexFull to return the push error")
 	}
@@ -319,7 +319,7 @@ func TestReindexFull_NoCleanupOnSuccess(t *testing.T) {
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}}}}
 	f := &fakeRebuilder{}
 
-	if _, _, err := reindexFull(context.Background(), reader, f, nil, nil, nil, time.Now()); err != nil {
+	if _, _, err := reindexFull(context.Background(), reader, f, nil, nil, nil, nil, time.Now()); err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}
 	if slices.Contains(f.calls, "cleanup") {
@@ -342,7 +342,7 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 	}
 
 	f := &fakeRebuilder{}
-	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, nil, time.Now())
+	indexed, skipped, err := reindexFull(context.Background(), reader, f, nil, nil, nil, nil, time.Now())
 	if err != nil {
 		t.Fatalf("reindexFull: %v", err)
 	}

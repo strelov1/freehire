@@ -1123,6 +1123,47 @@ func (s *ApproveEmployerClaimOK) SetData(val EmployerAccount) {
 }
 
 // A single item: `{"data": ...}`.
+type ApproveSponsoredCampaignOK struct {
+	Data SponsoredApproval `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ApproveSponsoredCampaignOK) GetData() SponsoredApproval {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ApproveSponsoredCampaignOK) SetData(val SponsoredApproval) {
+	s.Data = val
+}
+
+// ApproveSponsoredCampaignOKHeaders wraps ApproveSponsoredCampaignOK with response headers.
+type ApproveSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     ApproveSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *ApproveSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *ApproveSponsoredCampaignOKHeaders) GetResponse() ApproveSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *ApproveSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *ApproveSponsoredCampaignOKHeaders) SetResponse(val ApproveSponsoredCampaignOK) {
+	s.Response = val
+}
+
+// A single item: `{"data": ...}`.
 type ApproveSubmissionOK struct {
 	Data Submission `json:"data"`
 }
@@ -7760,6 +7801,47 @@ func (s *CreateSavedSearchCreated) SetData(val SavedSearch) {
 }
 
 // A single item: `{"data": ...}`.
+type CreateSponsoredCampaignCreated struct {
+	Data SponsoredCampaign `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *CreateSponsoredCampaignCreated) GetData() SponsoredCampaign {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *CreateSponsoredCampaignCreated) SetData(val SponsoredCampaign) {
+	s.Data = val
+}
+
+// CreateSponsoredCampaignCreatedHeaders wraps CreateSponsoredCampaignCreated with response headers.
+type CreateSponsoredCampaignCreatedHeaders struct {
+	CacheControl string
+	Response     CreateSponsoredCampaignCreated
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *CreateSponsoredCampaignCreatedHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *CreateSponsoredCampaignCreatedHeaders) GetResponse() CreateSponsoredCampaignCreated {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *CreateSponsoredCampaignCreatedHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *CreateSponsoredCampaignCreatedHeaders) SetResponse(val CreateSponsoredCampaignCreated) {
+	s.Response = val
+}
+
+// A single item: `{"data": ...}`.
 type CreateSubmissionCreated struct {
 	Data Submission `json:"data"`
 }
@@ -12049,6 +12131,47 @@ func (s *EnableBookingLinkCreated) SetData(val BookingLinkOut) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type EndSponsoredCampaignOK struct {
+	Data SponsoredCampaign `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *EndSponsoredCampaignOK) GetData() SponsoredCampaign {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *EndSponsoredCampaignOK) SetData(val SponsoredCampaign) {
+	s.Data = val
+}
+
+// EndSponsoredCampaignOKHeaders wraps EndSponsoredCampaignOK with response headers.
+type EndSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     EndSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *EndSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *EndSponsoredCampaignOKHeaders) GetResponse() EndSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *EndSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *EndSponsoredCampaignOKHeaders) SetResponse(val EndSponsoredCampaignOK) {
+	s.Response = val
+}
+
 // Ref: #/components/schemas/Engagement
 type Engagement struct {
 	Saved   int64 `json:"saved"`
@@ -13823,6 +13946,47 @@ func (s *GetSessionOK) GetData() MentorshipBooking {
 // SetData sets the value of Data.
 func (s *GetSessionOK) SetData(val MentorshipBooking) {
 	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetSponsoredCampaignOK struct {
+	Data SponsoredCampaignDetail `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetSponsoredCampaignOK) GetData() SponsoredCampaignDetail {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetSponsoredCampaignOK) SetData(val SponsoredCampaignDetail) {
+	s.Data = val
+}
+
+// GetSponsoredCampaignOKHeaders wraps GetSponsoredCampaignOK with response headers.
+type GetSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     GetSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *GetSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *GetSponsoredCampaignOKHeaders) GetResponse() GetSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *GetSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *GetSponsoredCampaignOKHeaders) SetResponse(val GetSponsoredCampaignOK) {
+	s.Response = val
 }
 
 // A single item: `{"data": ...}`.
@@ -17683,6 +17847,88 @@ func (s *ListSourcesOK) GetData() []SourceEntry {
 // SetData sets the value of Data.
 func (s *ListSourcesOK) SetData(val []SourceEntry) {
 	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type ListSponsoredCampaignsOK struct {
+	Data []SponsoredCampaign `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListSponsoredCampaignsOK) GetData() []SponsoredCampaign {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListSponsoredCampaignsOK) SetData(val []SponsoredCampaign) {
+	s.Data = val
+}
+
+// ListSponsoredCampaignsOKHeaders wraps ListSponsoredCampaignsOK with response headers.
+type ListSponsoredCampaignsOKHeaders struct {
+	CacheControl string
+	Response     ListSponsoredCampaignsOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *ListSponsoredCampaignsOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *ListSponsoredCampaignsOKHeaders) GetResponse() ListSponsoredCampaignsOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *ListSponsoredCampaignsOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *ListSponsoredCampaignsOKHeaders) SetResponse(val ListSponsoredCampaignsOK) {
+	s.Response = val
+}
+
+// A single item: `{"data": ...}`.
+type ListSponsoredReviewOK struct {
+	Data []SponsoredReviewItem `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ListSponsoredReviewOK) GetData() []SponsoredReviewItem {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ListSponsoredReviewOK) SetData(val []SponsoredReviewItem) {
+	s.Data = val
+}
+
+// ListSponsoredReviewOKHeaders wraps ListSponsoredReviewOK with response headers.
+type ListSponsoredReviewOKHeaders struct {
+	CacheControl string
+	Response     ListSponsoredReviewOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *ListSponsoredReviewOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *ListSponsoredReviewOKHeaders) GetResponse() ListSponsoredReviewOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *ListSponsoredReviewOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *ListSponsoredReviewOKHeaders) SetResponse(val ListSponsoredReviewOK) {
+	s.Response = val
 }
 
 // A list: `{"data": [...], "meta": {...}}`.
@@ -23294,6 +23540,47 @@ func (s *PauseMentorProfileOK) SetData(val MentorshipOwnMentor) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type PauseSponsoredCampaignOK struct {
+	Data SponsoredCampaign `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PauseSponsoredCampaignOK) GetData() SponsoredCampaign {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PauseSponsoredCampaignOK) SetData(val SponsoredCampaign) {
+	s.Data = val
+}
+
+// PauseSponsoredCampaignOKHeaders wraps PauseSponsoredCampaignOK with response headers.
+type PauseSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     PauseSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *PauseSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *PauseSponsoredCampaignOKHeaders) GetResponse() PauseSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *PauseSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *PauseSponsoredCampaignOKHeaders) SetResponse(val PauseSponsoredCampaignOK) {
+	s.Response = val
+}
+
 // Ref: #/components/schemas/PendingCompanyRelation
 type PendingCompanyRelation struct {
 	ID              int64                        `json:"id"`
@@ -26123,6 +26410,47 @@ func (s *RejectEmployerClaimOK) SetData(val EmployerRejected) {
 }
 
 // A single item: `{"data": ...}`.
+type RejectSponsoredCampaignOK struct {
+	Data SponsoredRejection `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *RejectSponsoredCampaignOK) GetData() SponsoredRejection {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *RejectSponsoredCampaignOK) SetData(val SponsoredRejection) {
+	s.Data = val
+}
+
+// RejectSponsoredCampaignOKHeaders wraps RejectSponsoredCampaignOK with response headers.
+type RejectSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     RejectSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *RejectSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *RejectSponsoredCampaignOKHeaders) GetResponse() RejectSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *RejectSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *RejectSponsoredCampaignOKHeaders) SetResponse(val RejectSponsoredCampaignOK) {
+	s.Response = val
+}
+
+// A single item: `{"data": ...}`.
 type RejectSubmissionOK struct {
 	Data Submission `json:"data"`
 }
@@ -26912,6 +27240,47 @@ func (s *ResumeReviewRequirement) SetText(val string) {
 // SetPriority sets the value of Priority.
 func (s *ResumeReviewRequirement) SetPriority(val string) {
 	s.Priority = val
+}
+
+// A single item: `{"data": ...}`.
+type ResumeSponsoredCampaignOK struct {
+	Data SponsoredCampaign `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *ResumeSponsoredCampaignOK) GetData() SponsoredCampaign {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *ResumeSponsoredCampaignOK) SetData(val SponsoredCampaign) {
+	s.Data = val
+}
+
+// ResumeSponsoredCampaignOKHeaders wraps ResumeSponsoredCampaignOK with response headers.
+type ResumeSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     ResumeSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *ResumeSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *ResumeSponsoredCampaignOKHeaders) GetResponse() ResumeSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *ResumeSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *ResumeSponsoredCampaignOKHeaders) SetResponse(val ResumeSponsoredCampaignOK) {
+	s.Response = val
 }
 
 // RetractGhostReportNoContent is response for RetractGhostReport operation.
@@ -29178,6 +29547,499 @@ func (s *SourceJobs) SetAtsUnmatched(val OptInt64) {
 // SetMeasuredAt sets the value of MeasuredAt.
 func (s *SourceJobs) SetMeasuredAt(val string) {
 	s.MeasuredAt = val
+}
+
+// Ref: #/components/schemas/SponsoredApproval
+type SponsoredApproval struct {
+	Approved bool `json:"approved"`
+}
+
+// GetApproved returns the value of Approved.
+func (s *SponsoredApproval) GetApproved() bool {
+	return s.Approved
+}
+
+// SetApproved sets the value of Approved.
+func (s *SponsoredApproval) SetApproved(val bool) {
+	s.Approved = val
+}
+
+// `draft`, `pending_payment`, `pending_review`, `active`, `paused`, `exhausted`, `rejected` or
+// `ended`.
+// Ref: #/components/schemas/SponsoredCampaign
+type SponsoredCampaign struct {
+	ID         int64  `json:"id"`
+	Status     string `json:"status"`
+	JobSlug    string `json:"job_slug"`
+	JobTitle   string `json:"job_title"`
+	JobCompany string `json:"job_company"`
+	CpcCents   int64  `json:"cpc_cents"`
+	// Absent when there is no daily cap.
+	DailyCapCents OptInt64 `json:"daily_cap_cents"`
+	// Paid in so far.
+	BudgetCents    int64 `json:"budget_cents"`
+	SpentCents     int64 `json:"spent_cents"`
+	RemainingCents int64 `json:"remaining_cents"`
+	// Set only on a rejected campaign.
+	RejectReason OptString `json:"reject_reason"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *SponsoredCampaign) GetID() int64 {
+	return s.ID
+}
+
+// GetStatus returns the value of Status.
+func (s *SponsoredCampaign) GetStatus() string {
+	return s.Status
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *SponsoredCampaign) GetJobSlug() string {
+	return s.JobSlug
+}
+
+// GetJobTitle returns the value of JobTitle.
+func (s *SponsoredCampaign) GetJobTitle() string {
+	return s.JobTitle
+}
+
+// GetJobCompany returns the value of JobCompany.
+func (s *SponsoredCampaign) GetJobCompany() string {
+	return s.JobCompany
+}
+
+// GetCpcCents returns the value of CpcCents.
+func (s *SponsoredCampaign) GetCpcCents() int64 {
+	return s.CpcCents
+}
+
+// GetDailyCapCents returns the value of DailyCapCents.
+func (s *SponsoredCampaign) GetDailyCapCents() OptInt64 {
+	return s.DailyCapCents
+}
+
+// GetBudgetCents returns the value of BudgetCents.
+func (s *SponsoredCampaign) GetBudgetCents() int64 {
+	return s.BudgetCents
+}
+
+// GetSpentCents returns the value of SpentCents.
+func (s *SponsoredCampaign) GetSpentCents() int64 {
+	return s.SpentCents
+}
+
+// GetRemainingCents returns the value of RemainingCents.
+func (s *SponsoredCampaign) GetRemainingCents() int64 {
+	return s.RemainingCents
+}
+
+// GetRejectReason returns the value of RejectReason.
+func (s *SponsoredCampaign) GetRejectReason() OptString {
+	return s.RejectReason
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *SponsoredCampaign) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *SponsoredCampaign) SetID(val int64) {
+	s.ID = val
+}
+
+// SetStatus sets the value of Status.
+func (s *SponsoredCampaign) SetStatus(val string) {
+	s.Status = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *SponsoredCampaign) SetJobSlug(val string) {
+	s.JobSlug = val
+}
+
+// SetJobTitle sets the value of JobTitle.
+func (s *SponsoredCampaign) SetJobTitle(val string) {
+	s.JobTitle = val
+}
+
+// SetJobCompany sets the value of JobCompany.
+func (s *SponsoredCampaign) SetJobCompany(val string) {
+	s.JobCompany = val
+}
+
+// SetCpcCents sets the value of CpcCents.
+func (s *SponsoredCampaign) SetCpcCents(val int64) {
+	s.CpcCents = val
+}
+
+// SetDailyCapCents sets the value of DailyCapCents.
+func (s *SponsoredCampaign) SetDailyCapCents(val OptInt64) {
+	s.DailyCapCents = val
+}
+
+// SetBudgetCents sets the value of BudgetCents.
+func (s *SponsoredCampaign) SetBudgetCents(val int64) {
+	s.BudgetCents = val
+}
+
+// SetSpentCents sets the value of SpentCents.
+func (s *SponsoredCampaign) SetSpentCents(val int64) {
+	s.SpentCents = val
+}
+
+// SetRemainingCents sets the value of RemainingCents.
+func (s *SponsoredCampaign) SetRemainingCents(val int64) {
+	s.RemainingCents = val
+}
+
+// SetRejectReason sets the value of RejectReason.
+func (s *SponsoredCampaign) SetRejectReason(val OptString) {
+	s.RejectReason = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *SponsoredCampaign) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/SponsoredCampaignDetail
+type SponsoredCampaignDetail struct {
+	Campaign SponsoredCampaign `json:"campaign"`
+	// The last 30 days that have any activity, oldest first.
+	Days []SponsoredDayStat `json:"days"`
+	// Clicks that were not charged in the last 30 days, grouped by why.
+	InvalidClicksByReason []SponsoredInvalidReason `json:"invalid_clicks_by_reason"`
+}
+
+// GetCampaign returns the value of Campaign.
+func (s *SponsoredCampaignDetail) GetCampaign() SponsoredCampaign {
+	return s.Campaign
+}
+
+// GetDays returns the value of Days.
+func (s *SponsoredCampaignDetail) GetDays() []SponsoredDayStat {
+	return s.Days
+}
+
+// GetInvalidClicksByReason returns the value of InvalidClicksByReason.
+func (s *SponsoredCampaignDetail) GetInvalidClicksByReason() []SponsoredInvalidReason {
+	return s.InvalidClicksByReason
+}
+
+// SetCampaign sets the value of Campaign.
+func (s *SponsoredCampaignDetail) SetCampaign(val SponsoredCampaign) {
+	s.Campaign = val
+}
+
+// SetDays sets the value of Days.
+func (s *SponsoredCampaignDetail) SetDays(val []SponsoredDayStat) {
+	s.Days = val
+}
+
+// SetInvalidClicksByReason sets the value of InvalidClicksByReason.
+func (s *SponsoredCampaignDetail) SetInvalidClicksByReason(val []SponsoredInvalidReason) {
+	s.InvalidClicksByReason = val
+}
+
+// Ref: #/components/schemas/SponsoredCampaignRequest
+type SponsoredCampaignRequest struct {
+	// The job's public slug (the one in its page URL).
+	JobSlug  OptString `json:"job_slug"`
+	CpcCents OptInt64  `json:"cpc_cents"`
+	// Optional; at least `cpc_cents` when set.
+	DailyCapCents OptInt64 `json:"daily_cap_cents"`
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *SponsoredCampaignRequest) GetJobSlug() OptString {
+	return s.JobSlug
+}
+
+// GetCpcCents returns the value of CpcCents.
+func (s *SponsoredCampaignRequest) GetCpcCents() OptInt64 {
+	return s.CpcCents
+}
+
+// GetDailyCapCents returns the value of DailyCapCents.
+func (s *SponsoredCampaignRequest) GetDailyCapCents() OptInt64 {
+	return s.DailyCapCents
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *SponsoredCampaignRequest) SetJobSlug(val OptString) {
+	s.JobSlug = val
+}
+
+// SetCpcCents sets the value of CpcCents.
+func (s *SponsoredCampaignRequest) SetCpcCents(val OptInt64) {
+	s.CpcCents = val
+}
+
+// SetDailyCapCents sets the value of DailyCapCents.
+func (s *SponsoredCampaignRequest) SetDailyCapCents(val OptInt64) {
+	s.DailyCapCents = val
+}
+
+// Ref: #/components/schemas/SponsoredDayStat
+type SponsoredDayStat struct {
+	Day           time.Time `json:"day"`
+	Impressions   int64     `json:"impressions"`
+	ValidClicks   int64     `json:"valid_clicks"`
+	InvalidClicks int64     `json:"invalid_clicks"`
+	SpentCents    int64     `json:"spent_cents"`
+}
+
+// GetDay returns the value of Day.
+func (s *SponsoredDayStat) GetDay() time.Time {
+	return s.Day
+}
+
+// GetImpressions returns the value of Impressions.
+func (s *SponsoredDayStat) GetImpressions() int64 {
+	return s.Impressions
+}
+
+// GetValidClicks returns the value of ValidClicks.
+func (s *SponsoredDayStat) GetValidClicks() int64 {
+	return s.ValidClicks
+}
+
+// GetInvalidClicks returns the value of InvalidClicks.
+func (s *SponsoredDayStat) GetInvalidClicks() int64 {
+	return s.InvalidClicks
+}
+
+// GetSpentCents returns the value of SpentCents.
+func (s *SponsoredDayStat) GetSpentCents() int64 {
+	return s.SpentCents
+}
+
+// SetDay sets the value of Day.
+func (s *SponsoredDayStat) SetDay(val time.Time) {
+	s.Day = val
+}
+
+// SetImpressions sets the value of Impressions.
+func (s *SponsoredDayStat) SetImpressions(val int64) {
+	s.Impressions = val
+}
+
+// SetValidClicks sets the value of ValidClicks.
+func (s *SponsoredDayStat) SetValidClicks(val int64) {
+	s.ValidClicks = val
+}
+
+// SetInvalidClicks sets the value of InvalidClicks.
+func (s *SponsoredDayStat) SetInvalidClicks(val int64) {
+	s.InvalidClicks = val
+}
+
+// SetSpentCents sets the value of SpentCents.
+func (s *SponsoredDayStat) SetSpentCents(val int64) {
+	s.SpentCents = val
+}
+
+// Ref: #/components/schemas/SponsoredInvalidReason
+type SponsoredInvalidReason struct {
+	// `bot`, `duplicate`, `rate`, `inactive` or `budget`.
+	Reason string `json:"reason"`
+	Clicks int64  `json:"clicks"`
+}
+
+// GetReason returns the value of Reason.
+func (s *SponsoredInvalidReason) GetReason() string {
+	return s.Reason
+}
+
+// GetClicks returns the value of Clicks.
+func (s *SponsoredInvalidReason) GetClicks() int64 {
+	return s.Clicks
+}
+
+// SetReason sets the value of Reason.
+func (s *SponsoredInvalidReason) SetReason(val string) {
+	s.Reason = val
+}
+
+// SetClicks sets the value of Clicks.
+func (s *SponsoredInvalidReason) SetClicks(val int64) {
+	s.Clicks = val
+}
+
+// Ref: #/components/schemas/SponsoredRejectRequest
+type SponsoredRejectRequest struct {
+	// Required and non-empty; shown to the buyer.
+	Reason OptString `json:"reason"`
+}
+
+// GetReason returns the value of Reason.
+func (s *SponsoredRejectRequest) GetReason() OptString {
+	return s.Reason
+}
+
+// SetReason sets the value of Reason.
+func (s *SponsoredRejectRequest) SetReason(val OptString) {
+	s.Reason = val
+}
+
+// Ref: #/components/schemas/SponsoredRejection
+type SponsoredRejection struct {
+	Rejected bool `json:"rejected"`
+	// True when the campaign is rejected but the refund did not finish; it is retried later.
+	RefundPending bool `json:"refund_pending"`
+}
+
+// GetRejected returns the value of Rejected.
+func (s *SponsoredRejection) GetRejected() bool {
+	return s.Rejected
+}
+
+// GetRefundPending returns the value of RefundPending.
+func (s *SponsoredRejection) GetRefundPending() bool {
+	return s.RefundPending
+}
+
+// SetRejected sets the value of Rejected.
+func (s *SponsoredRejection) SetRejected(val bool) {
+	s.Rejected = val
+}
+
+// SetRefundPending sets the value of RefundPending.
+func (s *SponsoredRejection) SetRefundPending(val bool) {
+	s.RefundPending = val
+}
+
+// Ref: #/components/schemas/SponsoredReviewItem
+type SponsoredReviewItem struct {
+	ID            int64    `json:"id"`
+	JobSlug       string   `json:"job_slug"`
+	JobTitle      string   `json:"job_title"`
+	JobCompany    string   `json:"job_company"`
+	JobURL        string   `json:"job_url"`
+	CpcCents      int64    `json:"cpc_cents"`
+	DailyCapCents OptInt64 `json:"daily_cap_cents"`
+	BudgetCents   int64    `json:"budget_cents"`
+	// The buyer's account id; no email is shown.
+	OwnerUserID int64     `json:"owner_user_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// GetID returns the value of ID.
+func (s *SponsoredReviewItem) GetID() int64 {
+	return s.ID
+}
+
+// GetJobSlug returns the value of JobSlug.
+func (s *SponsoredReviewItem) GetJobSlug() string {
+	return s.JobSlug
+}
+
+// GetJobTitle returns the value of JobTitle.
+func (s *SponsoredReviewItem) GetJobTitle() string {
+	return s.JobTitle
+}
+
+// GetJobCompany returns the value of JobCompany.
+func (s *SponsoredReviewItem) GetJobCompany() string {
+	return s.JobCompany
+}
+
+// GetJobURL returns the value of JobURL.
+func (s *SponsoredReviewItem) GetJobURL() string {
+	return s.JobURL
+}
+
+// GetCpcCents returns the value of CpcCents.
+func (s *SponsoredReviewItem) GetCpcCents() int64 {
+	return s.CpcCents
+}
+
+// GetDailyCapCents returns the value of DailyCapCents.
+func (s *SponsoredReviewItem) GetDailyCapCents() OptInt64 {
+	return s.DailyCapCents
+}
+
+// GetBudgetCents returns the value of BudgetCents.
+func (s *SponsoredReviewItem) GetBudgetCents() int64 {
+	return s.BudgetCents
+}
+
+// GetOwnerUserID returns the value of OwnerUserID.
+func (s *SponsoredReviewItem) GetOwnerUserID() int64 {
+	return s.OwnerUserID
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *SponsoredReviewItem) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// SetID sets the value of ID.
+func (s *SponsoredReviewItem) SetID(val int64) {
+	s.ID = val
+}
+
+// SetJobSlug sets the value of JobSlug.
+func (s *SponsoredReviewItem) SetJobSlug(val string) {
+	s.JobSlug = val
+}
+
+// SetJobTitle sets the value of JobTitle.
+func (s *SponsoredReviewItem) SetJobTitle(val string) {
+	s.JobTitle = val
+}
+
+// SetJobCompany sets the value of JobCompany.
+func (s *SponsoredReviewItem) SetJobCompany(val string) {
+	s.JobCompany = val
+}
+
+// SetJobURL sets the value of JobURL.
+func (s *SponsoredReviewItem) SetJobURL(val string) {
+	s.JobURL = val
+}
+
+// SetCpcCents sets the value of CpcCents.
+func (s *SponsoredReviewItem) SetCpcCents(val int64) {
+	s.CpcCents = val
+}
+
+// SetDailyCapCents sets the value of DailyCapCents.
+func (s *SponsoredReviewItem) SetDailyCapCents(val OptInt64) {
+	s.DailyCapCents = val
+}
+
+// SetBudgetCents sets the value of BudgetCents.
+func (s *SponsoredReviewItem) SetBudgetCents(val int64) {
+	s.BudgetCents = val
+}
+
+// SetOwnerUserID sets the value of OwnerUserID.
+func (s *SponsoredReviewItem) SetOwnerUserID(val int64) {
+	s.OwnerUserID = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *SponsoredReviewItem) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// Ref: #/components/schemas/SponsoredTopupRequest
+type SponsoredTopupRequest struct {
+	AmountCents OptInt64 `json:"amount_cents"`
+}
+
+// GetAmountCents returns the value of AmountCents.
+func (s *SponsoredTopupRequest) GetAmountCents() OptInt64 {
+	return s.AmountCents
+}
+
+// SetAmountCents sets the value of AmountCents.
+func (s *SponsoredTopupRequest) SetAmountCents(val OptInt64) {
+	s.AmountCents = val
 }
 
 // An offer to move the application to the stage its newest classified message implies.
@@ -31671,6 +32533,47 @@ func (s *ToolJob) SetCompany(val string) {
 // SetLocation sets the value of Location.
 func (s *ToolJob) SetLocation(val OptString) {
 	s.Location = val
+}
+
+// A single item: `{"data": ...}`.
+type TopupSponsoredCampaignOK struct {
+	Data BillingUrl `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *TopupSponsoredCampaignOK) GetData() BillingUrl {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *TopupSponsoredCampaignOK) SetData(val BillingUrl) {
+	s.Data = val
+}
+
+// TopupSponsoredCampaignOKHeaders wraps TopupSponsoredCampaignOK with response headers.
+type TopupSponsoredCampaignOKHeaders struct {
+	CacheControl string
+	Response     TopupSponsoredCampaignOK
+}
+
+// GetCacheControl returns the value of CacheControl.
+func (s *TopupSponsoredCampaignOKHeaders) GetCacheControl() string {
+	return s.CacheControl
+}
+
+// GetResponse returns the value of Response.
+func (s *TopupSponsoredCampaignOKHeaders) GetResponse() TopupSponsoredCampaignOK {
+	return s.Response
+}
+
+// SetCacheControl sets the value of CacheControl.
+func (s *TopupSponsoredCampaignOKHeaders) SetCacheControl(val string) {
+	s.CacheControl = val
+}
+
+// SetResponse sets the value of Response.
+func (s *TopupSponsoredCampaignOKHeaders) SetResponse(val TopupSponsoredCampaignOK) {
+	s.Response = val
 }
 
 // A single item: `{"data": ...}`.

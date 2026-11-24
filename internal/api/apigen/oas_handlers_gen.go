@@ -823,6 +823,101 @@ func (s *Server) handleApproveEmployerClaimRequest(args [1]string, argsEscaped b
 	}
 }
 
+// handleApproveSponsoredCampaignRequest handles approveSponsoredCampaign operation.
+//
+// Moderators only. 409 when the campaign is not in review.
+//
+// POST /sponsored/review/{id}/approve
+func (s *Server) handleApproveSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ApproveSponsoredCampaignOperation,
+			ID:   "approveSponsoredCampaign",
+		}
+	)
+	params, err := decodeApproveSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ApproveSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ApproveSponsoredCampaignOperation,
+			OperationSummary: "Approve a sponsored campaign.",
+			OperationID:      "approveSponsoredCampaign",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ApproveSponsoredCampaignParams
+			Response = *ApproveSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackApproveSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ApproveSponsoredCampaign(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ApproveSponsoredCampaign(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeApproveSponsoredCampaignResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleApproveSubmissionRequest handles approveSubmission operation.
 //
 // Moderators only. 404 for an unknown id, 409 for one already decided.
@@ -6961,6 +7056,103 @@ func (s *Server) handleCreateSavedSearchRequest(args [0]string, argsEscaped bool
 	}
 }
 
+// handleCreateSponsoredCampaignRequest handles createSponsoredCampaign operation.
+//
+// Opens a draft campaign for an open, public job. 422 for a cost per click under the minimum
+// (`SPONSORED_MIN_CPC_CENTS`, 10 by default), a daily cap under the click cost, or a job that is
+// closed, private or unknown.
+//
+// POST /sponsored/campaigns
+func (s *Server) handleCreateSponsoredCampaignRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: CreateSponsoredCampaignOperation,
+			ID:   "createSponsoredCampaign",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeCreateSponsoredCampaignRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *CreateSponsoredCampaignCreatedHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    CreateSponsoredCampaignOperation,
+			OperationSummary: "Create a sponsored campaign.",
+			OperationID:      "createSponsoredCampaign",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *SponsoredCampaignRequest
+			Params   = struct{}
+			Response = *CreateSponsoredCampaignCreatedHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.CreateSponsoredCampaign(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.CreateSponsoredCampaign(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeCreateSponsoredCampaignResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleCreateSubmissionRequest handles createSubmission operation.
 //
 // A URL already awaiting review is a `409`, and so is a URL the catalogue already carries — matched
@@ -9537,6 +9729,101 @@ func (s *Server) handleEnableBookingLinkRequest(args [1]string, argsEscaped bool
 	}
 
 	if err := encodeEnableBookingLinkResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleEndSponsoredCampaignRequest handles endSponsoredCampaign operation.
+//
+// Ends the campaign for good; unused budget stays recorded. 409 when it is already over.
+//
+// POST /sponsored/campaigns/{id}/end
+func (s *Server) handleEndSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: EndSponsoredCampaignOperation,
+			ID:   "endSponsoredCampaign",
+		}
+	)
+	params, err := decodeEndSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *EndSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    EndSponsoredCampaignOperation,
+			OperationSummary: "End a sponsored campaign.",
+			OperationID:      "endSponsoredCampaign",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = EndSponsoredCampaignParams
+			Response = *EndSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackEndSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.EndSponsoredCampaign(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.EndSponsoredCampaign(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeEndSponsoredCampaignResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -15439,6 +15726,101 @@ func (s *Server) handleGetSessionRequest(args [1]string, argsEscaped bool, w htt
 	}
 
 	if err := encodeGetSessionResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleGetSponsoredCampaignRequest handles getSponsoredCampaign operation.
+//
+// One of the caller's campaigns with its delivery and spend. Another user's id answers 404.
+//
+// GET /sponsored/campaigns/{id}
+func (s *Server) handleGetSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetSponsoredCampaignOperation,
+			ID:   "getSponsoredCampaign",
+		}
+	)
+	params, err := decodeGetSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetSponsoredCampaignOperation,
+			OperationSummary: "Read a sponsored campaign and its stats.",
+			OperationID:      "getSponsoredCampaign",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetSponsoredCampaignParams
+			Response = *GetSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetSponsoredCampaign(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetSponsoredCampaign(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetSponsoredCampaignResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -22895,6 +23277,158 @@ func (s *Server) handleListSourcesRequest(args [0]string, argsEscaped bool, w ht
 	}
 }
 
+// handleListSponsoredCampaignsRequest handles listSponsoredCampaigns operation.
+//
+// The caller's campaigns, newest first.
+//
+// GET /sponsored/campaigns
+func (s *Server) handleListSponsoredCampaignsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *ListSponsoredCampaignsOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListSponsoredCampaignsOperation,
+			OperationSummary: "List your sponsored campaigns.",
+			OperationID:      "listSponsoredCampaigns",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *ListSponsoredCampaignsOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListSponsoredCampaigns(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListSponsoredCampaigns(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListSponsoredCampaignsResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleListSponsoredReviewRequest handles listSponsoredReview operation.
+//
+// Moderators only, oldest first.
+//
+// GET /sponsored/review
+func (s *Server) handleListSponsoredReviewRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *ListSponsoredReviewOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ListSponsoredReviewOperation,
+			OperationSummary: "List sponsored campaigns waiting for review.",
+			OperationID:      "listSponsoredReview",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *ListSponsoredReviewOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ListSponsoredReview(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ListSponsoredReview(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeListSponsoredReviewResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleListSubscriptionsRequest handles listSubscriptions operation.
 //
 // List your subscriptions.
@@ -25108,6 +25642,101 @@ func (s *Server) handlePauseMentorProfileRequest(args [0]string, argsEscaped boo
 	}
 
 	if err := encodePauseMentorProfileResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handlePauseSponsoredCampaignRequest handles pauseSponsoredCampaign operation.
+//
+// `active` to `paused`. 409 when the campaign is in another state.
+//
+// POST /sponsored/campaigns/{id}/pause
+func (s *Server) handlePauseSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PauseSponsoredCampaignOperation,
+			ID:   "pauseSponsoredCampaign",
+		}
+	)
+	params, err := decodePauseSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *PauseSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PauseSponsoredCampaignOperation,
+			OperationSummary: "Pause a sponsored campaign.",
+			OperationID:      "pauseSponsoredCampaign",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = PauseSponsoredCampaignParams
+			Response = *PauseSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackPauseSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PauseSponsoredCampaign(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PauseSponsoredCampaign(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePauseSponsoredCampaignResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -27817,6 +28446,117 @@ func (s *Server) handleRejectEmployerClaimRequest(args [1]string, argsEscaped bo
 	}
 }
 
+// handleRejectSponsoredCampaignRequest handles rejectSponsoredCampaign operation.
+//
+// Moderators only. Refunds what was paid; answers 200 with `refund_pending` when the refund is still
+// to retry.
+//
+// POST /sponsored/review/{id}/reject
+func (s *Server) handleRejectSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: RejectSponsoredCampaignOperation,
+			ID:   "rejectSponsoredCampaign",
+		}
+	)
+	params, err := decodeRejectSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeRejectSponsoredCampaignRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *RejectSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    RejectSponsoredCampaignOperation,
+			OperationSummary: "Reject a sponsored campaign.",
+			OperationID:      "rejectSponsoredCampaign",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *SponsoredRejectRequest
+			Params   = RejectSponsoredCampaignParams
+			Response = *RejectSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackRejectSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.RejectSponsoredCampaign(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.RejectSponsoredCampaign(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeRejectSponsoredCampaignResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleRejectSubmissionRequest handles rejectSubmission operation.
 //
 // Moderators only. The body is optional.
@@ -29994,6 +30734,101 @@ func (s *Server) handleRestoreEmailRequest(args [1]string, argsEscaped bool, w h
 	}
 
 	if err := encodeRestoreEmailResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleResumeSponsoredCampaignRequest handles resumeSponsoredCampaign operation.
+//
+// `paused` to `active`. 409 when the campaign is in another state.
+//
+// POST /sponsored/campaigns/{id}/resume
+func (s *Server) handleResumeSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ResumeSponsoredCampaignOperation,
+			ID:   "resumeSponsoredCampaign",
+		}
+	)
+	params, err := decodeResumeSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *ResumeSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ResumeSponsoredCampaignOperation,
+			OperationSummary: "Resume a sponsored campaign.",
+			OperationID:      "resumeSponsoredCampaign",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = ResumeSponsoredCampaignParams
+			Response = *ResumeSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackResumeSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.ResumeSponsoredCampaign(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.ResumeSponsoredCampaign(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeResumeSponsoredCampaignResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -33829,6 +34664,117 @@ func (s *Server) handleTestPushTokenRequest(args [0]string, argsEscaped bool, w 
 	}
 
 	if err := encodeTestPushTokenResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleTopupSponsoredCampaignRequest handles topupSponsoredCampaign operation.
+//
+// Returns a Stripe Checkout URL that pays `amount_cents` into the campaign. 422 under the minimum
+// top-up, 409 for a rejected or ended campaign, 404 when payments are not configured.
+//
+// POST /sponsored/campaigns/{id}/topup
+func (s *Server) handleTopupSponsoredCampaignRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: TopupSponsoredCampaignOperation,
+			ID:   "topupSponsoredCampaign",
+		}
+	)
+	params, err := decodeTopupSponsoredCampaignParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeTopupSponsoredCampaignRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *TopupSponsoredCampaignOKHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    TopupSponsoredCampaignOperation,
+			OperationSummary: "Start a sponsored campaign top-up.",
+			OperationID:      "topupSponsoredCampaign",
+			Body:             request,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = *SponsoredTopupRequest
+			Params   = TopupSponsoredCampaignParams
+			Response = *TopupSponsoredCampaignOKHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackTopupSponsoredCampaignParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.TopupSponsoredCampaign(ctx, request, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.TopupSponsoredCampaign(ctx, request, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeTopupSponsoredCampaignResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

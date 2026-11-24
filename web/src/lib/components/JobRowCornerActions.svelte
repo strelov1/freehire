@@ -11,6 +11,7 @@
     title,
     directApply,
     applyUrl,
+    sponsored = false,
     onApplyClick,
     onHide,
     hiding,
@@ -23,6 +24,8 @@
     directApply: boolean;
     /** The employer's own posting, when the card can link out to it. */
     applyUrl: string | null;
+    /** A paid slot: `applyUrl` is the click-tracking redirect, so the link says so. */
+    sponsored?: boolean;
     onApplyClick: (e: MouseEvent) => void;
     /** Absent where the feed offers no "hide this job". */
     onHide: (() => void) | undefined;
@@ -72,7 +75,8 @@
       variant="outline"
       href={isAuthenticated() ? applyUrl : undefined}
       target="_blank"
-      rel="nofollow noopener noreferrer"
+      rel={sponsored ? 'sponsored nofollow noopener noreferrer' : 'nofollow noopener noreferrer'}
+      data-sveltekit-reload={sponsored ? '' : undefined}
       onclick={onApplyClick}
       aria-label={isAuthenticated()
         ? `Apply to ${title} on the employer's site (opens in a new tab)`
