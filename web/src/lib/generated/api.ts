@@ -521,10 +521,9 @@ export interface paths {
         };
         /**
          * List companies with job counts and denormalized facets; optional filters.
-         * @description Most active first. Facet params are repeatable and filter by array overlap (OR within a
-         *     facet, AND across facets), composably with `q`. `meta.total` reports the count matching
-         *     the full filter. `countries` matches where a company's open jobs are; `hq_country`
-         *     (ISO 3166-1 alpha-2, any case) matches where it is headquartered.
+         * @description Most active first. Facet params repeat and filter by array overlap (OR within a facet,
+         *     AND across), composable with `q`; `meta.total` counts the full filter. `countries` is
+         *     where open jobs are, `hq_country` the headquarters (ISO alpha-2).
          */
         get: operations["listCompanies"];
         put?: never;
