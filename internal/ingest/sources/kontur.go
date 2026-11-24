@@ -160,7 +160,7 @@ func (k kontur) detail(ctx context.Context, e CompanyEntry, c konturCard) (Job, 
 	}
 
 	labels := konturLabels(root)
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	location := konturLocation(p.JobLocation)
 	return Job{
 		ExternalID:         c.ID,

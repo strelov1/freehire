@@ -415,7 +415,7 @@ func netempregosJob(ld netempregosLD, p netempregosPosting) (Job, bool) {
 	}
 	j.Location, j.FallbackCountries = netempregosPlace(zone)
 	j.PostedAt = NotFuture(p.posted)
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode = "remote"
 		j.Remote = true
 	}

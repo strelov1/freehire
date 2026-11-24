@@ -345,7 +345,7 @@ func parseWORK180Posting(root *html.Node, l work180Listing) (Job, bool) {
 		PostedAt:       parseRFC3339(p.DatePosted),
 		EmploymentType: work180EmploymentType(p.EmploymentType),
 	}
-	if strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
+	if IsTelecommute(p.JobLocationType) {
 		job.Remote = true
 		job.WorkMode = "remote"
 	}

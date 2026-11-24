@@ -205,7 +205,7 @@ func homerunAddPage(j *Job, root *html.Node) {
 			j.Location += "; " + town
 		}
 	}
-	if strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(jp.JobLocationType) {
 		j.Remote, j.WorkMode = true, workModeFromRemote(true)
 	}
 }

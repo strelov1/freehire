@@ -217,7 +217,7 @@ func (p ptsecurity) detail(ctx context.Context, e CompanyEntry, v ptsecurityVaca
 	ldJobPosting(root, &ld) // optional: a page without it still has its body
 
 	location := distinctJoin(v.Locations, ", ", func(s string) string { return s })
-	remoteMarked := strings.EqualFold(ld.JobLocationType, "TELECOMMUTE")
+	remoteMarked := IsTelecommute(ld.JobLocationType)
 	var countries []string
 	for _, a := range ld.JobLocation.Address {
 		countries = append(countries, a.AddressCountry)

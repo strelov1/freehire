@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"strings"
 )
 
 // briefhq adapts a hand-rolled static careers page (briefhq.ai/careers) that inlines every
@@ -40,7 +39,7 @@ func (s briefhq) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		id := firstNonEmpty(p.Identifier.Value, p.URL, pageURL)
 		// jobLocationType is the schema.org work-arrangement signal: TELECOMMUTE means remote,
 		// ON_SITE means not; anything else falls back to the free-text location.
-		remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+		remote := IsTelecommute(p.JobLocationType)
 		jobs = append(jobs, Job{
 			ExternalID:     id,
 			URL:            firstNonEmpty(p.URL, pageURL),

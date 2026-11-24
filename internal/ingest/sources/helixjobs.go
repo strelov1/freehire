@@ -231,7 +231,7 @@ func (s helixjobs) detail(ctx context.Context, e CompanyEntry, l helixjobsLine) 
 	}
 	// TELECOMMUTE is read as the remote statement schema.org defines it to be; jobLocationType
 	// is rarely stated, and its absence says nothing.
-	remote := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
+	remote := IsTelecommute(jp.JobLocationType)
 	loc, countries := concludisPlaces(jp.JobLocation)
 	return Job{
 		ExternalID:     l.ID,

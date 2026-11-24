@@ -196,7 +196,7 @@ func (s coveto) detail(ctx context.Context, e CompanyEntry, p covetoPosting) (Jo
 	// TELECOMMUTE is the only work-arrangement statement the page makes, and it is a remote one:
 	// "(Remote)" and "100% Home Office" postings carry it, "Homeoffice möglich" ones do not.
 	// Its absence says nothing, so it never yields "onsite".
-	remote := strings.EqualFold(strings.TrimSpace(jp.JobLocationType), "TELECOMMUTE")
+	remote := IsTelecommute(jp.JobLocationType)
 	j := Job{
 		ExternalID:     p.ID,
 		URL:            p.URL,

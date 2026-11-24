@@ -65,7 +65,7 @@ func (t twogis) detail(ctx context.Context, e CompanyEntry, jobURL string) (Job,
 	location := p.location()
 	// jobLocationType TELECOMMUTE is 2GIS's structured remote signal, so it sets WorkMode (clean
 	// provenance); located roles leave WorkMode empty and the pipeline parses the location.
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	workMode := ""
 	if remote {
 		workMode = "remote"

@@ -227,7 +227,7 @@ func (b bairesdev) detail(ctx context.Context, r bairesDevRef) (Job, bool) {
 		company = "BairesDev"
 	}
 	mode := ""
-	if strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
+	if IsTelecommute(p.JobLocationType) {
 		mode = "remote"
 	}
 	return Job{

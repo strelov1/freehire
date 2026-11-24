@@ -336,7 +336,7 @@ func founditJob(ld founditLD, p founditPosting) (Job, bool) {
 		FallbackCountries: []string{"in"},
 		PostedAt:          founditPostedAt(ld.DatePosted),
 	}
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	switch strings.ToLower(strings.TrimSpace(ld.EmploymentType)) {

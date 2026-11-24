@@ -146,7 +146,7 @@ func (p djinniPosting) toJob() (Job, bool) {
 	if p.Identifier == 0 || p.URL == "" || p.HiringOrganization.Name == "" {
 		return Job{}, false
 	}
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	addr := p.ApplicantLocationRequirements.Address
 	loc := addr.AddressCountry
 	if loc == "" {

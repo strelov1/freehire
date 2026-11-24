@@ -421,7 +421,7 @@ func infoempleoWorkMode(locationType, cardRemote string) string {
 	switch {
 	case strings.Contains(r, "parcial"):
 		return "hybrid"
-	case strings.EqualFold(strings.TrimSpace(locationType), "TELECOMMUTE"),
+	case IsTelecommute(locationType),
 		strings.Contains(r, "total"), strings.Contains(r, "100"):
 		return "remote"
 	}

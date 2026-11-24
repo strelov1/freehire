@@ -209,7 +209,7 @@ func (s rexx) detail(ctx context.Context, e CompanyEntry, l rexxLink) (Job, bool
 		EmploymentType: schemaEmploymentType(p.EmploymentType),
 		PostedAt:       parseRFC3339OrDate(p.DatePosted),
 	}
-	if strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(p.JobLocationType) {
 		j.Remote, j.WorkMode = true, "remote"
 	}
 	var places []string
