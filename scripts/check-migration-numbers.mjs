@@ -13,7 +13,7 @@
 //   node scripts/check-migration-numbers.mjs
 //   pnpm check:migration-numbers
 //   pnpm check:migration-numbers --base <commit>   # also names the migrations added since
-//                                                  # <commit>, i.e. the ones safe to rename
+//                                                  # <commit>, i.e. the candidates to rename
 //
 // It reads the tree it is given, so it cannot see a file that only another pull request
 // adds: two pull requests can each pass with the same number. The push to main is where
@@ -161,9 +161,11 @@ export function checkMigrationNumbers(filenames, allowlist) {
 
 /**
  * The migrations that exist in the working tree but not at `base` — the files this change
- * added. Those are the only ones that may be renamed: one main already holds may have run
- * in production, and the runner records migrations by filename. An unreachable base (a
- * shallow clone, a detached checkout) yields nothing; the verdict stands without it.
+ * added. They are the candidates to rename; whether that is safe is not this script's to
+ * say. The runner records migrations by filename, so renaming one that has already run
+ * anywhere (production, a replica, a colleague's database) makes it look unapplied and it
+ * runs again. The reader checks `schema_migrations` first. An unreachable base (a shallow
+ * clone, a detached checkout) yields nothing; the verdict stands without it.
  */
 export function addedMigrations(base) {
   if (!base) return [];
@@ -201,9 +203,13 @@ function main() {
     const added = base && addedMigrations(base);
     if (added && added.length > 0) {
       console.error(
-        `\nThis change added: ${added.join(', ')}. A number it shares with a file that was\n` +
-          'already on main belongs to that file: rename the one added here to the next free\n' +
-          'number. Do not add it to the allowlist to get a green check.',
+        `\nThis change added: ${added.join(', ')}.\n` +
+          'The file with that number which was already on main keeps its name: it may have\n' +
+          'run, and the runner records migrations by filename. Fix the one added here, and\n' +
+          'which fix is safe depends on whether it has run anywhere (schema_migrations):\n' +
+          '  not run anywhere  -> rename it to the next free number\n' +
+          '  run somewhere      -> leave the filename; raise its count in ALLOWED_DUPLICATE_COUNTS\n' +
+          '                       and say why, or add a corrective migration',
       );
     }
     console.error(

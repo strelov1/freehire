@@ -41,9 +41,13 @@ still require the filename order and forbid repeating a data copy.
 
 **What it cannot see: another pull request's file.** The job reads the tree it is checked
 out with, so two pull requests that each add `0309_*.sql` both pass, and the second to
-merge lands a duplicate on main (0309 on 2026-11-24, 0283 on 2026-11-18). Renumber the
-file that second pull request added — never the one already on main, which may have run in
-production. On a push to main the failure names that file.
+merge lands a duplicate on main (0309 on 2026-11-24, 0283 on 2026-11-18). Fix the file that
+second pull request added, never the one already on main: the latter may have run in
+production, and a red run on main does not hold back a deploy. Check `schema_migrations`
+for the added file before choosing how. Rename it to the next free number while it has run
+nowhere; once it has run somewhere, keep its filename and raise its count in
+`ALLOWED_DUPLICATE_COUNTS` with the reason, or add a corrective migration. On a push to
+main the failure names that file.
 
 Closing the window is a repository setting, not code, and is not on yet: make `migrations`
 a required check on main and turn on "Require branches to be up to date before merging",
