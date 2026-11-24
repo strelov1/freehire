@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MoeForge/moego/regexp"
-
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -256,8 +254,9 @@ func TrimURLSuffix(u string) string {
 
 // FirstSubmatch returns the first capture group of pattern in s, or "". Adapters that pull a
 // native posting id out of a URL with a single-group regex funnel through it, so the "match,
-// else empty" idiom is written once.
-func FirstSubmatch(pattern *regexp.Regexp, s string) string {
+// else empty" idiom is written once. It takes the method rather than *regexp.Regexp, so a
+// caller on the standard library's regexp (cmd/harvest-boards) can pass one of its own.
+func FirstSubmatch(pattern interface{ FindStringSubmatch(string) []string }, s string) string {
 	if m := pattern.FindStringSubmatch(s); m != nil {
 		return m[1]
 	}
