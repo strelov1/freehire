@@ -5,6 +5,7 @@
   import { t } from '#lib/i18n/t.js';
   import type { Job } from '#lib/types.js';
   import { Button } from '#lib/ui/index.js';
+  import EmployerOutboundClicks from './EmployerOutboundClicks.svelte';
   import { messages } from './EmployerView.messages';
 
   // One vacancy in the employer's list: its title, badges and location, and the edit,
@@ -101,6 +102,8 @@
           {/each}
         </dl>
         <p class="text-xs text-muted-foreground">{s.analyticsNote}</p>
+        <!-- An on-site vacancy has no employer destination, so nothing is clicked through. -->
+        {#if !job.direct_apply}<EmployerOutboundClicks slug={job.public_slug} />{/if}
       {:catch}
         <p role="alert" class="text-sm text-destructive">{s.analyticsError}</p>
       {/await}

@@ -7,7 +7,12 @@ const { getEmployerVacancyAnalytics } = vi.hoisted(() => ({ getEmployerVacancyAn
 
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('$app/state', () => ({ page: { data: { locale: 'en' }, url: new URL('http://localhost/') } }));
-vi.mock('#lib/api.js', () => ({ api: { getEmployerVacancyAnalytics } }));
+vi.mock('#lib/api.js', () => ({
+  api: {
+    getEmployerVacancyAnalytics,
+    getEmployerVacancyOutboundClicks: vi.fn().mockResolvedValue({ days: [], countries: [], sources: [], clicks: 0, visitors: 0 }),
+  },
+}));
 
 it('loads a closed vacancy’s analytics on demand for a recruiter', async () => {
   getEmployerVacancyAnalytics.mockResolvedValue({ views: 40, apply_clicks: 10, applications: 3 });

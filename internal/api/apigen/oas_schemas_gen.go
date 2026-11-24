@@ -11364,6 +11364,138 @@ func (s *EmployerConfirm) SetCode(val OptString) {
 	s.Code = val
 }
 
+// Ref: #/components/schemas/EmployerOutboundClicks
+type EmployerOutboundClicks struct {
+	// Days with at least one click, oldest first.
+	Days []EmployerOutboundDay `json:"days"`
+	// Most clicks first.
+	Countries []EmployerOutboundCount `json:"countries"`
+	// Most clicks first.
+	Sources []EmployerOutboundCount `json:"sources"`
+	// Clicks in the range.
+	Clicks int64 `json:"clicks"`
+	// Visitors in the range, one per visitor per day.
+	Visitors int64 `json:"visitors"`
+}
+
+// GetDays returns the value of Days.
+func (s *EmployerOutboundClicks) GetDays() []EmployerOutboundDay {
+	return s.Days
+}
+
+// GetCountries returns the value of Countries.
+func (s *EmployerOutboundClicks) GetCountries() []EmployerOutboundCount {
+	return s.Countries
+}
+
+// GetSources returns the value of Sources.
+func (s *EmployerOutboundClicks) GetSources() []EmployerOutboundCount {
+	return s.Sources
+}
+
+// GetClicks returns the value of Clicks.
+func (s *EmployerOutboundClicks) GetClicks() int64 {
+	return s.Clicks
+}
+
+// GetVisitors returns the value of Visitors.
+func (s *EmployerOutboundClicks) GetVisitors() int64 {
+	return s.Visitors
+}
+
+// SetDays sets the value of Days.
+func (s *EmployerOutboundClicks) SetDays(val []EmployerOutboundDay) {
+	s.Days = val
+}
+
+// SetCountries sets the value of Countries.
+func (s *EmployerOutboundClicks) SetCountries(val []EmployerOutboundCount) {
+	s.Countries = val
+}
+
+// SetSources sets the value of Sources.
+func (s *EmployerOutboundClicks) SetSources(val []EmployerOutboundCount) {
+	s.Sources = val
+}
+
+// SetClicks sets the value of Clicks.
+func (s *EmployerOutboundClicks) SetClicks(val int64) {
+	s.Clicks = val
+}
+
+// SetVisitors sets the value of Visitors.
+func (s *EmployerOutboundClicks) SetVisitors(val int64) {
+	s.Visitors = val
+}
+
+// Ref: #/components/schemas/EmployerOutboundCount
+type EmployerOutboundCount struct {
+	// The country code (`CF-IPCountry`) or the surface (`web`, `mcp`, `ojcp`, `assistant`, `email`,
+	// `telegram`, `api`, `other`). Empty when unknown.
+	Key    string `json:"key"`
+	Clicks int64  `json:"clicks"`
+}
+
+// GetKey returns the value of Key.
+func (s *EmployerOutboundCount) GetKey() string {
+	return s.Key
+}
+
+// GetClicks returns the value of Clicks.
+func (s *EmployerOutboundCount) GetClicks() int64 {
+	return s.Clicks
+}
+
+// SetKey sets the value of Key.
+func (s *EmployerOutboundCount) SetKey(val string) {
+	s.Key = val
+}
+
+// SetClicks sets the value of Clicks.
+func (s *EmployerOutboundCount) SetClicks(val int64) {
+	s.Clicks = val
+}
+
+// Ref: #/components/schemas/EmployerOutboundDay
+type EmployerOutboundDay struct {
+	// UTC day, `YYYY-MM-DD`.
+	Day string `json:"day"`
+	// Human clicks through the freehire redirect to the employer's site that day.
+	Clicks int64 `json:"clicks"`
+	// Distinct visitors that day.
+	Visitors int64 `json:"visitors"`
+}
+
+// GetDay returns the value of Day.
+func (s *EmployerOutboundDay) GetDay() string {
+	return s.Day
+}
+
+// GetClicks returns the value of Clicks.
+func (s *EmployerOutboundDay) GetClicks() int64 {
+	return s.Clicks
+}
+
+// GetVisitors returns the value of Visitors.
+func (s *EmployerOutboundDay) GetVisitors() int64 {
+	return s.Visitors
+}
+
+// SetDay sets the value of Day.
+func (s *EmployerOutboundDay) SetDay(val string) {
+	s.Day = val
+}
+
+// SetClicks sets the value of Clicks.
+func (s *EmployerOutboundDay) SetClicks(val int64) {
+	s.Clicks = val
+}
+
+// SetVisitors sets the value of Visitors.
+func (s *EmployerOutboundDay) SetVisitors(val int64) {
+	s.Visitors = val
+}
+
 // A pending claim with the current domain check, not a stored historical failure reason.
 // Ref: #/components/schemas/EmployerPendingClaim
 type EmployerPendingClaim struct {
@@ -13582,6 +13714,21 @@ func (s *GetEmployerVacancyAnalyticsOK) GetData() EmployerVacancyAnalytics {
 
 // SetData sets the value of Data.
 func (s *GetEmployerVacancyAnalyticsOK) SetData(val EmployerVacancyAnalytics) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetEmployerVacancyOutboundClicksOK struct {
+	Data EmployerOutboundClicks `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetEmployerVacancyOutboundClicksOK) GetData() EmployerOutboundClicks {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetEmployerVacancyOutboundClicksOK) SetData(val EmployerOutboundClicks) {
 	s.Data = val
 }
 
