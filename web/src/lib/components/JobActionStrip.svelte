@@ -2,8 +2,11 @@
   import { ExternalLink, Flag } from '@lucide/svelte';
   import { Button } from '#lib/ui/index.js';
   import JobSaveButton from './JobSaveButton.svelte';
+  import JobShareButton from './JobShareButton.svelte';
 
   let {
+    slug,
+    title,
     className,
     iconOnly = false,
     saved,
@@ -13,6 +16,8 @@
     applyLabel,
     onApplyClick,
   }: {
+    slug: string;
+    title: string;
     className: string;
     iconOnly?: boolean;
     saved: boolean;
@@ -55,6 +60,7 @@
     <span class="sr-only">Report</span>
   </Button>
   <JobSaveButton {saved} onclick={onSaveClick} className={iconOnly ? 'size-11 px-0' : ''} {iconOnly} />
+  <JobShareButton {slug} {title} />
   <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
        whenever auto-apply can be started, so the posting's own page needs a door
        somewhere else — and this strip is where the quiet things already are. On lg the
