@@ -3,8 +3,8 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

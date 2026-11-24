@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"html"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // oraclePageLimit is the requisition-list page size (the API caps a page well above it).

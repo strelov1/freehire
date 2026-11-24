@@ -3,7 +3,6 @@ package sources
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/json"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
 )
@@ -127,6 +127,13 @@ func (c *Client) GetStream(ctx context.Context, url, accept string, fn func(io.R
 	return fn(resp.Body)
 }
 
+// decodeJSON decodes one JSON response body into v. It is the one place the JSON getters
+// choose their decoder: moego/json, which matches encoding/json's values and errors, an empty
+// body included (io.EOF, which do retries).
+func decodeJSON(r io.Reader, v any) error {
+	return json.NewDecoder(r).Decode(v)
+}
+
 // GetJSON fetches url and decodes its JSON body into v.
 func (c *Client) GetJSON(ctx context.Context, url string, v any) error {
 	return c.GetJSONWithHeaders(ctx, url, nil, v)
@@ -141,7 +148,7 @@ func (c *Client) GetJSONWithHeaders(ctx context.Context, url string, headers map
 		accept:  "application/json",
 		headers: headers,
 		decode: func(resp *http.Response) error {
-			return json.NewDecoder(resp.Body).Decode(v)
+			return decodeJSON(resp.Body, v)
 		},
 	})
 }
@@ -161,7 +168,7 @@ func (c *Client) GetJSONOrNoContent(ctx context.Context, url string, headers map
 				return nil
 			}
 			found = true
-			return json.NewDecoder(resp.Body).Decode(v)
+			return decodeJSON(resp.Body, v)
 		},
 	})
 	return found, err
@@ -182,7 +189,7 @@ func (c *Client) GetJSONResolved(ctx context.Context, url string, v any) (string
 			// Recorded before the decode so a redirect that landed on HTML — the case this
 			// exists for — still reports where it went, rather than only that it failed.
 			final = resp.Request.URL.String()
-			return json.NewDecoder(resp.Body).Decode(v)
+			return decodeJSON(resp.Body, v)
 		},
 	})
 	return final, err

@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // herkeyFake serves the real session, listing and detail fixtures (trimmed from responses

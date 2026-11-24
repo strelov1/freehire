@@ -3,9 +3,10 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // cornerstone adapts Cornerstone OnDemand (CSOD) career sites. The board is the tenant

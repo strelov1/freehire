@@ -16,6 +16,7 @@ require (
 require (
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2 // indirect
+	github.com/MoeForge/moego v0.1.0-alpha.5 // indirect
 	github.com/abadojack/whatlanggo v1.0.1 // indirect
 	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect

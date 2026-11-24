@@ -1,8 +1,6 @@
 package engagement
 
-import (
-	"regexp"
-)
+import "github.com/MoeForge/moego/regexp"
 
 var rules = []rule{
 	// ---- United Kingdom ----

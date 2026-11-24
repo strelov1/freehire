@@ -6,10 +6,10 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 

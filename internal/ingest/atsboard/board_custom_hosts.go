@@ -2,8 +2,9 @@ package atsboard
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 var fordRecruitingSite = regexp.MustCompile(`^/(?i:[a-z_-]+/sites)/CX_1(?:/|$)`)

@@ -8,8 +8,9 @@
 package jobfacts
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint/credentials"
 	"github.com/strelov1/freehire/internal/dict/edulevel"

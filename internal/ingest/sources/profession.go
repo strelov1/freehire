@@ -3,11 +3,11 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

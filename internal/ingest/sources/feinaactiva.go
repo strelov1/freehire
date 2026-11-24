@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"html"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 

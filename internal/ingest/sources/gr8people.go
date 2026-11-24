@@ -3,8 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // gr8people adapts career sites on the gr8people ATS — one vendor served under two marketing

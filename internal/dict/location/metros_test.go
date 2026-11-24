@@ -1,10 +1,11 @@
 package location
 
 import (
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 func TestParseMetros(t *testing.T) {

@@ -3,10 +3,10 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	xhtml "golang.org/x/net/html"
 	"golang.org/x/time/rate"
 )

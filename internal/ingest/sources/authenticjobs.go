@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"html"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/platform/flexjson"
 )
 

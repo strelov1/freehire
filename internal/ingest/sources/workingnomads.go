@@ -3,7 +3,8 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // workingnomads adapts workingnomads.com, a remote-jobs aggregator. Boardless (one public

@@ -2,8 +2,9 @@ package contribution
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // This file holds the link parsing specific to the contribution service: pulling a job id

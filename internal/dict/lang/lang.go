@@ -5,11 +5,11 @@
 package lang
 
 import (
-	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/abadojack/whatlanggo"
 )
 

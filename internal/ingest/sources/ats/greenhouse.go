@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/ingest/sources/kit"

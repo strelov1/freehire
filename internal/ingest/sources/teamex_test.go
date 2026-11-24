@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // teamexHTTP is a route-aware test JSONPoster. teamex has a single POST list endpoint

@@ -1,6 +1,6 @@
 package atsboard
 
-import "regexp"
+import "github.com/MoeForge/moego/regexp"
 
 // pathTenantSubdomains names the path-mode hosts that ALSO serve a tenant on its own subdomain
 // with the same board id: Manatal answers <tenant>.careers-page.com beside

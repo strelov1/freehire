@@ -2,10 +2,11 @@ package location
 
 import (
 	"html"
-	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // descriptionWorkModePhrases maps a work mode to anchored phrases that signal it in a job

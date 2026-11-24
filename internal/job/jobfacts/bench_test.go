@@ -35,3 +35,17 @@ func BenchmarkDerivePathWithoutPreferredSection(b *testing.B) {
 		EnglishLevel(noPreferred)
 	}
 }
+
+// BenchmarkDeriveJob runs the six matchers jobderive calls on every posting, in its order: the
+// per-job cost of the derive path end to end, where BenchmarkDerivePath* cover the four that
+// mask text.
+func BenchmarkDeriveJob(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		EmploymentType("Backend Engineer", realish)
+		ExperienceYearsMin(realish)
+		EducationLevel(realish)
+		EnglishLevel(realish)
+		ViaRecruiter(realish)
+		Equity("Backend Engineer", realish)
+	}
+}

@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // hcshiring adapts the symplr (formerly HealthcareSource) applicant career centers served at

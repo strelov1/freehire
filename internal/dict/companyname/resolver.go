@@ -3,7 +3,8 @@ package companyname
 import (
 	"context"
 	"fmt"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // textGetter fetches a URL's raw body (careers-page HTML). Matches

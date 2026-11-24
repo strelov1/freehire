@@ -1,6 +1,6 @@
 package classify
 
-import "regexp"
+import "github.com/MoeForge/moego/regexp"
 
 // matchPortugueseCategory resolves the category of a lowercased title the Spanish
 // table left unresolved. A blind alias answers categoryNone; the caller translates it.

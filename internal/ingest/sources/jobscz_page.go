@@ -1,9 +1,10 @@
 package sources
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // jobsczDetail is what a posting's own page (/rpd/<id>/) carries: the header, the "Informace o

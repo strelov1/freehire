@@ -2,8 +2,9 @@ package atsboard
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 var byteDancePosition = regexp.MustCompile(`^/(?:campus|experienced)/position/[0-9]+/detail/?$`)

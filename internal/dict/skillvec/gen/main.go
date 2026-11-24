@@ -18,7 +18,8 @@ import (
 	"fmt"
 	"go/format"
 	"os"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 )

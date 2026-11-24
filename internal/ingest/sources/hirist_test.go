@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // hiristFake serves the real fixtures (fetched 2026-10-25: the first three rows of hirist.tech's

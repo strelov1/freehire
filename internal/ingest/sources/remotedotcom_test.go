@@ -3,12 +3,13 @@ package sources
 import (
 	"context"
 	"errors"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // remotedotcomHTTP is a route-aware fake for the one transport remote.com needs. Both request

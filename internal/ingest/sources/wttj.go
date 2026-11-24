@@ -9,9 +9,10 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // wttj adapts Welcome to the Jungle (welcometothejungle.com), a large European job board that

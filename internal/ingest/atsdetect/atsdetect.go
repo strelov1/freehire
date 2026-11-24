@@ -6,8 +6,9 @@ package atsdetect
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // matchers are tried in order, so the first provider listed wins when a page links

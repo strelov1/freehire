@@ -6,10 +6,10 @@ import (
 	"html"
 	"log"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync/atomic"
 
+	"github.com/MoeForge/moego/regexp"
 	xhtml "golang.org/x/net/html"
 )
 

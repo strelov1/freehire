@@ -2,9 +2,10 @@ package atsboard
 
 import (
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // platformLabels are the leftmost DNS labels a multi-tenant ATS uses for its own product hosts
