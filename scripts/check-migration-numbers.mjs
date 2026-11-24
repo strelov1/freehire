@@ -12,7 +12,14 @@
 // Run from the repository root:
 //   node scripts/check-migration-numbers.mjs
 //   pnpm check:migration-numbers
+//   pnpm check:migration-numbers --base <commit>   # also names the migrations added since
+//                                                  # <commit>, i.e. the ones safe to rename
+//
+// It reads the tree it is given, so it cannot see a file that only another pull request
+// adds: two pull requests can each pass with the same number. The push to main is where
+// that surfaces; branch protection has to re-check a pull request against main to prevent it.
 
+import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -152,6 +159,29 @@ export function checkMigrationNumbers(filenames, allowlist) {
   return { ok: errors.length === 0, errors };
 }
 
+/**
+ * The migrations that exist in the working tree but not at `base` — the files this change
+ * added. Those are the only ones that may be renamed: one main already holds may have run
+ * in production, and the runner records migrations by filename. An unreachable base (a
+ * shallow clone, a detached checkout) yields nothing; the verdict stands without it.
+ */
+export function addedMigrations(base) {
+  if (!base) return [];
+  let onBase;
+  try {
+    onBase = execFileSync('git', ['ls-tree', '-r', '--name-only', base, '--', MIGRATIONS_DIR], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return [];
+  }
+  const known = new Set(onBase.split('\n').filter(Boolean).map((f) => path.basename(f)));
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql') && !known.has(f))
+    .sort();
+}
+
 function main() {
   let names;
   try {
@@ -161,10 +191,21 @@ function main() {
     console.error('Run it from the repository root.');
     return 1;
   }
+  // --base <commit>: what to compare the tree with. CI passes the previous tip of main, so
+  // the list is what the push added. Without it the message names no file.
+  const base = process.argv[process.argv.indexOf('--base') + 1];
   const { ok, errors } = checkMigrationNumbers(names, ALLOWED_DUPLICATE_COUNTS);
   if (!ok) {
     console.error(`check-migration-numbers: ${errors.length} problem(s):`);
     for (const error of errors) console.error(`  ${error}`);
+    const added = base && addedMigrations(base);
+    if (added && added.length > 0) {
+      console.error(
+        `\nThis change added: ${added.join(', ')}. A number it shares with a file that was\n` +
+          'already on main belongs to that file: rename the one added here to the next free\n' +
+          'number. Do not add it to the allowlist to get a green check.',
+      );
+    }
     console.error(
       '\nA new migration must use a numeric prefix no other file uses. The allowlist is\n' +
         'the duplicate prefixes already applied; do not renumber those. To permit a\n' +

@@ -220,12 +220,31 @@ jobs:
 
       # The allowlist is the duplicate prefixes already applied, each with its file
       # count. A new file that reuses a number — including one more 0144 — fails here.
+      #
+      # This job is NOT one of main's required checks, and a pull request is checked against
+      # the main of the moment its run started. Two pull requests that each pass with the
+      # same number still both merge: on 2026-11-24 #5124 passed at 11:00, #5121 put its
+      # own 0309 on main at 12:47, and #5124 merged at 17:09 against a main that already
+      # had the number. Nothing re-checked it, because no required check runs this guard.
+      #
+      # What makes the guard bite is the two settings on main, both in branch protection:
+      # add this job (`migrations`) to the required checks, and tick "Require branches to
+      # be up to date before merging". A queue would need `merge_group` on every workflow
+      # behind a required check (ci.yml, container-smoke.yml, pr-size.yml), not this one.
+      #
+      # Until then the push to main is the only place a collision is seen before the next
+      # pull request inherits it. This step names the file the push added; a cancelled
+      # run (the next merge's cancels it) is covered by that next merge's run.
       - name: Check migration numbers
+        env:
+          # The tip before this push. Empty on a pull request, where there is no such
+          # answer to give: both files already exist at the pull request's base.
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           node --test scripts/check-migration-numbers.test.mjs
           node scripts/check-gitignore.mjs --self-test
           node scripts/check-gitignore.mjs
-          pnpm check:migration-numbers
+          pnpm check:migration-numbers --base "$BEFORE_SHA"
 
   # The public API's contract against main: read scripts/check-openapi-breaking.sh for
   # what counts as breaking and the `API-Break:` trailer that lets a deliberate break

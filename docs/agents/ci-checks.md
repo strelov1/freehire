@@ -39,6 +39,16 @@ escape hatch for a corrective file that must sort beside an immutable migration 
 update that count in the same change and say why; [the SQL notes](../../internal/platform/db/AGENTS.md)
 still require the filename order and forbid repeating a data copy.
 
+**What it cannot see: another pull request's file.** The job reads the tree it is checked
+out with, so two pull requests that each add `0309_*.sql` both pass, and the second to
+merge lands a duplicate on main (0309 on 2026-11-24, 0283 on 2026-11-18). Renumber the
+file that second pull request added — never the one already on main, which may have run in
+production. On a push to main the failure names that file.
+
+Closing the window is a repository setting, not code, and is not on yet: make `migrations`
+a required check on main and turn on "Require branches to be up to date before merging",
+so a pull request is re-checked against the main it merges into.
+
 ## Generated SQL layer: `make sqlc`
 
 `internal/platform/db/` is generated: edit `internal/platform/db/queries/*.sql` and run
