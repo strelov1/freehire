@@ -58,7 +58,8 @@ export class JobCardActions {
         this.justSaved = true;
       }
     } catch (e) {
-      if (changed && currentUser()?.id === userID) {
+      if (currentUser()?.id !== userID) return;
+      if (changed) {
         if (wasSaved) markSaved(slug);
         else markUnsaved(slug);
       }
@@ -78,13 +79,14 @@ export class JobCardActions {
     if (this.hiding) return;
     this.hiding = true;
     const slug = this.slug();
+    const userID = currentUser()?.id;
     markDismissed(slug);
     try {
       await api.dismissJob(slug);
       this.onHide()?.(slug);
     } catch (e) {
       markUndismissed(slug);
-      if (isUnauthorized(e)) this.onUnauthorized()?.();
+      if (currentUser()?.id === userID && isUnauthorized(e)) this.onUnauthorized()?.();
     } finally {
       this.hiding = false;
     }
