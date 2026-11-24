@@ -3,7 +3,8 @@
 The SuperPlane canvas "PR auto-merge policy" reads this file from `main` after the ready check
 labels a pull request `ready-to-merge`. The principle: a pull request that passed the ready check
 and every required check merges on its own, unless it touches a zone listed under "Always a
-person". A pull request from a fork never auto-merges.
+person". A pull request from a fork never auto-merges. While the canvas runs in observe mode it
+only posts its decision, and the owner still merges by hand.
 
 ## Always a person
 
@@ -31,7 +32,8 @@ request auto-merges when all of these hold:
 
 - The latest `## Ready check` comment's verdict is **Ready** for the head commit being judged.
 - Every required check is green on that commit.
-- CodeRabbit has no open finding the ready check left unanswered.
+- Every CodeRabbit finding is resolved, or the latest ready check comment names it and says why
+  it was skipped. Any other open finding waits for the owner.
 - Size cap: at most 600 changed lines (additions plus deletions), not counting tests
   (`*_test.go`, `*.test.ts`, `*.spec.ts`, `web/e2e/`), `testdata/` fixtures and generated files.
 - Generated files (sqlc output `*.sql.go`, `pnpm-lock.yaml`, `go.sum`) are covered only together
