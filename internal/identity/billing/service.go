@@ -356,7 +356,7 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 		if err := s.q.RecordCheckoutFeedbackSession(recordCtx, db.RecordCheckoutFeedbackSessionParams{
 			UserID:          userID,
 			StripeSessionID: session.ID,
-			CreatedAt:       pgtype.Timestamptz{Time: time.Unix(session.Created, 0), Valid: true},
+			CreatedAt:       pgconv.Instant(time.Unix(session.Created, 0)),
 		}); err != nil {
 			log.Printf("billing: could not record checkout feedback session for user %d: %v", userID, err)
 		}

@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
 
@@ -32,7 +32,7 @@ func TestCheckoutFeedbackUsesStripeBeforeClaiming(t *testing.T) {
 		t.Helper()
 		err := q.RecordCheckoutFeedbackSession(ctx, db.RecordCheckoutFeedbackSessionParams{
 			UserID: userID, StripeSessionID: session,
-			CreatedAt: pgtype.Timestamptz{Time: time.Now().Add(-age), Valid: true},
+			CreatedAt: pgconv.Instant(time.Now().Add(-age)),
 		})
 		if err != nil {
 			t.Fatal(err)
