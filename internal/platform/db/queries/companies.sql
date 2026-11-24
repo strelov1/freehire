@@ -19,8 +19,14 @@
 -- postings the JOB SEARCH INDEX holds (see the facet recount in company_facets.sql), so the number here
 -- is the number the company's own page shows — the two used to disagree, listing
 -- Stripe at 570 against 444 on its page.
+--
+-- website and linkedin are how a caller outside freehire recognises the company: the site
+-- (company_info website, else homepage, trimmed the way ListCompaniesBySiteHost trims it)
+-- and the LinkedIn page. '' when unknown; the handler serves that as null.
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
-       feedback_count, feedback_rating_avg, ai_interview_reports
+       feedback_count, feedback_rating_avg, ai_interview_reports,
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(regexp_replace(company_info ->> 'linkedin', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '')::text AS linkedin
 FROM companies
 WHERE job_count > 0
   AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
@@ -53,6 +59,10 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
+  -- hq_country is where the company is headquartered (`countries` is where its open jobs
+  -- are). A NULLABLE SCALAR stored in mixed case ("US", "us"): the handler lowercases the
+  -- requested codes and the column is lowered here; NULL matches none.
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
 -- `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
 -- companies sort last), falling through to the default job_count DESC, name
 -- for the tiebreak. Any other value (including '', the default) leaves the
@@ -99,7 +109,8 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('yc_stage')::text[]), 0) = 0 OR yc_stage && sqlc.arg('yc_stage')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
-  AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]));
+  AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]));
 
 -- name: EstimateHiringCompanies :one
 -- Fast approximate hiring-company total (job_count > 0) for the UNFILTERED /companies

@@ -523,7 +523,8 @@ export interface paths {
          * List companies with job counts and denormalized facets; optional filters.
          * @description Most active first. Facet params are repeatable and filter by array overlap (OR within a
          *     facet, AND across facets), composably with `q`. `meta.total` reports the count matching
-         *     the full filter.
+         *     the full filter. `countries` matches where a company's open jobs are; `hq_country`
+         *     (ISO 3166-1 alpha-2, any case) matches where it is headquartered.
          */
         get: operations["listCompanies"];
         put?: never;
@@ -7808,6 +7809,10 @@ export interface components {
             tagline: string | null;
             industries: string[];
             hq_country: string | null;
+            /** @description The company's own site as recorded (its website, else its homepage); null when unknown. */
+            website: string | null;
+            /** @description The company's LinkedIn page; null when unknown. */
+            linkedin: string | null;
             /** @description Curated company tags; the catalogue card renders the backer marks from these. */
             collections: string[];
             /** Format: int64 */
@@ -12704,6 +12709,8 @@ export interface operations {
                      *             "payments"
                      *           ],
                      *           "hq_country": "DE",
+                     *           "website": "https://acme.example",
+                     *           "linkedin": "https://www.linkedin.com/company/acme",
                      *           "collections": [
                      *             "yc"
                      *           ],

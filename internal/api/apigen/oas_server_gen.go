@@ -1439,6 +1439,8 @@ type Handler interface {
 	//
 	// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
 	// across facets), composably with `q`. `meta.total` reports the count matching the full filter.
+	// `countries` matches where a company's open jobs are; `hq_country` (ISO 3166-1 alpha-2, any case)
+	// matches where it is headquartered.
 	//
 	// GET /companies
 	ListCompanies(ctx context.Context, params ListCompaniesParams) (*ListCompaniesOK, error)

@@ -95,3 +95,22 @@ func TestFromCompany_SlugIsTopLevelPrimaryKey(t *testing.T) {
 		t.Errorf("top-level job_count = %s, want 3 in %s", got, raw)
 	}
 }
+
+func TestFromCompany_SiteFromCompanyInfo(t *testing.T) {
+	for _, tc := range []struct {
+		name, info, website, linkedin string
+	}{
+		{"website wins", `{"website":" https://gomotive.com ","homepage":"wearemotive.com","linkedin":"https://linkedin.com/company/motive-inc"}`, "https://gomotive.com", "https://linkedin.com/company/motive-inc"},
+		{"homepage fallback", `{"website":"  ","homepage":"acme.example"}`, "acme.example", ""},
+		{"nothing recorded", `{}`, "", ""},
+		{"malformed blob", `not json`, "", ""},
+		{"no blob", ``, "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := FromCompany(db.Company{Slug: "x", Name: "X", CompanyInfo: json.RawMessage(tc.info)})
+			if doc.Website != tc.website || doc.LinkedIn != tc.linkedin {
+				t.Errorf("site = (%q, %q), want (%q, %q)", doc.Website, doc.LinkedIn, tc.website, tc.linkedin)
+			}
+		})
+	}
+}
