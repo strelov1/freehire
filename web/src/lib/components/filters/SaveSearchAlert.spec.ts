@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SaveSearchAlert from './SaveSearchAlert.svelte';
+import { isAuthenticated } from '#lib/auth.svelte.js';
+import { PENDING_ALERT_KEY } from '#lib/saveSearchAlert.js';
 import { savedSearches } from '#lib/savedSearches.svelte.js';
+import { promptSignIn } from '#lib/signin.js';
 
 const state = vi.hoisted(() => ({
   items: [] as { id: number; name: string; query: string }[],
@@ -11,7 +14,7 @@ const state = vi.hoisted(() => ({
 const goto = vi.hoisted(() => vi.fn());
 vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
-vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: vi.fn() }));
 vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn() }));
 vi.mock('#lib/savedSearches.svelte.js', () => ({
   savedSearches: {
@@ -41,9 +44,28 @@ beforeEach(() => {
   state.items = [];
   state.subs = [];
   goto.mockClear();
+  vi.mocked(isAuthenticated).mockReturnValue(true);
+  vi.mocked(promptSignIn).mockClear();
+  localStorage.removeItem(PENDING_ALERT_KEY);
 });
 
 describe('SaveSearchAlert', () => {
+  it('records the search before prompting a signed-out visitor to sign in', async () => {
+    const query = 'category=backend';
+    let queryAtPrompt: string | null = null;
+    vi.mocked(isAuthenticated).mockReturnValue(false);
+    vi.mocked(promptSignIn).mockImplementationOnce(() => {
+      queryAtPrompt = localStorage.getItem(PENDING_ALERT_KEY);
+    });
+
+    render(SaveSearchAlert, { query });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save this search' }));
+
+    expect(promptSignIn).toHaveBeenCalledOnce();
+    expect(queryAtPrompt).toBe(query);
+    expect(localStorage.getItem(PENDING_ALERT_KEY)).toBe(query);
+  });
+
   it.each(['min_skill_match=70', ''])('offers no alert on a saved query that does not narrow: %j', (query) => {
     state.items = [{ id: 1, name: 'mine', query }];
     render(SaveSearchAlert, { query, alerts: 'manage' });

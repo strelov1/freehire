@@ -7,6 +7,7 @@
     FileText,
     Flag,
     GraduationCap,
+    Megaphone,
     Handshake,
     Star,
     UserX,
@@ -29,6 +30,7 @@
   import ConversationReportsQueue from './ConversationReportsQueue.svelte';
   import CompanyRelationsQueue from './CompanyRelationsQueue.svelte';
   import UserBanPanel from './UserBanPanel.svelte';
+  import SponsoredReviewQueue from './SponsoredReviewQueue.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
@@ -42,6 +44,7 @@
     | 'employer'
     | 'conversations'
     | 'companies'
+    | 'sponsored'
     | 'users';
   const sections: { value: View; label: string; icon: LucideIcon }[] = [
     { value: 'queue', label: 'Moderation queue', icon: FileText },
@@ -58,6 +61,7 @@
     { value: 'conversations', label: 'Conversation reports', icon: UsersRound },
     // Company merges and parent links people proposed from a company page (freehire#3895).
     { value: 'companies', label: 'Company corrections', icon: Building2 },
+    { value: 'sponsored', label: 'Sponsored campaigns', icon: Megaphone },
     // Manual account ban: find an account, ban it with a reason, lift the ban.
     { value: 'users', label: 'Ban an account', icon: UserX },
   ];
@@ -283,6 +287,8 @@
           <ConversationReportsQueue />
         {:else if view === 'companies'}
           <CompanyRelationsQueue />
+        {:else if view === 'sponsored'}
+          <SponsoredReviewQueue />
         {:else if view === 'users'}
           <UserBanPanel />
         {:else}

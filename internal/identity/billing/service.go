@@ -227,6 +227,8 @@ type Service struct {
 	q      *db.Queries
 	client *client
 	prices priceCache
+	// crediter applies a verified sponsored top-up; set by the wiring (see TopupCrediter).
+	crediter TopupCrediter
 }
 
 // New constructs a Service. It never fails: an unconfigured Service is disabled and refuses

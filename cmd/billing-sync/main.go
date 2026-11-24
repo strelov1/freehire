@@ -12,6 +12,9 @@
 //     collected, then place the earned ones on their referrers' balances. Stripe only: a
 //     store subscription produces no invoice we can read.
 //
+// A fourth, sponsored housekeeping pass (sponsoredSweeps) ends campaigns of closed jobs and,
+// just after UTC midnight, requeues capped campaigns' jobs for the search index.
+//
 // The second pass reaches its candidates through what each provider can address them by (the
 // stored customer binding for Stripe, the store entitlement column for RevenueCat), so it walks
 // accounts that have transacted rather than every account.
@@ -32,6 +35,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -70,12 +74,18 @@ func run() int {
 	queries := db.New(pool)
 	max := worker.EnvInt32OrDefault("BILLING_SYNC_MAX_PER_RUN", maxPerRunDefault)
 
+	stripeSvc := billing.New(stripeCfg, queries)
+	// Sponsored top-ups (one-off payments) are credited through this seam, here as in the API:
+	// an unprocessed top-up event is replayed by pass one below.
+	sponsoredSvc := sponsored.New(pool).WithRefunder(stripeSvc)
+	stripeSvc.SetTopupCrediter(sponsoredSvc)
+
 	// Named so every log line says which provider it is about.
 	passes := []struct {
 		name string
 		svc  reconcilable
 	}{
-		{"stripe", billing.New(stripeCfg, queries)},
+		{"stripe", stripeSvc},
 		{"revenuecat", billing.NewRevenueCat(storeCfg, queries)},
 	}
 
@@ -97,9 +107,58 @@ func run() int {
 	// lives only on the production host. Stripe only, since a store subscription produces no
 	// invoice we can read.
 	if stripeCfg.Enabled() {
-		failures += settleRewardsLocked(ctx, pool, billing.New(stripeCfg, queries), queries, max)
+		failures += settleRewardsLocked(ctx, pool, stripeSvc, queries, max)
+		// Money that must go back to a sponsor and has not (a refund call that failed at
+		// rejection, or a payment for a campaign already dead).
+		refunded, err := sponsoredSvc.RefundPending(ctx, max)
+		if err != nil {
+			log.Printf("billing-sync: sponsored refunds: %v", err)
+			failures++
+		}
+		log.Printf("billing-sync: sponsored refunds=%d", refunded)
 	}
+	failures += sponsoredSweeps(ctx, sponsoredSvc, time.Now())
 	return worker.ExitCode(failures, 0)
+}
+
+// sponsoredSweeper is the housekeeping a sponsored campaign needs that no request triggers.
+type sponsoredSweeper interface {
+	EndClosedJobs(ctx context.Context) (int64, error)
+	RequeueDailyCapJobs(ctx context.Context) (int64, error)
+}
+
+// capResetWindowHours is how many hours after UTC midnight the daily-cap requeue runs. The
+// timer is hourly, so three tries survive a skipped firing, and the rest of the day does no
+// needless reindexing.
+const capResetWindowHours = 3
+
+// sponsoredSweeps is the sponsored housekeeping pass:
+//
+//  1. end the campaigns of jobs that have closed (closed_at is set by many statements, so a
+//     sweep stands in for a hook);
+//  2. in the first hours of a UTC day, requeue the jobs of active campaigns with a daily cap,
+//     since a cap resets at midnight and nothing writes those jobs then, so one whose document
+//     went sponsored=false when yesterday's cap was hit would stay hidden.
+//
+// It needs no provider credential, but the binary only runs where a billing provider is
+// configured, which is the only place campaigns can be paid for. A failure is counted and
+// never stops the other half.
+func sponsoredSweeps(ctx context.Context, svc sponsoredSweeper, now time.Time) int {
+	var failures int
+	ended, err := svc.EndClosedJobs(ctx)
+	if err != nil {
+		log.Printf("billing-sync: sponsored: end campaigns of closed jobs: %v", err)
+		failures++
+	}
+	var requeued int64
+	if now.UTC().Hour() < capResetWindowHours {
+		if requeued, err = svc.RequeueDailyCapJobs(ctx); err != nil {
+			log.Printf("billing-sync: sponsored: requeue daily-cap jobs: %v", err)
+			failures++
+		}
+	}
+	log.Printf("billing-sync: sponsored ended_closed=%d requeued_capped=%d", ended, requeued)
+	return failures
 }
 
 // settleRewardsLocked runs the referral pass under an advisory lock, or skips it.
@@ -194,7 +253,8 @@ func applyPending(ctx context.Context, name string, svc reconcilable, max int32)
 		// alone would make the retry WEAKER than the first attempt, and an account whose binding
 		// never got written would resolve to nobody and be stamped unattributable forever (a
 		// stamped row is never retried).
-		replay := billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType}
+		// The payload rides along: a sponsored top-up is identified by it (see Service.Apply).
+		replay := billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType, Payload: ev.Payload}
 		if ev.UserID.Valid {
 			replay.UserRef = strconv.FormatInt(ev.UserID.Int64, 10)
 		}

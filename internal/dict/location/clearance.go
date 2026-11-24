@@ -1,8 +1,9 @@
 package location
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 )

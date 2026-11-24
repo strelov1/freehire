@@ -70,11 +70,14 @@ func facetSettings() *meilisearch.Settings {
 			// reality.class is the job-reality signal (fresh/stale/likely-evergreen), nested under
 			// the served reality object.
 			"reality.class",
+			// sponsored is true-or-absent: a paid campaign is serving the job (JobDocument.Sponsored).
+			// Declare it in the live settings BEFORE a binary that filters on it.
+			"sponsored",
 		},
 		// posted_at / created_at are RFC3339 UTC strings and sort chronologically as text.
 		// view_count backs the "Most viewed" order. An undeclared sort attribute makes Meili
 		// reject the whole query, so declare it before a binary accepts ?sort=view_count.
-		SortableAttributes: []string{"posted_at", "created_at", "view_count", "enrichment.salary_min", "enrichment.salary_max"},
+		SortableAttributes: []string{"posted_at", "created_at", "view_count", "enrichment.salary_min", "enrichment.salary_max", "sponsored_cpc"},
 		// posted_ts:desc is a freshness tie-breaker after exactness: relevance and any explicit
 		// sort decide first. It uses the numeric posted_ts; custom ranking rules need no sortable
 		// declaration.

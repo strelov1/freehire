@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/strelov1/freehire/internal/application/deliverywindow"
+	"github.com/strelov1/freehire/internal/engage/deliverywindow"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/job/silence"
 	"github.com/strelov1/freehire/internal/platform/db"

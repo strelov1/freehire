@@ -1,8 +1,6 @@
 package sources
 
-import (
-	"regexp"
-)
+import "github.com/MoeForge/moego/regexp"
 
 // brazilRegimeTerm finds the two contract regimes a Brazilian board's "Tipo de contrato"
 // picklist names: "CLT (Efetivo)", "Efetivo – CLT", "Efetivo (CLT)" for employment under

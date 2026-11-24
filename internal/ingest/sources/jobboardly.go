@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // jobboardly adapts Jobboardly (jobboardly.com), a hosted job-board builder: every board is a

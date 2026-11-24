@@ -1,8 +1,9 @@
 package location
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // Indian postings state the arrangement in a register of their own: "WFO" (work from

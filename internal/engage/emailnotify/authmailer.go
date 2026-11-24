@@ -5,8 +5,8 @@ import (
 	"context"
 	"html/template"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // AuthMailer renders and sends the transactional account mails: sign-up

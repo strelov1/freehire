@@ -4,17 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -117,68 +115,12 @@ func (s computrabajo) FetchNewGated(ctx context.Context, e CompanyEntry, seen fu
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(cards))
-		for _, c := range cards {
-			companies = append(companies, c.company)
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []computrabajoCard
-	deferred := 0
-	for _, c := range cards {
-		base := computrabajoBaseJob(c, country)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[c.company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, c)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, computrabajoDetailWorkers, func(c computrabajoCard) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, c, country)
-		if err != nil {
-			log.Printf("computrabajo: posting %s failed; deferring: %v", c.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone; postings left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("computrabajo: requested %d posting pages and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("computrabajo: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("computrabajo: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns, so one
-// that runs into its deadline stores nothing at all.
-func (s computrabajo) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "computrabajo", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: computrabajoDetailWorkers, Deadline: s.deadlineMargin}, cards, seen, gate,
+		nil,
+		func(c computrabajoCard) Job { return computrabajoBaseJob(c, country) },
+		func(c computrabajoCard) any { return c.id },
+		func(ctx context.Context, c computrabajoCard) (Job, bool, error) { return s.detail(ctx, c, country) })
 }
 
 // list reads the province filter and walks each province, returning the named-employer postings

@@ -7,8 +7,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // ApplicationStatusMail is the employer's answer to an on-site application, as the

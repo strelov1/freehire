@@ -206,6 +206,8 @@
   // where they unit-test without mounting this component.
   const cta = $derived(jobCtaPlan(autoApplyState));
   const strip = $derived({
+    slug: job.public_slug,
+    title: job.title,
     saved,
     onSaveClick,
     onReportClick,

@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // appleFake is a test transport for the Apple adapter: the listing is a POST whose page

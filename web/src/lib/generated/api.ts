@@ -6001,6 +6001,193 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sponsored/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your sponsored campaigns.
+         * @description The caller's campaigns, newest first.
+         */
+        get: operations["listSponsoredCampaigns"];
+        put?: never;
+        /**
+         * Create a sponsored campaign.
+         * @description Opens a draft campaign for an open, public job. 422 for a cost per click under the
+         *     minimum (`SPONSORED_MIN_CPC_CENTS`, 10 by default), a daily cap under the click cost, or a
+         *     job that is closed, private or unknown.
+         */
+        post: operations["createSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/campaigns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a sponsored campaign and its stats.
+         * @description One of the caller's campaigns with its delivery and spend. Another user's id answers 404.
+         */
+        get: operations["getSponsoredCampaign"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/campaigns/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a sponsored campaign.
+         * @description Ends the campaign for good; unused budget stays recorded. 409 when it is already over.
+         */
+        post: operations["endSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/campaigns/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a sponsored campaign.
+         * @description `active` to `paused`. 409 when the campaign is in another state.
+         */
+        post: operations["pauseSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/campaigns/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a sponsored campaign.
+         * @description `paused` to `active`. 409 when the campaign is in another state.
+         */
+        post: operations["resumeSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/campaigns/{id}/topup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a sponsored campaign top-up.
+         * @description Returns a Stripe Checkout URL that pays `amount_cents` into the campaign. 422 under the
+         *     minimum top-up, 409 for a rejected or ended campaign, 404 when payments are not configured.
+         */
+        post: operations["topupSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List sponsored campaigns waiting for review.
+         * @description Moderators only, oldest first.
+         */
+        get: operations["listSponsoredReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/review/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a sponsored campaign.
+         * @description Moderators only. 409 when the campaign is not in review.
+         */
+        post: operations["approveSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sponsored/review/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a sponsored campaign.
+         * @description Moderators only. Refunds what was paid; answers 200 with `refund_pending` when the refund is still to retry.
+         */
+        post: operations["rejectSponsoredCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/catalog": {
         parameters: {
             query?: never;
@@ -8958,6 +9145,16 @@ export interface components {
              *     database may omit it.
              */
             apply_questions?: number;
+            /**
+             * @description True only on a search hit placed as a paid slot (never on an organic hit). Render a
+             *     visible "Sponsored" label, and link the card to `sponsored_url`.
+             */
+            sponsored?: boolean;
+            /**
+             * @description Click-tracking redirect (`/api/v1/sponsored/go/<token>`) for a sponsored hit; it always
+             *     ends at the job. `url` stays the organic link.
+             */
+            sponsored_url?: string;
             posted_at?: string | null;
             /** @description When freehire first saw the posting. */
             created_at?: string | null;
@@ -10516,6 +10713,108 @@ export interface components {
             /** Format: int64 */
             ats_unmatched?: number;
             measured_at: string;
+        };
+        SponsoredApproval: {
+            approved: boolean;
+        };
+        /** @description `draft`, `pending_payment`, `pending_review`, `active`, `paused`, `exhausted`, `rejected` or `ended`. */
+        SponsoredCampaign: {
+            /** Format: int64 */
+            id: number;
+            status: string;
+            job_slug: string;
+            job_title: string;
+            job_company: string;
+            /** Format: int64 */
+            cpc_cents: number;
+            /**
+             * Format: int64
+             * @description Absent when there is no daily cap.
+             */
+            daily_cap_cents?: number;
+            /**
+             * Format: int64
+             * @description Paid in so far.
+             */
+            budget_cents: number;
+            /** Format: int64 */
+            spent_cents: number;
+            /** Format: int64 */
+            remaining_cents: number;
+            /** @description Set only on a rejected campaign. */
+            reject_reason?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SponsoredCampaignDetail: {
+            campaign: components["schemas"]["SponsoredCampaign"];
+            /** @description The last 30 days that have any activity, oldest first. */
+            days: components["schemas"]["SponsoredDayStat"][];
+            /** @description Clicks that were not charged in the last 30 days, grouped by why. */
+            invalid_clicks_by_reason: components["schemas"]["SponsoredInvalidReason"][];
+        };
+        SponsoredCampaignRequest: {
+            /** @description The job's public slug (the one in its page URL). */
+            job_slug?: string;
+            /** Format: int64 */
+            cpc_cents?: number;
+            /**
+             * Format: int64
+             * @description Optional; at least `cpc_cents` when set.
+             */
+            daily_cap_cents?: number;
+        };
+        SponsoredDayStat: {
+            /** Format: date */
+            day: string;
+            /** Format: int64 */
+            impressions: number;
+            /** Format: int64 */
+            valid_clicks: number;
+            /** Format: int64 */
+            invalid_clicks: number;
+            /** Format: int64 */
+            spent_cents: number;
+        };
+        SponsoredInvalidReason: {
+            /** @description `bot`, `duplicate`, `rate`, `inactive` or `budget`. */
+            reason: string;
+            /** Format: int64 */
+            clicks: number;
+        };
+        SponsoredRejectRequest: {
+            /** @description Required and non-empty; shown to the buyer. */
+            reason?: string;
+        };
+        SponsoredRejection: {
+            rejected: boolean;
+            /** @description True when the campaign is rejected but the refund did not finish; it is retried later. */
+            refund_pending: boolean;
+        };
+        SponsoredReviewItem: {
+            /** Format: int64 */
+            id: number;
+            job_slug: string;
+            job_title: string;
+            job_company: string;
+            job_url: string;
+            /** Format: int64 */
+            cpc_cents: number;
+            /** Format: int64 */
+            daily_cap_cents?: number;
+            /** Format: int64 */
+            budget_cents: number;
+            /**
+             * Format: int64
+             * @description The buyer's account id; no email is shown.
+             */
+            owner_user_id: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SponsoredTopupRequest: {
+            /** Format: int64 */
+            amount_cents?: number;
         };
         /** @description An offer to move the application to the stage its newest classified message implies. */
         StageSuggestion: {
@@ -26708,6 +27007,352 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["SourceEntry"][];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSponsoredCampaigns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredCampaign"][];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SponsoredCampaignRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredCampaign"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredCampaignDetail"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    endSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredCampaign"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pauseSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredCampaign"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredCampaign"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    topupSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SponsoredTopupRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BillingUrl"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSponsoredReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredReviewItem"][];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredApproval"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rejectSponsoredCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SponsoredRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SponsoredRejection"];
                     };
                 };
             };

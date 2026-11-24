@@ -2,8 +2,9 @@ package atsboard
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 const brassringCareerPath = "/TGnewUI/Search/home/HomeWithPreLoad"

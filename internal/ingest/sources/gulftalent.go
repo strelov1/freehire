@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // gulftalent adapts GulfTalent.com, a major Gulf job board. It is a boardless multi-company

@@ -1,10 +1,10 @@
 package location
 
 import (
-	"regexp"
 	"strings"
 	"unicode"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/text/unicode/norm"
 )
 

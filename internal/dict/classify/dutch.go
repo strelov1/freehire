@@ -1,8 +1,9 @@
 package classify
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // Dutch titles, like German ones, name their role in the LAST morpheme of a compound: a servicedesk|medewerker, a wijk|verpleegkundige, an applicatie|beheerder. Where the qualifier is a separate word ("Functioneel Beheerder", "Business Analist") it is a phrase the main tables never learned, because the head is spelled the Dutch way.

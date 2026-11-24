@@ -1,8 +1,9 @@
 package skilltag
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // These disciplines and plant tools name industrial work; none corroborates an ambiguous software word such as "react".

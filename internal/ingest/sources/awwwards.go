@@ -7,10 +7,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // awwwards adapts Awwwards Jobs (awwwards.com/jobs), the web-design showcase's job board:

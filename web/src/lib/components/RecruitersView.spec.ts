@@ -14,4 +14,11 @@ describe('RecruitersView', () => {
     ]);
     expect(screen.getByRole('link', { name: 'Submit an existing job' }).getAttribute('href')).toBe('/submit');
   });
+
+  it('links hiring teams to the job promotion pilot', () => {
+    render(RecruitersView);
+    expect(screen.getByRole('link', { name: 'Explore the pilot' }).getAttribute('href')).toBe(
+      '/recruiters/job-promotion',
+    );
+  });
 });

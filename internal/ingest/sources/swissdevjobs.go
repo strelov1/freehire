@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"log"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -107,58 +105,12 @@ func (s swissdevjobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fu
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(rows))
-		for _, r := range rows {
-			companies = append(companies, collapseSpace(r.Company))
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []swissdevjobsJob
-	deferred := 0
-	for _, r := range rows {
-		base := swissdevjobsBaseJob(r)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[base.Company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, r)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, swissdevjobsDetailWorkers, func(r swissdevjobsJob) (Job, bool) {
-		if d, ok := ctx.Deadline(); ok && time.Until(d) < s.deadlineMargin {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, r)
-		if err != nil {
-			log.Printf("swissdevjobs: posting %s failed; deferring: %v", r.Slug, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	if requested := int64(len(unseen)) - outOfTime.Load(); requested > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("swissdevjobs: requested %d posting pages and none answered", requested)
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("swissdevjobs: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("swissdevjobs: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
+	return hydrateNew(ctx, hydration{Provider: "swissdevjobs", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: swissdevjobsDetailWorkers, Deadline: s.deadlineMargin}, rows, seen, gate,
+		nil,
+		swissdevjobsBaseJob,
+		func(r swissdevjobsJob) any { return r.Slug },
+		s.detail)
 }
 
 // list reads the feed and keeps the live postings with an id, a page, a title and an employer.

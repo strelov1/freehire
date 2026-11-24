@@ -1,8 +1,9 @@
 package classify
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // frenchWorkplaceTable lists the WORKPLACES a title names — the bank, the insurer, the

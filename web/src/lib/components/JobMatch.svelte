@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Ban, Check, FileText, Lock, RotateCcw, TriangleAlert } from '@lucide/svelte';
+  import { ArrowRight, Ban, Check, FileText, Lock, RotateCcw, TriangleAlert, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { signinUrl } from '#lib/signin.js';
@@ -62,6 +62,8 @@
     | { kind: 'unavoid'; skill: string };
 
   let claiming = $state<string | null>(null);
+  let claimTrigger: HTMLButtonElement | null = null;
+  let claimRowElement = $state<HTMLDivElement>();
   let overlay = $state.raw<JobMatchResult | null>(null);
   let done = $state.raw<Done | null>(null);
   let failed = $state<string | null>(null);
@@ -79,6 +81,7 @@
     match = null;
     overlay = null;
     claiming = null;
+    claimTrigger = null;
     done = null;
     failed = null;
     if (blockState !== 'ready') return;
@@ -222,22 +225,39 @@
   /** Open the claim row for a skill, or close it if it is already the open one. Only one
    *  is open at a time — the row names its skill, which is what keeps it tied to the chip
    *  without anchoring a floating layer inside a narrow column. */
-  function toggleClaimRow(skill: string) {
-    claiming = claiming === skill ? null : skill;
+  function toggleClaimRow(skill: string, trigger: HTMLButtonElement) {
+    const open = claiming !== skill;
+    claiming = open ? skill : null;
+    claimTrigger = open ? trigger : null;
+  }
+
+  function closeClaimRow(restoreFocus: boolean) {
+    claiming = null;
+    if (restoreFocus) claimTrigger?.focus();
+    claimTrigger = null;
   }
 </script>
 
 {#snippet claimRow(skill: string)}
   <!-- The row expands under the group rather than floating over it: the sidebar column is
        too narrow for an anchored popover, and naming the skill in the row's own text keeps
-       it tied to the chip that opened it. Styled as a bare row of pills, not a panel, so
-       every inline disclosure in the app reads the same.
-       It names the skill instead of asking "do you have it?": that question fitted one
-       answer, and the row now carries two. -->
-  <div class="flex flex-wrap items-center gap-1.5">
-    <span class="flex items-center gap-1 text-xs font-medium text-foreground">
-      <SkillIcon slug={skill} />{skillLabel(skill)}
-    </span>
+       it tied to the chip that opened it. -->
+  {@const label = skillLabel(skill)}
+  <div bind:this={claimRowElement} class="flex flex-wrap items-center gap-1.5">
+    <div class="flex w-full items-center justify-between gap-1.5">
+      <span class="flex items-center gap-1 text-xs font-medium text-foreground">
+        <SkillIcon slug={skill} />{label}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-6 shrink-0 text-muted-foreground"
+        aria-label="Close skill actions"
+        onclick={() => closeClaimRow(true)}
+      >
+        <X class="size-3.5" aria-hidden="true" />
+      </Button>
+    </div>
     <button
       type="button"
       disabled={pending}
@@ -265,12 +285,22 @@
         <Ban class="size-3.5" aria-hidden="true" /> Avoid
       </button>
     {/if}
+    <Button
+      variant="outline"
+      size="sm"
+      class="h-auto min-h-6 gap-1.5 rounded-full px-2.5 py-1 text-xs text-muted-foreground"
+      href={resolve('/skills/[slug]', { slug: skill })}
+    >
+      <span class="whitespace-normal">About {label}</span><ArrowRight class="size-3.5 shrink-0" aria-hidden="true" />
+    </Button>
   </div>
 {/snippet}
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.key === 'Escape' && claiming) claiming = null;
+    if (e.key === 'Escape' && claiming) {
+      closeClaimRow(claimRowElement?.contains(document.activeElement) ?? false);
+    }
   }}
 />
 
@@ -340,7 +370,7 @@
               aria-expanded={claiming === a.name}
               aria-label={chipLabel(a.name)}
               disabled={pending}
-              onclick={() => toggleClaimRow(a.name)}
+              onclick={(event) => toggleClaimRow(a.name, event.currentTarget)}
             >
               <SkillIcon slug={a.name} />{skillLabel(a.name)} <span class="font-normal">· you have {a.via}</span>
             </button>
@@ -365,7 +395,7 @@
               aria-expanded={claiming === skill}
               aria-label={chipLabel(skill)}
               disabled={pending}
-              onclick={() => toggleClaimRow(skill)}
+              onclick={(event) => toggleClaimRow(skill, event.currentTarget)}
             >
               <SkillIcon slug={skill} />{skillLabel(skill)}
             </button>

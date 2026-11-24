@@ -110,11 +110,7 @@ func prepareAll(t *testing.T, pool *pgxpool.Pool, stmts map[string]string) map[s
 // the after-pass, so the list is exact on purpose: any other baseline failure, or the same
 // statement failing for a different reason, fails the test, and an entry whose SQL names a legacy
 // column is refused (a statement that already fails would hide it: Postgres reports one error).
-var knownBaselineFailures = map[string]string{
-	// internal/platform/db/link_contributions_backfill.sql.go has no source in queries/ and no
-	// caller; migrations/0131_drop_link_contributions.sql dropped its table. A dead generated file.
-	"listLinkContributionsForBackfill": `relation "link_contributions" does not exist`,
-}
+var knownBaselineFailures = map[string]string{}
 
 var reLegacyName = regexp.MustCompile(`(?i)\b(last_seen_at|hydrated_at|liveness_strikes)\b`)
 

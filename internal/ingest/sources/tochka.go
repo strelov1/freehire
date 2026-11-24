@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // tochka adapts Tochka Bank's own careers site (hr.tochka.com), a single-company source with no

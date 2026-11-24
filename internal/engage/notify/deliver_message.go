@@ -75,6 +75,7 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 		p.covered = r.countCovered(ctx, p.subID, p.claim)
 		p.digest = buildDigest(p.info.SavedSearchName, jobs, p.covered)
 		p.digest.SearchQuery = p.info.SavedSearchQuery
+		p.digest.Sponsored = r.sponsoredSlot(ctx, info.Channel, info.UserID, p.digest)
 		// Record the in-app notification BEFORE sending, so the digest carries its row's id and each
 		// channel's "and N more" tail can link to the full match set. A recording failure is not a
 		// delivery failure: the digest goes out with a zero id and a generic tail.
@@ -153,6 +154,10 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 
 	for _, p := range parts {
 		r.finalize(ctx, p, stamped)
+		// Counted once the mail is out: a failed send shows nobody the ad.
+		if p.digest.Sponsored != nil {
+			r.ads.imp.Add(p.digest.Sponsored.CampaignID, r.now())
+		}
 	}
 	if info.Channel == ChannelWebhook {
 		if err := r.store.RecordWebhookDeliverySuccess(ctx, info.UserID); err != nil {

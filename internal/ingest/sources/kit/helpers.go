@@ -3,10 +3,12 @@ package kit
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -75,6 +77,110 @@ func HydrationLanes[P any](unseen []P, fresh, backlog int, now time.Time) []P {
 		picked = append(picked, rest[(start+i)%len(rest)])
 	}
 	return picked
+}
+
+// Hydration is what one bounded, per-posting-detail aggregator tells the shared walk about
+// itself: its log prefix, how its logs name a page (noun "posting", plural "postings", unit
+// "posting pages" in the none-answered failure), the per-run page budget and fan-out, and the
+// margin it leaves the run's deadline for the pipeline's own writes.
+type Hydration struct {
+	Provider     string
+	Noun         string
+	Plural       string
+	Unit         string
+	MaxNewPerRun int
+	Workers      int
+	Deadline     time.Duration
+}
+
+// nearDeadline reports that the run is inside the margin hydration leaves to the pipeline. A zero
+// margin leaves everything to the run and stops nothing early.
+func (h Hydration) nearDeadline(ctx context.Context) bool {
+	if h.Deadline == 0 {
+		return false
+	}
+	d, ok := ctx.Deadline()
+	return ok && time.Until(d) < h.Deadline
+}
+
+// HydrateNew is the walk every such adapter shares: list, refresh the postings the catalogue
+// already holds, yield body-less the ones the coverage gate condemns, and read up to
+// maxNewPerRun of the rest in listing order through FetchDetails. It fails when it asked for at
+// least one page and none answered (see AGENT-REFERENCE.md, "A crawl that reads nothing of what
+// it listed must fail"); a page left unread for want of time or of budget is logged and deferred
+// to a later run, never counted as a failure.
+//
+// order, when given, sorts the unseen postings before the budget is taken from their head (an
+// adapter whose listing is not newest first); the budget otherwise follows the listing's order.
+//
+// base builds a posting's body-less Job; its Company is both the key the gate is asked about and
+// the key a covered posting is recognised by, so an adapter whose listing names no employer
+// (turijobs, hzz) passes a zero DetailGate and nothing is condemned. label is the posting's id as
+// its adapter logs it (an int or a string), printed with %v.
+func HydrateNew[P any](ctx context.Context, h Hydration, postings []P, seen func(externalID string) bool, gate DetailGate, order func([]P), base func(P) Job, label func(P) any, detail func(context.Context, P) (Job, bool, error)) ([]Job, error) {
+	var covered map[string]bool
+	if gate.Covered != nil {
+		companies := make([]string, 0, len(postings))
+		for _, p := range postings {
+			companies = append(companies, base(p).Company)
+		}
+		covered = gate.Covered(companies)
+	}
+
+	var kept []Job
+	var unseen []P
+	deferred := 0
+	for _, p := range postings {
+		b := base(p)
+		switch {
+		case seen(b.ExternalID):
+			b.SeenRefresh = true
+			kept = append(kept, b)
+		case covered[b.Company]:
+			kept = append(kept, b)
+		case order != nil || len(unseen) < h.MaxNewPerRun:
+			unseen = append(unseen, p)
+		default:
+			deferred++
+		}
+	}
+	// order is the adapter's own idea of which unseen pages the budget buys first, so it must see
+	// every candidate before the budget is taken from the head; without one the listing's order
+	// stands and the loop never holds more than the budget.
+	if order != nil {
+		order(unseen)
+		if n := len(unseen) - h.MaxNewPerRun; n > 0 {
+			deferred = n
+			unseen = unseen[:h.MaxNewPerRun]
+		}
+	}
+
+	var answered, outOfTime atomic.Int64
+	read := FetchDetails(unseen, h.Workers, func(p P) (Job, bool) {
+		if h.nearDeadline(ctx) {
+			outOfTime.Add(1)
+			return Job{}, false
+		}
+		job, ok, err := detail(ctx, p)
+		if err != nil {
+			log.Printf("%s: %s %v failed; deferring: %v", h.Provider, h.Noun, label(p), err)
+			return Job{}, false
+		}
+		answered.Add(1)
+		return job, ok
+	})
+	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
+	// site reported gone; postings left for want of time are not failures.
+	if asked := int64(len(unseen)) - outOfTime.Load(); asked > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("%s: requested %d %s and none answered", h.Provider, asked, h.Unit)
+	}
+	if n := outOfTime.Load(); n > 0 {
+		log.Printf("%s: %d new %s left unread as the run neared its deadline, deferred to later runs", h.Provider, n, h.Plural)
+	}
+	if deferred > 0 {
+		log.Printf("%s: %d new %s past this run's bound of %d, deferred to later runs", h.Provider, deferred, h.Plural, h.MaxNewPerRun)
+	}
+	return append(kept, read...), nil
 }
 
 // FetchDetailsStream maps each posting to a Job via fetch, concurrently with a bounded worker
@@ -255,8 +361,9 @@ func TrimURLSuffix(u string) string {
 
 // FirstSubmatch returns the first capture group of pattern in s, or "". Adapters that pull a
 // native posting id out of a URL with a single-group regex funnel through it, so the "match,
-// else empty" idiom is written once.
-func FirstSubmatch(pattern *regexp.Regexp, s string) string {
+// else empty" idiom is written once. It takes the method rather than *regexp.Regexp, so a
+// caller on the standard library's regexp (cmd/harvest-boards) can pass one of its own.
+func FirstSubmatch(pattern interface{ FindStringSubmatch(string) []string }, s string) string {
 	if m := pattern.FindStringSubmatch(s); m != nil {
 		return m[1]
 	}

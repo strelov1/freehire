@@ -6,9 +6,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

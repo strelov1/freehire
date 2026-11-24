@@ -1,6 +1,6 @@
 package location
 
-import "regexp"
+import "github.com/MoeForge/moego/regexp"
 
 // Polish location lines come in a few shapes the parser used to miss:
 //

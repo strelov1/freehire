@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // whatjobs adapts the WhatJobs FeedAPI, a CPC network where freehire is a publisher. Unlike the

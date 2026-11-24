@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

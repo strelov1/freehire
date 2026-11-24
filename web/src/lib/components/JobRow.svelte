@@ -24,6 +24,7 @@
   import JobRowApplyGate from './JobRowApplyGate.svelte';
   import { JobCardActions } from './jobCardActions.svelte';
   import JobRowCornerActions from './JobRowCornerActions.svelte';
+  import JobShareButton from './JobShareButton.svelte';
   import JobRowBadges from './JobRowBadges.svelte';
   import JobRowGeo from './JobRowGeo.svelte';
   import JobRowRailFacts from './JobRowRailFacts.svelte';
@@ -109,6 +110,8 @@
   // `jobview.Job` carries that flag, like `url`.
   // A closed posting takes no applications, so it offers no Apply at all.
   const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);
+  // A paid slot: its links go through the click redirect that counts and charges the click.
+  const sponsoredUrl = $derived('sponsored_url' in job && job.sponsored ? (job.sponsored_url ?? null) : null);
   const directApply = $derived('direct_apply' in job && job.direct_apply === true && !job.closed_at);
   // The freshness badge, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
@@ -248,7 +251,7 @@
   data-testid="job-card"
   class={[
     'group relative transition hover:bg-accent',
-    !flat && 'rounded-xl border border-border/70 bg-card hover:border-brand',
+    flat ? 'first:rounded-t-xl last:rounded-b-xl' : 'rounded-xl border border-border/70 bg-card hover:border-brand',
   ]}
 >
   <!-- The title link stretches over this content area. Keeping the containing block
@@ -258,16 +261,14 @@
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-    <!-- Reserves the top-right corner for the Save overlay, so the
-       timestamp never slides under it. Only a compact card keeps Save up here; a normal
-       card has moved it into the action row at its foot, leaving the corner free. -->
+    <!-- Reserve space for the corner actions so they clear the timestamp. -->
     <!-- Not drawn on the employer's own page (`hideCompany`): with no company the rail would
        hold only small facts floating above the title, so they lead the meta line instead. -->
     <div
       class={[
         'flex items-center gap-2',
-        !compact && onHide ? 'pr-20' : 'pr-11',
-        touchActions && 'pointer-coarse:pr-30',
+        !compact && onHide ? 'pr-29' : 'pr-20',
+        touchActions && 'pointer-coarse:pr-39',
         hideCompany && 'hidden',
       ]}
     >
@@ -315,14 +316,16 @@
         compact ? 'mt-2 text-base' : 'text-base sm:text-lg',
         !compact && !hideCompany && 'mt-1.5',
         // With the rail hidden the title is the top line, so it reserves the corner controls' room the rail would have.
-        hideCompany && (!compact && onHide ? 'pr-20' : 'pr-11'),
-        hideCompany && touchActions && 'pointer-coarse:pr-30',
+        hideCompany && (!compact && onHide ? 'pr-29' : 'pr-20'),
+        hideCompany && touchActions && 'pointer-coarse:pr-39',
       ]}
     >
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- a sponsored card links to the API's click redirect, not a route -->
       <a
-        href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+        href={sponsoredUrl ?? resolve('/jobs/[slug]', { slug: job.public_slug })}
         target={newTab ? '_blank' : undefined}
-        rel={newTab ? 'noopener' : undefined}
+        rel={sponsoredUrl ? 'sponsored nofollow' + (newTab ? ' noopener' : '') : newTab ? 'noopener' : undefined}
+        data-sveltekit-reload={sponsoredUrl ? '' : undefined}
         aria-label={linkName}
         aria-describedby={summary ? summaryId : undefined}
         title={linkTooltip}
@@ -335,6 +338,7 @@
              clips its rows to a rounded container. -->
         <span class={compact ? 'line-clamp-1' : 'line-clamp-2'}>{job.title}</span>
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     </h3>
 
     <!-- Signal row: reality chip + the region/employment facets, grouped under the
@@ -342,9 +346,9 @@
     <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-    {#if reality || freshness.length > 0 || metaFacts.length > 0 || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
+    {#if sponsoredUrl || reality || freshness.length > 0 || metaFacts.length > 0 || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
-        <JobRowBadges {job} {directApply} {appliedToCompany} {ghost} {reality} {freshness} />
+        <JobRowBadges {job} sponsored={!!sponsoredUrl} {directApply} {appliedToCompany} {ghost} {reality} {freshness} />
         <!-- The role's facets, then the pay and the cost of applying, as one line of quiet
            text joined by dots rather than a row of outlined chips: the skills below are
            chips already, and two rows of identical outlines made every card noisy.
@@ -422,26 +426,30 @@
      states it is in rather than which action it performs, because the state is what a
      card in a long feed has to answer at a glance. -->
   {#if compact}
-    <button
-      type="button"
-      onclick={actions.toggleSave}
-      disabled={actions.saving}
-      aria-pressed={saved}
-      aria-label={saved ? 'Remove from your board' : 'Save to your board'}
-      title={saved ? 'On your board' : 'Save to board'}
-      class={[
-        'absolute right-2.5 top-4 z-10 grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
-        saved ? 'text-brand' : 'text-muted-foreground',
-      ]}
-    >
-      <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
-    </button>
+    <div class="absolute right-2.5 top-4 z-10 flex items-center gap-1 has-aria-expanded:z-20">
+      <button
+        type="button"
+        onclick={actions.toggleSave}
+        disabled={actions.saving}
+        aria-pressed={saved}
+        aria-label={saved ? 'Remove from your board' : 'Save to your board'}
+        title={saved ? 'On your board' : 'Save to board'}
+        class={[
+          'grid size-8 place-items-center rounded-lg transition hover:bg-accent hover:text-brand disabled:pointer-events-none disabled:opacity-50',
+          saved ? 'text-brand' : 'text-muted-foreground',
+        ]}
+      >
+        <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
+      </button>
+      <JobShareButton slug={job.public_slug} title={job.title} compact />
+    </div>
   {:else}
     <JobRowCornerActions
       slug={job.public_slug}
       title={job.title}
       {directApply}
-      applyUrl={applyJob?.url ?? null}
+      applyUrl={sponsoredUrl ?? applyJob?.url ?? null}
+      sponsored={!!sponsoredUrl}
       {onApplyClick}
       onHide={onHide ? actions.hide : undefined}
       hiding={actions.hiding}
@@ -465,7 +473,7 @@
   <JobRowApplyGate
     show={showApplyGate && !!applyJob}
     title={job.title}
-    url={applyJob?.url ?? ''}
+    url={sponsoredUrl ?? applyJob?.url ?? ''}
     onclose={() => (showApplyGate = false)}
   />
 </div>

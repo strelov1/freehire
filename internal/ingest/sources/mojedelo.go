@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 )
@@ -155,68 +153,12 @@ func (s mojedelo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(items))
-		for _, it := range items {
-			companies = append(companies, collapseSpace(it.Company.Name))
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []mojedeloItem
-	deferred := 0
-	for _, it := range items {
-		base := mojedeloBaseJob(it)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[base.Company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, it)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, mojedeloDetailWorkers, func(it mojedeloItem) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, it)
-		if err != nil {
-			log.Printf("mojedelo: posting %s failed; deferring: %v", it.ID, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no posting at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone; postings left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("mojedelo: requested %d postings and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("mojedelo: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("mojedelo: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns, so one
-// that runs into its deadline stores nothing at all.
-func (s mojedelo) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "mojedelo", Noun: "posting", Plural: "postings", Unit: "postings",
+		MaxNewPerRun: s.maxNewPerRun, Workers: mojedeloDetailWorkers, Deadline: s.deadlineMargin}, items, seen, gate,
+		nil,
+		mojedeloBaseJob,
+		func(it mojedeloItem) any { return it.ID },
+		s.detail)
 }
 
 // list walks the search to the total it states and returns the postings that name their

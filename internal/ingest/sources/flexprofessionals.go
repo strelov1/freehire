@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // flexprofessionals adapts FlexProfessionals (flexprofessionalsllc.com), a Washington DC / Boston

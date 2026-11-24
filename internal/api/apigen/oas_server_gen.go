@@ -64,6 +64,12 @@ type Handler interface {
 	//
 	// POST /employer/claims/{user_id}/approve
 	ApproveEmployerClaim(ctx context.Context, params ApproveEmployerClaimParams) (*ApproveEmployerClaimOK, error)
+	// ApproveSponsoredCampaign implements approveSponsoredCampaign operation.
+	//
+	// Moderators only. 409 when the campaign is not in review.
+	//
+	// POST /sponsored/review/{id}/approve
+	ApproveSponsoredCampaign(ctx context.Context, params ApproveSponsoredCampaignParams) (*ApproveSponsoredCampaignOKHeaders, error)
 	// ApproveSubmission implements approveSubmission operation.
 	//
 	// Moderators only. 404 for an unknown id, 409 for one already decided.
@@ -425,6 +431,14 @@ type Handler interface {
 	//
 	// POST /me/searches
 	CreateSavedSearch(ctx context.Context, req *SavedSearchCreate) (*CreateSavedSearchCreated, error)
+	// CreateSponsoredCampaign implements createSponsoredCampaign operation.
+	//
+	// Opens a draft campaign for an open, public job. 422 for a cost per click under the minimum
+	// (`SPONSORED_MIN_CPC_CENTS`, 10 by default), a daily cap under the click cost, or a job that is
+	// closed, private or unknown.
+	//
+	// POST /sponsored/campaigns
+	CreateSponsoredCampaign(ctx context.Context, req *SponsoredCampaignRequest) (*CreateSponsoredCampaignCreatedHeaders, error)
 	// CreateSubmission implements createSubmission operation.
 	//
 	// A URL already awaiting review is a `409`, and so is a URL the catalogue already carries — matched
@@ -595,6 +609,12 @@ type Handler interface {
 	//
 	// POST /me/applications/{id}/booking-link
 	EnableBookingLink(ctx context.Context, req *BookingLinkEnableBody, params EnableBookingLinkParams) (*EnableBookingLinkCreated, error)
+	// EndSponsoredCampaign implements endSponsoredCampaign operation.
+	//
+	// Ends the campaign for good; unused budget stays recorded. 409 when it is already over.
+	//
+	// POST /sponsored/campaigns/{id}/end
+	EndSponsoredCampaign(ctx context.Context, params EndSponsoredCampaignParams) (*EndSponsoredCampaignOKHeaders, error)
 	// EngagementStats implements engagementStats operation.
 	//
 	// `viewed` is the only field here that is not a signed-in count: it is bot-filtered job-page opens by
@@ -1067,6 +1087,12 @@ type Handler interface {
 	//
 	// GET /me/mentorship/sessions/{id}
 	GetSession(ctx context.Context, params GetSessionParams) (*GetSessionOK, error)
+	// GetSponsoredCampaign implements getSponsoredCampaign operation.
+	//
+	// One of the caller's campaigns with its delivery and spend. Another user's id answers 404.
+	//
+	// GET /sponsored/campaigns/{id}
+	GetSponsoredCampaign(ctx context.Context, params GetSponsoredCampaignParams) (*GetSponsoredCampaignOKHeaders, error)
 	// GetSurvey implements getSurvey operation.
 	//
 	// Your stored survey answers. Every field is absent until you answer it.
@@ -1638,6 +1664,18 @@ type Handler interface {
 	//
 	// GET /sources
 	ListSources(ctx context.Context) (*ListSourcesOK, error)
+	// ListSponsoredCampaigns implements listSponsoredCampaigns operation.
+	//
+	// The caller's campaigns, newest first.
+	//
+	// GET /sponsored/campaigns
+	ListSponsoredCampaigns(ctx context.Context) (*ListSponsoredCampaignsOKHeaders, error)
+	// ListSponsoredReview implements listSponsoredReview operation.
+	//
+	// Moderators only, oldest first.
+	//
+	// GET /sponsored/review
+	ListSponsoredReview(ctx context.Context) (*ListSponsoredReviewOKHeaders, error)
 	// ListSubscriptions implements listSubscriptions operation.
 	//
 	// List your subscriptions.
@@ -1799,6 +1837,12 @@ type Handler interface {
 	//
 	// POST /me/mentorship/profile/pause
 	PauseMentorProfile(ctx context.Context, req *MentorshipPauseBody) (*PauseMentorProfileOK, error)
+	// PauseSponsoredCampaign implements pauseSponsoredCampaign operation.
+	//
+	// `active` to `paused`. 409 when the campaign is in another state.
+	//
+	// POST /sponsored/campaigns/{id}/pause
+	PauseSponsoredCampaign(ctx context.Context, params PauseSponsoredCampaignParams) (*PauseSponsoredCampaignOKHeaders, error)
 	// PostAssistantExtend implements postAssistantExtend operation.
 	//
 	// A CV editing session is bounded by a turn ceiling as well as by the daily session allowance, and a
@@ -1986,6 +2030,13 @@ type Handler interface {
 	//
 	// POST /employer/claims/{user_id}/reject
 	RejectEmployerClaim(ctx context.Context, params RejectEmployerClaimParams) (*RejectEmployerClaimOK, error)
+	// RejectSponsoredCampaign implements rejectSponsoredCampaign operation.
+	//
+	// Moderators only. Refunds what was paid; answers 200 with `refund_pending` when the refund is still
+	// to retry.
+	//
+	// POST /sponsored/review/{id}/reject
+	RejectSponsoredCampaign(ctx context.Context, req *SponsoredRejectRequest, params RejectSponsoredCampaignParams) (*RejectSponsoredCampaignOKHeaders, error)
 	// RejectSubmission implements rejectSubmission operation.
 	//
 	// Moderators only. The body is optional.
@@ -2144,6 +2195,12 @@ type Handler interface {
 	//
 	// POST /me/emails/{id}/restore
 	RestoreEmail(ctx context.Context, params RestoreEmailParams) error
+	// ResumeSponsoredCampaign implements resumeSponsoredCampaign operation.
+	//
+	// `paused` to `active`. 409 when the campaign is in another state.
+	//
+	// POST /sponsored/campaigns/{id}/resume
+	ResumeSponsoredCampaign(ctx context.Context, params ResumeSponsoredCampaignParams) (*ResumeSponsoredCampaignOKHeaders, error)
 	// RetractGhostReport implements retractGhostReport operation.
 	//
 	// A claim that is absent or already withdrawn is a `404`.
@@ -2408,6 +2465,13 @@ type Handler interface {
 	//
 	// POST /me/push-tokens/test
 	TestPushToken(ctx context.Context) (*TestPushTokenOK, error)
+	// TopupSponsoredCampaign implements topupSponsoredCampaign operation.
+	//
+	// Returns a Stripe Checkout URL that pays `amount_cents` into the campaign. 422 under the minimum
+	// top-up, 409 for a rejected or ended campaign, 404 when payments are not configured.
+	//
+	// POST /sponsored/campaigns/{id}/topup
+	TopupSponsoredCampaign(ctx context.Context, req *SponsoredTopupRequest, params TopupSponsoredCampaignParams) (*TopupSponsoredCampaignOKHeaders, error)
 	// TrackApplication implements trackApplication operation.
 	//
 	// Same as `PATCH /jobs/{slug}/track`, but addressed by the tracking-board row id instead of the job

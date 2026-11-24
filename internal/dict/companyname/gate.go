@@ -9,9 +9,10 @@ package companyname
 
 import (
 	"html"
-	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 var (

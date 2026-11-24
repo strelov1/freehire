@@ -5,19 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -129,58 +127,14 @@ func (s spainjobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(postings))
-		for _, p := range postings {
-			companies = append(companies, p.company)
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []spainjobsPosting
-	deferred := 0
-	for _, p := range postings {
-		base := Job{ExternalID: p.id, URL: p.url, Title: p.title, Company: p.company, FallbackCountries: []string{"es"}}
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[p.company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, p)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, spainjobsDetailWorkers, func(p spainjobsPosting) (Job, bool) {
-		if d, ok := ctx.Deadline(); ok && time.Until(d) < s.deadlineMargin {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, p)
-		if err != nil {
-			log.Printf("spainjobs: posting %s failed; deferring: %v", p.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	if asked := int64(len(unseen)) - outOfTime.Load(); asked > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("spainjobs: requested %d posting pages and none answered", asked)
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("spainjobs: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("spainjobs: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
+	return hydrateNew(ctx, hydration{Provider: "spainjobs", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: spainjobsDetailWorkers, Deadline: s.deadlineMargin}, postings, seen, gate,
+		nil,
+		func(p spainjobsPosting) Job {
+			return Job{ExternalID: p.id, URL: p.url, Title: p.title, Company: p.company, FallbackCountries: []string{"es"}}
+		},
+		func(p spainjobsPosting) any { return p.id },
+		s.detail)
 }
 
 // list reads every job sitemap the index names and returns their postings, most recently

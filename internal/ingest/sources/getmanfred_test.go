@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // getmanfredHTTP is a route-aware test JSONGetter. getmanfred has two endpoints: a single list

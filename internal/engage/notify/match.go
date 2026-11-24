@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strelov1/freehire/internal/application/deliverywindow"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
+	"github.com/strelov1/freehire/internal/engage/deliverywindow"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/search/search"

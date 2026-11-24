@@ -85,7 +85,7 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 
 	if resp.StatusCode != http.StatusOK {
 		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit))
-		return fmt.Errorf("billing: %s %s: provider returned %d: %s", method, path, resp.StatusCode, snippet)
+		return &providerError{Method: method, Path: path, Status: resp.StatusCode, Body: snippet}
 	}
 	if out == nil {
 		return nil
@@ -94,6 +94,28 @@ func (c *client) do(ctx context.Context, method, path string, form url.Values, i
 		return fmt.Errorf("billing: decoding %s %s: %w", method, path, err)
 	}
 	return nil
+}
+
+// providerError is a non-200 answer. Code is the provider's machine-readable error code, for the
+// few callers that must tell one refusal from another.
+type providerError struct {
+	Method, Path string
+	Status       int
+	Body         []byte
+}
+
+func (e *providerError) Error() string {
+	return fmt.Sprintf("billing: %s %s: provider returned %d: %s", e.Method, e.Path, e.Status, e.Body)
+}
+
+func (e *providerError) Code() string {
+	var env struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(e.Body, &env)
+	return env.Error.Code
 }
 
 // stripeSubscriptionList is the provider's reply shape for a subscription listing.

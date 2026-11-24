@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // twogis adapts the 2GIS careers site (job.2gis.ru), a single-company source with no per-tenant

@@ -3,8 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // himalayas adapts himalayas.app, a remote-jobs aggregator. Boardless (one public API, no

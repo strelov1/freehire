@@ -7,14 +7,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -144,58 +143,12 @@ func (s servicepublic) FetchNewGated(ctx context.Context, _ CompanyEntry, seen f
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		employers := make([]string, 0, len(cards))
-		for _, c := range cards {
-			employers = append(employers, c.employer)
-		}
-		covered = gate.Covered(employers)
-	}
-	var jobs []Job
-	var unseen []servicepublicCard
-	deferred := 0
-	for _, c := range cards {
-		base := servicepublicBaseJob(c)
-		if seen(c.id) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[c.employer] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, c)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, servicepublicDetailWorkers, func(c servicepublicCard) (Job, bool) {
-		if d, ok := ctx.Deadline(); ok && time.Until(d) < s.deadlineMargin {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, c)
-		if err != nil {
-			log.Printf("servicepublic: posting %s failed; deferring: %v", c.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	if asked := int64(len(unseen)) - outOfTime.Load(); asked > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("servicepublic: requested %d posting pages and none answered", asked)
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("servicepublic: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("servicepublic: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
+	return hydrateNew(ctx, hydration{Provider: "servicepublic", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: servicepublicDetailWorkers, Deadline: s.deadlineMargin}, cards, seen, gate,
+		nil,
+		servicepublicBaseJob,
+		func(c servicepublicCard) any { return c.id },
+		s.detail)
 }
 
 // list reads the head of the list — newest first, until a page holds no posting the catalogue

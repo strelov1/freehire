@@ -119,6 +119,7 @@ export const STATIC_PATHS = [
   '/talent',
   '/for-companies',
   '/recruiters',
+  '/recruiters/job-promotion',
   '/features/extension',
   '/features/inbox',
   '/features/interview-scheduling',
@@ -130,6 +131,7 @@ export const STATIC_PATHS = [
   '/features/notifications',
   '/features/ghost-jobs',
   '/features/advanced-search',
+  '/features/matches',
   '/how-it-works',
   // The discussions feed. The individual threads are NOT here: they live under their
   // subject's route, and a sub-sitemap for the handful that exist would be
