@@ -67,7 +67,7 @@ func (c *Client) sitemapPage(ctx context.Context, idx meilisearch.IndexManager, 
 	if filter != "" {
 		q.Filter = filter
 	}
-	if err := idx.GetDocumentsWithContext(ctx, q, &resp); err != nil {
+	if err := idx.GetDocuments(ctx, q, &resp); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, 0, fmt.Errorf("search: sitemap page: %w", ctxErr)
 		}
@@ -136,7 +136,7 @@ const freshSitemapFilter = jobSitemapFilter + ` AND is_tech = "tech"`
 // The caller bounds the window (the handler's freshSitemapMaxOffset): sorted pages get slower
 // with offset, and the bound is about crawl budget and the SSR route's 10s fetch timeout.
 func (c *Client) ListFreshSitemapPage(ctx context.Context, offset, limit int) ([]SitemapDocument, error) {
-	resp, err := c.facet.SearchWithContext(ctx, "", &meilisearch.SearchRequest{
+	resp, err := c.facet.Search(ctx, "", &meilisearch.SearchRequest{
 		Offset:               int64(offset),
 		Limit:                int64(limit),
 		Filter:               freshSitemapFilter,

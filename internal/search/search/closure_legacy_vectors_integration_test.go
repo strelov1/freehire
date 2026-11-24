@@ -26,7 +26,7 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 		t.Run(status.marker, func(t *testing.T) {
 			ctx := context.Background()
 			c := startMeili(t)
-			if _, err := c.manager.ExperimentalFeatures().SetEditDocumentsByFunction(true).UpdateWithContext(ctx); err != nil {
+			if _, err := c.manager.ExperimentalFeatures().SetEditDocumentsByFunction(true).Update(ctx); err != nil {
 				t.Fatal(err)
 			}
 			if err := c.EnsureIndex(ctx); err != nil {
@@ -35,7 +35,7 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 			// Recreate the pre-#4417 state: declare `desc`, store chunk vectors under it,
 			// then retire the embedder so its vectors move into the documents, as in production.
 			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) {
-				return c.facet.UpdateEmbeddersWithContext(ctx, map[string]meilisearch.Embedder{
+				return c.facet.UpdateEmbedders(ctx, map[string]meilisearch.Embedder{
 					SkillEmbedder: {Source: meilisearch.UserProvidedEmbedderSource, Dimensions: 1280},
 					"desc":        {Source: meilisearch.UserProvidedEmbedderSource, Dimensions: 768},
 				})
@@ -58,18 +58,18 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 			// 13 chunks (9,984 floats) is the largest document the engine still edits;
 			// 14 (10,752) is the first it refuses.
 			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) {
-				return c.facet.AddDocumentsWithContext(ctx, []map[string]any{doc(1, 13), doc(2, 14), doc(3, 40)}, nil)
+				return c.facet.AddDocuments(ctx, []map[string]any{doc(1, 13), doc(2, 14), doc(3, 40)}, nil)
 			})
 			// Await the reset alone: when the engine batches it with EnsureIndex's settings, it
 			// applies only the net change and keeps the desc vectors out of the documents, where
 			// the edit function cannot reach them.
-			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) { return c.facet.ResetEmbeddersWithContext(ctx) })
+			awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) { return c.facet.ResetEmbedders(ctx) })
 			if err := c.EnsureIndex(ctx); err != nil {
 				t.Fatal(err)
 			}
 
 			var before map[string]any
-			if err := c.facet.GetDocumentWithContext(ctx, "2", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
+			if err := c.facet.GetDocument(ctx, "2", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
 				t.Fatal(err)
 			}
 			// One wave: poison documents, a healthy one, and an id that was never indexed.
@@ -78,7 +78,7 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 			}
 			for _, id := range []string{"1", "2", "3"} {
 				var raw map[string]any
-				if err := c.facet.GetDocumentWithContext(ctx, id, &meilisearch.DocumentQuery{RetrieveVectors: true}, &raw); err != nil {
+				if err := c.facet.GetDocument(ctx, id, &meilisearch.DocumentQuery{RetrieveVectors: true}, &raw); err != nil {
 					t.Fatal(err)
 				}
 				if raw[status.marker] != true || raw["title"] != "Golang engineer" {
@@ -92,7 +92,7 @@ func TestIntegration_MarkersSurviveLegacyDescriptionVectors(t *testing.T) {
 					t.Fatalf("doc %s kept the retired desc vectors", id)
 				}
 			}
-			stats, err := c.facet.GetStatsWithContext(ctx, nil)
+			stats, err := c.facet.GetStats(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

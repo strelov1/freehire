@@ -50,7 +50,7 @@ func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 		return nil
 	}
 	pk := primaryKey
-	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := r.rebuild.UpdateDocuments(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: rebuild push: %w", err)
 	}

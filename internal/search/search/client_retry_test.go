@@ -45,7 +45,7 @@ func TestNewClientDisablesSDKRetry(t *testing.T) {
 
 	c := NewClient(srv.URL, "test-key")
 	var resp meilisearch.DocumentsResult
-	err := c.manager.Index("companies").GetDocumentsWithContext(t.Context(), &meilisearch.DocumentsQuery{Limit: 1}, &resp)
+	err := c.manager.Index("companies").GetDocuments(t.Context(), &meilisearch.DocumentsQuery{Limit: 1}, &resp)
 	if err == nil {
 		t.Fatal("a 503 from the engine surfaced no error")
 	}
@@ -58,42 +58,6 @@ func TestNewClientDisablesSDKRetry(t *testing.T) {
 	}
 	if me.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("surfaced status %d, want the engine's 503 (the failure the caller can actually retry)", me.StatusCode)
-	}
-}
-
-// TestSDKRetryResendsEmptyBody documents the upstream defect itself: with the
-// SDK's default retry ENABLED, a POST that meets a retryable 503 is re-sent with
-// a zero-byte body. This is the mechanism behind the incident's
-// "Code: missing_payload" 400. If a future SDK release fixes body rewinding, this
-// test fails — which is the reminder to re-read the DisableRetries comment in NewClient.
-func TestSDKRetryResendsEmptyBody(t *testing.T) {
-	var bodies []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		bodies = append(bodies, string(b))
-		w.Header().Set("Content-Type", "application/json")
-		if len(bodies) == 1 {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = io.WriteString(w, `{"message":"engine overloaded"}`)
-			return
-		}
-		_, _ = io.WriteString(w, `{"results":[],"total":0}`)
-	}))
-	defer srv.Close()
-
-	m := meilisearch.New(srv.URL, meilisearch.WithAPIKey("test-key")) // default retry ON
-	var resp meilisearch.DocumentsResult
-	if err := m.Index("companies").GetDocumentsWithContext(t.Context(), &meilisearch.DocumentsQuery{Limit: 1}, &resp); err != nil {
-		t.Fatalf("default-retry client errored: %v", err)
-	}
-	if len(bodies) != 2 {
-		t.Fatalf("stub saw %d requests, want 2 (503 then retry)", len(bodies))
-	}
-	if bodies[0] == "" {
-		t.Fatal("first request carried no body — stub is wrong")
-	}
-	if bodies[1] != "" {
-		t.Fatalf("retried request carried body %q, want EMPTY — the SDK now rewinds the body and DisableRetries in NewClient can be revisited", bodies[1])
 	}
 }
 
@@ -110,7 +74,7 @@ func TestNewClientRetriesTransientBodylessRequests(t *testing.T) {
 			name: "task poll", method: http.MethodGet, successStatus: http.StatusOK,
 			success: `{"uid":7,"indexUid":"companies","status":"succeeded","type":"documentAdditionOrUpdate"}`,
 			call: func(c *Client) error {
-				_, err := c.manager.GetTaskWithContext(t.Context(), 7)
+				_, err := c.manager.GetTask(t.Context(), 7)
 				return err
 			},
 		},
@@ -118,7 +82,7 @@ func TestNewClientRetriesTransientBodylessRequests(t *testing.T) {
 			name: "index drop", method: http.MethodDelete, successStatus: http.StatusAccepted,
 			success: `{"taskUid":9,"indexUid":"jobs_rebuild","status":"enqueued","type":"indexDeletion"}`,
 			call: func(c *Client) error {
-				_, err := c.manager.DeleteIndexWithContext(t.Context(), "jobs_rebuild")
+				_, err := c.manager.DeleteIndex(t.Context(), "jobs_rebuild")
 				return err
 			},
 		},

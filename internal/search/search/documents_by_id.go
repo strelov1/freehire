@@ -23,7 +23,7 @@ func (c *Client) JobViewsByID(ctx context.Context, ids []int64) (map[int64]jobvi
 	}
 	var resp meilisearch.DocumentsResult
 	q := &meilisearch.DocumentsQuery{Ids: keys, Limit: int64(len(ids))}
-	if err := c.facet.GetDocumentsWithContext(ctx, q, &resp); err != nil {
+	if err := c.facet.GetDocuments(ctx, q, &resp); err != nil {
 		return nil, fmt.Errorf("search: documents by id: %w", err)
 	}
 	var docs []JobDocument
@@ -52,7 +52,7 @@ func (c *Client) IndexedJobIDs(ctx context.Context, ids []int64) ([]int64, error
 	q := &meilisearch.DocumentsQuery{
 		Filter: "id IN [" + strings.Join(keys, ",") + "]", Fields: []string{"id"}, Limit: int64(len(ids)),
 	}
-	if err := c.facet.GetDocumentsWithContext(ctx, q, &resp); err != nil {
+	if err := c.facet.GetDocuments(ctx, q, &resp); err != nil {
 		return nil, fmt.Errorf("search: indexed job ids: %w", err)
 	}
 	var docs []struct {

@@ -57,14 +57,14 @@ func TestIntegration_DistinctCount(t *testing.T) {
 	}
 
 	// A facet value cap below the company count: the distribution cannot hold them all.
-	task, err := c.facet.UpdateFacetingWithContext(ctx, &meilisearch.Faceting{
+	task, err := c.facet.UpdateFaceting(ctx, &meilisearch.Faceting{
 		MaxValuesPerFacet: 3,
 		SortFacetValuesBy: map[string]meilisearch.SortFacetType{"*": meilisearch.SortFacetTypeCount},
 	})
 	if err != nil {
 		t.Fatalf("UpdateFaceting: %v", err)
 	}
-	if _, err := c.facet.WaitForTaskWithContext(ctx, task.TaskUID, 50*time.Millisecond); err != nil {
+	if _, err := c.facet.WaitForTask(ctx, task.TaskUID, 50*time.Millisecond); err != nil {
 		t.Fatalf("await faceting: %v", err)
 	}
 

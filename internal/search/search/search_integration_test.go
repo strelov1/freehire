@@ -201,16 +201,16 @@ func TestIntegration_EnsureIndexResetsExistingEmbedder(t *testing.T) {
 	}
 
 	// Put an embedder on the facet index. userProvided needs no model download.
-	task, err := c.facet.UpdateEmbeddersWithContext(ctx, map[string]meilisearch.Embedder{
+	task, err := c.facet.UpdateEmbedders(ctx, map[string]meilisearch.Embedder{
 		"manual": {Source: "userProvided", Dimensions: 3},
 	})
 	if err != nil {
 		t.Fatalf("UpdateEmbedders: %v", err)
 	}
-	if _, err := c.facet.WaitForTaskWithContext(ctx, task.TaskUID, 50*time.Millisecond); err != nil {
+	if _, err := c.facet.WaitForTask(ctx, task.TaskUID, 50*time.Millisecond); err != nil {
 		t.Fatalf("await embedder set: %v", err)
 	}
-	emb, err := c.facet.GetEmbeddersWithContext(ctx)
+	emb, err := c.facet.GetEmbedders(ctx)
 	if err != nil {
 		t.Fatalf("precondition: GetEmbedders: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestIntegration_EnsureIndexResetsExistingEmbedder(t *testing.T) {
 	if err := c.EnsureIndex(ctx); err != nil {
 		t.Fatalf("EnsureIndex (reset): %v", err)
 	}
-	emb, err = c.facet.GetEmbeddersWithContext(ctx)
+	emb, err = c.facet.GetEmbedders(ctx)
 	if err != nil {
 		t.Fatalf("GetEmbedders: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
 		t.Errorf("hit count = %d, want 2 (the fresh set only)", len(res.Hits))
 	}
 
-	if _, err := c.manager.GetIndexWithContext(ctx, "jobs_rebuild"); err == nil {
+	if _, err := c.manager.GetIndex(ctx, "jobs_rebuild"); err == nil {
 		t.Error("jobs_rebuild still exists; Promote should drop it")
 	}
 }

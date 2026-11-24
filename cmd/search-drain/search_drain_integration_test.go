@@ -58,7 +58,7 @@ func startMeili(t *testing.T) (url, key string) {
 	}
 	meiliURL := "http://" + host + ":" + port.Port()
 	if _, err := meilisearch.New(meiliURL, meilisearch.WithAPIKey(key)).ExperimentalFeatures().
-		SetEditDocumentsByFunction(true).UpdateWithContext(ctx); err != nil {
+		SetEditDocumentsByFunction(true).Update(ctx); err != nil {
 		t.Fatalf("enable document editing: %v", err)
 	}
 	return meiliURL, key

@@ -22,7 +22,7 @@ func (c *Client) SetViewCounts(ctx context.Context, counts map[int64]int64) erro
 		docs = append(docs, map[string]any{primaryKey: id, "view_count": n})
 	}
 	pk := primaryKey
-	task, err := c.facet.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk, SkipCreation: true})
+	task, err := c.facet.UpdateDocuments(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk, SkipCreation: true})
 	if err != nil {
 		return fmt.Errorf("search: update view counts: %w", err)
 	}
