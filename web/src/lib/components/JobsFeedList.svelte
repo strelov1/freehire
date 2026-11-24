@@ -40,9 +40,9 @@
   <!-- Busy while held-over rows stand in for a reload underneath them (see
        `holdover`): the rows are real but about to be replaced. -->
   <!-- One list surface with hairline dividers rather than a stack of separately framed
-       cards: twenty bordered boxes read as a wall. -->
+       cards: twenty bordered boxes read as a wall. Round the end rows so popovers can extend past the list. -->
   <div
-    class="flex flex-col divide-y divide-border/70 overflow-hidden rounded-xl border border-border/70 bg-card"
+    class="flex flex-col divide-y divide-border/70 rounded-xl border border-border/70 bg-card"
     aria-busy={holdingOver}
   >
     {#each jobs as job (job.public_slug)}

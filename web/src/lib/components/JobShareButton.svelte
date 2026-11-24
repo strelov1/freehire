@@ -55,16 +55,16 @@
     }
   }
 
+  function dismissOutside(event: PointerEvent) {
+    if (event.target instanceof Node && !root.contains(event.target)) close();
+  }
+
+  function dismissOnEscape(event: KeyboardEvent) {
+    if (event.key === 'Escape') close();
+  }
+
   $effect(() => {
     if (!open) return;
-
-    function dismissOutside(event: PointerEvent) {
-      if (event.target instanceof Node && !root.contains(event.target)) close();
-    }
-
-    function dismissOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') close();
-    }
 
     window.addEventListener('pointerdown', dismissOutside);
     window.addEventListener('keydown', dismissOnEscape);

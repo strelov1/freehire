@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { COMPANY_SLUG, JOB_SLUG } from './a11y/fixtures.ts';
 import { STUB_PORT } from './a11y/ports.ts';
@@ -199,4 +199,34 @@ test('overlapping country flags still open the job', async ({ page }) => {
   const card = page.getByTestId('job-card').first();
   await card.getByRole('img', { name: 'United States', exact: true }).click({ force: true });
   await expectJobPage(page);
+});
+
+test('the final short job card can copy its link from the share menu', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.addInitScript(() => {
+    navigator.share = async () => {};
+    navigator.canShare = () => true;
+  });
+  await forwardApi(page);
+  await page.goto('/jobs');
+  await page.waitForLoadState('networkidle');
+
+  // Model a short posting while retaining the fixture used by the other feed checks.
+  const card = page.getByTestId('job-card').last();
+  await card.evaluate((row) => {
+    row.style.maxHeight = '64px';
+  });
+  await card.getByRole('button', { name: 'Share this job' }).click();
+
+  const menu = card.getByRole('menu', { name: 'Share this job' });
+  await expect(menu.getByRole('menuitem', { name: 'Share', exact: true })).toBeVisible();
+  const copy = menu.getByRole('menuitem', { name: 'Copy link' });
+  const reachesBottom = await copy.evaluate((item) => {
+    const bounds = item.getBoundingClientRect();
+    return item.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.bottom - 2));
+  });
+  expect(reachesBottom, 'the full Copy link row should receive clicks').toBe(true);
+  await copy.click({ timeout: 5000 });
+  await expect(menu.getByRole('menuitem', { name: 'Link copied' })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(new URL(`/jobs/${JOB_SLUG}`, page.url()).href);
 });

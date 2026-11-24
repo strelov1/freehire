@@ -249,7 +249,7 @@
   data-testid="job-card"
   class={[
     'group relative transition hover:bg-accent',
-    !flat && 'rounded-xl border border-border/70 bg-card hover:border-brand',
+    flat ? 'first:rounded-t-xl last:rounded-b-xl' : 'rounded-xl border border-border/70 bg-card hover:border-brand',
   ]}
 >
   <!-- The title link stretches over this content area. Keeping the containing block
