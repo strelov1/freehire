@@ -17,8 +17,9 @@ Cloudflare challenges, GET only. `proxy` asks the service to egress through its 
 
 **The upstream status is a response, a service failure is an error.** A 403 page comes back as
 a 403 response, so the caller's ordinary status handling sees it. A service that is down,
-answers 5xx, or answers malformed is a transport error: the crawl fails rather than falling back
-to a direct request that would only be refused again.
+answers 5xx, or answers malformed is a transport error. A non-200 service response carries
+`ServiceError` so a caller can retry specific service statuses. Naukrigulf retries a service 502
+within its existing backoff and request limit.
 
 **Time.** A browser page that meets a Cloudflare challenge measured ~110 s on its first fetch
 (bayt, 2026-10-20) and ~5 s after, so the timeout a caller passes to `New` has to cover the
