@@ -10,7 +10,9 @@ vi.mock('$app/state', () => ({ page: { data: { locale: 'en' }, url: new URL('htt
 vi.mock('#lib/api.js', () => ({
   api: {
     getEmployerVacancyAnalytics,
-    getEmployerVacancyOutboundClicks: vi.fn().mockResolvedValue({ days: [], countries: [], sources: [], clicks: 0, visitors: 0 }),
+    getEmployerVacancyOutboundClicks: vi
+      .fn()
+      .mockResolvedValue({ days: [], countries: [], sources: [], clicks: 0, visitors: 0 }),
   },
 }));
 

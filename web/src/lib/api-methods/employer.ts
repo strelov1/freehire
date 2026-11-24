@@ -26,7 +26,9 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     return requestData(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/analytics`);
   }
 
-  async function getEmployerVacancyOutboundClicks(slug: string): Promise<components['schemas']['EmployerOutboundClicks']> {
+  async function getEmployerVacancyOutboundClicks(
+    slug: string,
+  ): Promise<components['schemas']['EmployerOutboundClicks']> {
     return requestData(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/outbound-clicks`);
   }
 

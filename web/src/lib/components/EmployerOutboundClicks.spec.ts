@@ -28,7 +28,13 @@ it('shows totals, days, countries and sources', async () => {
 });
 
 it('says so when nothing was clicked and when the load fails', async () => {
-  getEmployerVacancyOutboundClicks.mockResolvedValueOnce({ days: [], countries: [], sources: [], clicks: 0, visitors: 0 });
+  getEmployerVacancyOutboundClicks.mockResolvedValueOnce({
+    days: [],
+    countries: [],
+    sources: [],
+    clicks: 0,
+    visitors: 0,
+  });
   const { unmount } = render(EmployerOutboundClicks, { slug: 'a' });
   expect(await screen.findByText('No clicks to your site yet.')).toBeTruthy();
   unmount();

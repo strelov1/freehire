@@ -8,11 +8,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/ingest/employer"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Cap unauthenticated telemetry by the same trusted client IP the server uses for
@@ -108,7 +108,7 @@ func (h *employerHandlers) GetEmployerVacancyOutboundClicks(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	from, to, err := outboundClicksWindow(params.From.Or(""), params.To.Or(""), time.Now())
+	from, to, err := outboundClicksWindow(params.From.Or(""), params.To.Or(""), time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func (h *employerHandlers) GetEmployerVacancyOutboundClicks(ctx context.Context,
 	}
 	rows, err := h.queries.GetJobOutboundClickStats(ctx, db.GetJobOutboundClickStatsParams{
 		JobID:  jobID,
-		FromAt: pgtype.Timestamptz{Time: from, Valid: true},
-		ToAt:   pgtype.Timestamptz{Time: to.AddDate(0, 0, 1), Valid: true},
+		FromAt: pgconv.Instant(from),
+		ToAt:   pgconv.Instant(to.AddDate(0, 0, 1)),
 	})
 	if err != nil {
 		return nil, err
