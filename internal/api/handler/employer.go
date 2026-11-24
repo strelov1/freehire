@@ -63,6 +63,7 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Patch("/employer/company", mw.cookie, contract)
 	api.Get("/employer/jobs", mw.cookie, contract)
 	api.Get("/employer/jobs/:slug/analytics", mw.cookie, employerNoStore, contract)
+	api.Get("/employer/jobs/:slug/outbound-clicks", mw.cookie, employerNoStore, contract)
 	api.Post("/employer/jobs", mw.cookie, contract)
 	api.Patch("/employer/jobs/:slug", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, contract)

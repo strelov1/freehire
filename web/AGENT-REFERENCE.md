@@ -18,8 +18,8 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   bare status.
 - OAuth buttons render from `GET /api/v1/auth/oauth/providers`. Callbacks 302 back to the
   SPA; failures 302 with `?auth_error=oauth`, never JSON.
-- Four actions need a *second* proof on top of the session — creating and revoking an API
-  key, changing the password, deleting the account — and answer `428 recent_auth_required`
+- Some actions need a *second* proof on top of the session — creating and revoking an API
+  key, changing the password or email, connecting a sign-in provider, deleting the account — and answer `428 recent_auth_required`
   without one. `ConfirmIdentity.svelte` is the only surface that asks for it: it decides
   whether the account confirms by password or by provider, `prove()` produces the proof (and
   refuses to send a blank one), and `handleRefusal()` words the `401`/`428` so no caller
@@ -29,7 +29,11 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   the confirmation, so a `428` there means the session cannot bind a proof at all and the
   only remedy is signing in again.
 - A pending action survives the provider round trip in `sessionStorage` (`recentAuth.ts`,
-  `ReauthDraft`), because confirming leaves the site entirely. Secrets and anti-mistake
+  `ReauthDraft`), because confirming leaves the site entirely. Connecting a provider
+  (`beginProviderLink`, `providerLink.ts`, kept out of `recentAuth.ts` so every page that
+  can ask for confirmation does not ship it) is a trip of its own that ends on the same `/my/reauth` callback;
+  a `sessionStorage` marker tells that page to run the link exchange, and it sends the
+  outcome back to `/my/account` as `?linked=` / `?link_error=`. Secrets and anti-mistake
   barriers never go in it: the typed key name is restored, the typed address confirming an
   account deletion deliberately is not.
 - `stage` in job tracking mirrors the backend vocabulary (`internal/application/userjob/stages.go`):
