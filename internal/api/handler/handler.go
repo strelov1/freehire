@@ -32,6 +32,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/engage/processreport"
 	"github.com/strelov1/freehire/internal/engage/reminder"
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/identity/accountdelete"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -164,6 +165,9 @@ func Register(app *fiber.App, cfg Config) {
 	planH := newPlanHandlers(plans, queries)
 	catalogueH := newCatalogueHandlers(queries, cfg.Export)
 	billingSvc := billing.New(cfg.Billing, queries)
+	// Sponsored top-ups are paid through billing but credited by sponsored (which billing cannot import).
+	sponsoredSvc := sponsored.New(cfg.Pool).WithRefunder(billingSvc)
+	billingSvc.SetTopupCrediter(sponsoredSvc)
 	// The store provider reads its own environment: it is enabled and credentialed
 	// independently of Stripe.
 	storeSvc := billing.NewRevenueCat(billing.RevenueCatConfigFromEnv(), queries)

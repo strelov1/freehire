@@ -88,6 +88,23 @@ func (q *Queries) CreateSponsoredCampaign(ctx context.Context, arg CreateSponsor
 	return i, err
 }
 
+const creditSponsoredBudget = `-- name: CreditSponsoredBudget :exec
+UPDATE sponsored_campaigns
+SET budget_cents = budget_cents + $3::bigint, status = $2, updated_at = now()
+WHERE id = $1
+`
+
+type CreditSponsoredBudgetParams struct {
+	ID          int64  `json:"id"`
+	Status      string `json:"status"`
+	AmountCents int64  `json:"amount_cents"`
+}
+
+func (q *Queries) CreditSponsoredBudget(ctx context.Context, arg CreditSponsoredBudgetParams) error {
+	_, err := q.db.Exec(ctx, creditSponsoredBudget, arg.ID, arg.Status, arg.AmountCents)
+	return err
+}
+
 const endSponsoredCampaignsForJob = `-- name: EndSponsoredCampaignsForJob :many
 UPDATE sponsored_campaigns
 SET status = 'ended', updated_at = now()
@@ -206,6 +223,36 @@ func (q *Queries) InsertSponsoredClick(ctx context.Context, arg InsertSponsoredC
 	return err
 }
 
+const insertSponsoredTopup = `-- name: InsertSponsoredTopup :one
+INSERT INTO sponsored_topups (campaign_id, stripe_session_id, payment_intent_id, amount_cents, credited)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (stripe_session_id) DO NOTHING
+RETURNING id
+`
+
+type InsertSponsoredTopupParams struct {
+	CampaignID      int64       `json:"campaign_id"`
+	StripeSessionID string      `json:"stripe_session_id"`
+	PaymentIntentID pgtype.Text `json:"payment_intent_id"`
+	AmountCents     int64       `json:"amount_cents"`
+	Credited        bool        `json:"credited"`
+}
+
+// ON CONFLICT DO NOTHING on the session id is the whole of the webhook idempotency: no row
+// back means this payment was already recorded.
+func (q *Queries) InsertSponsoredTopup(ctx context.Context, arg InsertSponsoredTopupParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertSponsoredTopup,
+		arg.CampaignID,
+		arg.StripeSessionID,
+		arg.PaymentIntentID,
+		arg.AmountCents,
+		arg.Credited,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listSponsoredCampaignsByOwner = `-- name: ListSponsoredCampaignsByOwner :many
 SELECT id, job_id, owner_user_id, status, cpc_cents, daily_cap_cents, budget_cents, spent_cents, reviewed_by, reviewed_at, reject_reason, created_at, updated_at FROM sponsored_campaigns WHERE owner_user_id = $1 ORDER BY id DESC
 `
@@ -280,6 +327,84 @@ func (q *Queries) ListSponsoredReviewQueue(ctx context.Context) ([]SponsoredCamp
 		return nil, err
 	}
 	return items, nil
+}
+
+const listSponsoredTopupsToRefund = `-- name: ListSponsoredTopupsToRefund :many
+SELECT t.id, t.campaign_id, t.payment_intent_id
+FROM sponsored_topups t
+JOIN sponsored_campaigns c ON c.id = t.campaign_id
+WHERE t.refunded_at IS NULL
+  AND t.payment_intent_id IS NOT NULL
+  AND (c.status = 'rejected' OR NOT t.credited)
+  AND ($1::bigint IS NULL OR t.campaign_id = $1::bigint)
+ORDER BY t.id
+LIMIT $2
+`
+
+type ListSponsoredTopupsToRefundParams struct {
+	CampaignID pgtype.Int8 `json:"campaign_id"`
+	MaxRows    int32       `json:"max_rows"`
+}
+
+type ListSponsoredTopupsToRefundRow struct {
+	ID              int64       `json:"id"`
+	CampaignID      int64       `json:"campaign_id"`
+	PaymentIntentID pgtype.Text `json:"payment_intent_id"`
+}
+
+// Money that must go back: every top-up of a rejected campaign, and any top-up that arrived
+// for a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
+func (q *Queries) ListSponsoredTopupsToRefund(ctx context.Context, arg ListSponsoredTopupsToRefundParams) ([]ListSponsoredTopupsToRefundRow, error) {
+	rows, err := q.db.Query(ctx, listSponsoredTopupsToRefund, arg.CampaignID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSponsoredTopupsToRefundRow{}
+	for rows.Next() {
+		var i ListSponsoredTopupsToRefundRow
+		if err := rows.Scan(&i.ID, &i.CampaignID, &i.PaymentIntentID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markSponsoredTopupRefunded = `-- name: MarkSponsoredTopupRefunded :exec
+UPDATE sponsored_topups SET refunded_at = now() WHERE id = $1 AND refunded_at IS NULL
+`
+
+func (q *Queries) MarkSponsoredTopupRefunded(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markSponsoredTopupRefunded, id)
+	return err
+}
+
+const reviewSponsoredCampaign = `-- name: ReviewSponsoredCampaign :exec
+UPDATE sponsored_campaigns
+SET status = $2, reviewed_by = $3, reviewed_at = now(), reject_reason = $4, updated_at = now()
+WHERE id = $1
+`
+
+type ReviewSponsoredCampaignParams struct {
+	ID           int64       `json:"id"`
+	Status       string      `json:"status"`
+	ReviewedBy   pgtype.Int8 `json:"reviewed_by"`
+	RejectReason pgtype.Text `json:"reject_reason"`
+}
+
+// Moderator decision: stamps who and when; reject_reason is NULL on approval.
+func (q *Queries) ReviewSponsoredCampaign(ctx context.Context, arg ReviewSponsoredCampaignParams) error {
+	_, err := q.db.Exec(ctx, reviewSponsoredCampaign,
+		arg.ID,
+		arg.Status,
+		arg.ReviewedBy,
+		arg.RejectReason,
+	)
+	return err
 }
 
 const setSponsoredCampaignStatus = `-- name: SetSponsoredCampaignStatus :exec

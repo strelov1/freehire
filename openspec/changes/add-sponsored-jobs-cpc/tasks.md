@@ -30,12 +30,12 @@
 
 ## 3. Billing
 
-- [ ] 3.1 `client.createPaymentCheckoutSession` (`mode=payment`, metadata
+- [x] 3.1 `client.createPaymentCheckoutSession` (`mode=payment`, metadata
       campaign_id/user_id) with a client test
-- [ ] 3.2 Webhook: `checkout.session.completed` with campaign metadata credits the budget
+- [x] 3.2 Webhook: `checkout.session.completed` with campaign metadata credits the budget
       idempotently by session id. Draft becomes `pending_review` on the first top-up;
       exhausted becomes `active` on a later one.
-- [ ] 3.3 Refund call (`POST /v1/refunds`, payment_intent) used on rejection, with a test
+- [x] 3.3 Refund call (`POST /v1/refunds`, payment_intent) used on rejection, with a test
 
 ## 4. Search index and placements
 

@@ -32,6 +32,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -70,12 +71,18 @@ func run() int {
 	queries := db.New(pool)
 	max := worker.EnvInt32OrDefault("BILLING_SYNC_MAX_PER_RUN", maxPerRunDefault)
 
+	stripeSvc := billing.New(stripeCfg, queries)
+	// Sponsored top-ups (one-off payments) are credited through this seam, here as in the API:
+	// an unprocessed top-up event is replayed by pass one below.
+	sponsoredSvc := sponsored.New(pool).WithRefunder(stripeSvc)
+	stripeSvc.SetTopupCrediter(sponsoredSvc)
+
 	// Named so every log line says which provider it is about.
 	passes := []struct {
 		name string
 		svc  reconcilable
 	}{
-		{"stripe", billing.New(stripeCfg, queries)},
+		{"stripe", stripeSvc},
 		{"revenuecat", billing.NewRevenueCat(storeCfg, queries)},
 	}
 
@@ -97,7 +104,15 @@ func run() int {
 	// lives only on the production host. Stripe only, since a store subscription produces no
 	// invoice we can read.
 	if stripeCfg.Enabled() {
-		failures += settleRewardsLocked(ctx, pool, billing.New(stripeCfg, queries), queries, max)
+		failures += settleRewardsLocked(ctx, pool, stripeSvc, queries, max)
+		// Money that must go back to a sponsor and has not (a refund call that failed at
+		// rejection, or a payment for a campaign already dead).
+		refunded, err := sponsoredSvc.RefundPending(ctx, max)
+		if err != nil {
+			log.Printf("billing-sync: sponsored refunds: %v", err)
+			failures++
+		}
+		log.Printf("billing-sync: sponsored refunds=%d", refunded)
 	}
 	return worker.ExitCode(failures, 0)
 }
@@ -194,7 +209,8 @@ func applyPending(ctx context.Context, name string, svc reconcilable, max int32)
 		// alone would make the retry WEAKER than the first attempt, and an account whose binding
 		// never got written would resolve to nobody and be stamped unattributable forever (a
 		// stamped row is never retried).
-		replay := billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType}
+		// The payload rides along: a sponsored top-up is identified by it (see Service.Apply).
+		replay := billing.Event{ID: ev.EventID, CustomerID: ev.AppUserID, Type: ev.EventType, Payload: ev.Payload}
 		if ev.UserID.Valid {
 			replay.UserRef = strconv.FormatInt(ev.UserID.Int64, 10)
 		}

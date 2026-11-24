@@ -36,7 +36,7 @@ RETURNING id;
 -- would resolve the account through the wrong route, write the wrong column, and then STAMP
 -- the row processed — so a store purchase would be marked done having never conferred
 -- anything, and never be retried.
-SELECT id, provider, event_id, app_user_id, user_id, event_type, received_at
+SELECT id, provider, event_id, app_user_id, user_id, event_type, payload, received_at
 FROM billing_events
 WHERE processed_at IS NULL
   AND provider = sqlc.arg(provider)::text

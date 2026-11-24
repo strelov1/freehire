@@ -68,3 +68,23 @@ func TestAcceptVerifiesBeforeParsing(t *testing.T) {
 		}
 	})
 }
+
+func TestSponsoredTopupURLRefusals(t *testing.T) {
+	setEnv(t, "", "", "", "")
+	if _, err := New(ConfigFromEnv(), nil).SponsoredTopupURL(context.Background(), 1, 2, 5000); !errors.Is(err, ErrDisabled) {
+		t.Errorf("disabled: want ErrDisabled, got %v", err)
+	}
+
+	setEnv(t, "sk_test", testSecret, proPrice, "https://freehire.me")
+	s := New(ConfigFromEnv(), nil) // nil queries: the amount is refused before any read
+	var below *BelowMinimumError
+	if _, err := s.SponsoredTopupURL(context.Background(), 1, 2, 2899); !errors.As(err, &below) || below.MinCents != 2900 {
+		t.Errorf("below the default minimum: got %v", err)
+	}
+
+	t.Setenv("SPONSORED_MIN_TOPUP_CENTS", "5000")
+	s = New(ConfigFromEnv(), nil)
+	if _, err := s.SponsoredTopupURL(context.Background(), 1, 2, 4999); !errors.As(err, &below) || below.MinCents != 5000 {
+		t.Errorf("below the configured minimum: got %v", err)
+	}
+}

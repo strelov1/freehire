@@ -55,3 +55,38 @@ SELECT * FROM sponsored_campaigns WHERE owner_user_id = $1 ORDER BY id DESC;
 
 -- name: ListSponsoredReviewQueue :many
 SELECT * FROM sponsored_campaigns WHERE status = 'pending_review' ORDER BY updated_at, id;
+
+-- name: InsertSponsoredTopup :one
+-- ON CONFLICT DO NOTHING on the session id is the whole of the webhook idempotency: no row
+-- back means this payment was already recorded.
+INSERT INTO sponsored_topups (campaign_id, stripe_session_id, payment_intent_id, amount_cents, credited)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (stripe_session_id) DO NOTHING
+RETURNING id;
+
+-- name: CreditSponsoredBudget :exec
+UPDATE sponsored_campaigns
+SET budget_cents = budget_cents + sqlc.arg(amount_cents)::bigint, status = $2, updated_at = now()
+WHERE id = $1;
+
+-- name: ReviewSponsoredCampaign :exec
+-- Moderator decision: stamps who and when; reject_reason is NULL on approval.
+UPDATE sponsored_campaigns
+SET status = $2, reviewed_by = $3, reviewed_at = now(), reject_reason = sqlc.narg(reject_reason), updated_at = now()
+WHERE id = $1;
+
+-- name: ListSponsoredTopupsToRefund :many
+-- Money that must go back: every top-up of a rejected campaign, and any top-up that arrived
+-- for a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
+SELECT t.id, t.campaign_id, t.payment_intent_id
+FROM sponsored_topups t
+JOIN sponsored_campaigns c ON c.id = t.campaign_id
+WHERE t.refunded_at IS NULL
+  AND t.payment_intent_id IS NOT NULL
+  AND (c.status = 'rejected' OR NOT t.credited)
+  AND (sqlc.narg(campaign_id)::bigint IS NULL OR t.campaign_id = sqlc.narg(campaign_id)::bigint)
+ORDER BY t.id
+LIMIT sqlc.arg(max_rows);
+
+-- name: MarkSponsoredTopupRefunded :exec
+UPDATE sponsored_topups SET refunded_at = now() WHERE id = $1 AND refunded_at IS NULL;

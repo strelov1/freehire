@@ -2022,6 +2022,7 @@ type SponsoredTopup struct {
 	AmountCents     int64              `json:"amount_cents"`
 	RefundedAt      pgtype.Timestamptz `json:"refunded_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Credited        bool               `json:"credited"`
 }
 
 // Hosts refused at the public submission form. Checked only in submission.Service.Submit; never applied to a moderator-authored vacancy create.

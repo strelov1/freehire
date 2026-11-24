@@ -3,7 +3,9 @@
 ## Scope
 
 The Pro subscription: where a candidate buys it, and how the provider's record of it reaches
-the SOURCE COLUMN that provider owns. Nothing else. What the plan then ALLOWS is
+the SOURCE COLUMN that provider owns. Plus one more thing that is NOT a subscription: the
+one-off `mode=payment` checkouts that fund a sponsored job campaign, and their refunds
+(`sponsored.go`). Nothing else. What the plan then ALLOWS is
 `internal/ai/plan`'s business, and the two packages never meet: `plan` reads the column
 through `platform/db` and does not import this package.
 
@@ -211,6 +213,30 @@ answer 404, and its worker exits without opening a connection.
   to return a buyer to, and is separate on purpose — subscriptions already sold keep
   renewing, and refusing to record their renewals because nobody can start a NEW purchase
   would lose money we have been paid.
+
+## Sponsored top-ups (one-off payments)
+
+A top-up is a checkout session with `metadata.kind=sponsored_topup`. The same invariants hold:
+
+- **Signal, not fact.** `Service.Apply` takes only the session id from the delivery and RE-READS
+  `GET /v1/checkout/sessions/{id}`. It credits only `mode=payment`, `payment_status=paid`,
+  `currency=usd`, and the amount is the re-read `amount_total`, never a number in the event.
+  Campaign and payer come from the re-read metadata and the crediter checks the campaign
+  belongs to that payer. `async_payment_succeeded` credits an unpaid-at-completion session later.
+- **Record, answer 200, then apply; processed only after the credit.** The event is stamped
+  processed only after the credit committed. A failed credit (or no crediter wired) leaves it
+  unprocessed and `cmd/billing-sync` replays it; the stored payload is read back for that, since
+  the session id lives in it. A permanently invalid payment (`ErrTopupInvalid`) is stamped, not
+  retried forever. Other events of the same payment (payment_intent, charge) are stamped without
+  a subscription sync, which would find no customer and mislabel them unattributable.
+- **Layering.** `engage/sponsored` imports billing, never the reverse: billing defines
+  `TopupCrediter` and `Service.SetTopupCrediter`, the wiring (`handler.go`, `cmd/billing-sync`)
+  injects sponsored. Credit is idempotent by `stripe_session_id` UNIQUE.
+- **Refunds.** `RefundPaymentIntent` carries a per-top-up idempotency key and `refunded_at` is
+  stamped by sponsored only after the provider confirmed. A payment for a campaign already
+  rejected or ended is recorded with `credited=false`, not added to the budget, and refunded.
+- Top-ups never touch `users` entitlement columns. The minimum amount is
+  `SPONSORED_MIN_TOPUP_CENTS` (default 2900), enforced when the checkout is created.
 
 ## The provider contract, as read
 
