@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { api } from '#lib/api.js';
+  import { ApiError, api } from '#lib/api.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatMinorUnits } from '#lib/money.js';
   import { PRICE_INCREASE_LABEL, upcomingCents } from '#lib/priceIncrease.js';
@@ -121,6 +121,10 @@
   let checked = $state<number | null>(null);
   let codeError = $state<string | null>(null);
 
+  // The server answers 409 for an account that already holds a code and 404 for every
+  // refusal about the code itself, so the two are told apart by status, never by wording.
+  const alreadyHeld = (e: unknown) => e instanceof ApiError && e.status === 409;
+
   // What the code is worth, checked without spending it. Deliberately a button rather than
   // something that fires as you type: firing on
   // every keystroke would spend a real caller's budget rendering "not available" over and
@@ -137,10 +141,7 @@
     } catch (e) {
       // Every refusal about the code itself reads the same on the server, so there is one
       // message here too. 409 is the one exception: it is about this account, not the code.
-      codeError =
-        e instanceof Error && e.message.includes('already')
-          ? 'You have already used a promo code.'
-          : 'That code is not available.';
+      codeError = alreadyHeld(e) ? 'You have already used a promo code.' : 'That code is not available.';
     } finally {
       checking = false;
     }
@@ -184,11 +185,11 @@
         // durable and the checkout below picks it up whatever happens here — refusing to
         // sell to somebody because they entered a code they had already used would turn a
         // note into a dead end.
-        const alreadyHeld = e instanceof Error && e.message.includes('already');
-        codeError = alreadyHeld
+        const holdsCode = alreadyHeld(e);
+        codeError = holdsCode
           ? 'You have already used a promo code — your existing discount still applies.'
           : 'That code is not available. Clear it to continue at the usual price.';
-        if (!alreadyHeld) {
+        if (!holdsCode) {
           busy = false;
           return;
         }
