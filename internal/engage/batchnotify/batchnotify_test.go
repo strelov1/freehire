@@ -80,8 +80,8 @@ func TestEmail_SendsOneMailWithSignedUnsubscribeLinkAndFooter(t *testing.T) {
 	s := &sender{}
 	n := NewEmail(s, "jobs@freehire.me", emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me"), "reminder",
 		func(ms []msg) int64 { return ms[0].UserID },
-		func(ms []msg, unsubscribe string) (subject, htmlBody, textBody string) {
-			return "s", "<p>" + unsubscribe + "</p>", "text"
+		func(_ []msg, unsubscribe string) (subject, htmlBody, textBody string, err error) {
+			return "s", "<p>" + unsubscribe + "</p>", "text", nil
 		})
 
 	if err := n.Send(context.Background(), notify.ChannelEmail, "u@x.com", []msg{{7}}); err != nil {
@@ -118,7 +118,7 @@ func TestEmail_PausedSESSoftSkipsAndKeepsTheCause(t *testing.T) {
 	s := &sender{err: emailnotify.ErrSendingPaused}
 	n := NewEmail(s, "jobs@freehire.me", emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me"),
 		"nudge", func(ms []msg) int64 { return ms[0].UserID },
-		func([]msg, string) (string, string, string) { return "", "", "" })
+		func([]msg, string) (string, string, string, error) { return "", "", "", nil })
 
 	err := n.Send(context.Background(), notify.ChannelEmail, "u@x.com", []msg{{7}})
 	if !errors.Is(err, notify.ErrChannelNotConfigured) || !errors.Is(err, emailnotify.ErrSendingPaused) {
@@ -139,6 +139,24 @@ func TestEmail_UnsignableUnsubscribeLinkFailsBeforeSending(t *testing.T) {
 	}
 	if len(s.sent) != 0 {
 		t.Errorf("sent %d mails without a working unsubscribe link, want 0", len(s.sent))
+	}
+}
+
+// A render failure means there is no mail to send: the engine counts a failed
+// attempt rather than delivering an empty or truncated body.
+func TestEmail_RenderErrorSendsNothing(t *testing.T) {
+	s := &sender{}
+	boom := errors.New("template: job-row: no such template")
+	n := NewEmail(s, "jobs@freehire.me", emailprefs.NewLinks("mail-test-secret-padded-to-32-byte", "https://freehire.me"),
+		"reminder", func(ms []msg) int64 { return ms[0].UserID },
+		func([]msg, string) (string, string, string, error) { return "", "", "", boom })
+
+	err := n.Send(context.Background(), notify.ChannelEmail, "u@x.com", []msg{{7}})
+	if !errors.Is(err, boom) {
+		t.Fatalf("Send = %v, want the render error", err)
+	}
+	if len(s.sent) != 0 {
+		t.Errorf("sent %d mails after a render failure, want 0", len(s.sent))
 	}
 }
 

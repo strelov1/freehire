@@ -50,7 +50,7 @@ type Email[T any] struct {
 	sender emailnotify.Sender
 	from   string
 	links  *emailprefs.Links
-	render func(ms []T, unsubscribe string) (subject, htmlBody, textBody string)
+	render func(ms []T, unsubscribe string) (subject, htmlBody, textBody string, err error)
 	userID func(ms []T) int64
 	engine string
 }
@@ -60,11 +60,12 @@ const senderName = "freehire"
 
 // NewEmail builds an Email notifier sending from `from` through sender, with
 // unsubscribe links signed by links. render produces the subject, HTML and text
-// of the mail for the whole batch, layout included. userID reads whose mail it is
-// off the batch: every message is the same account's, since the engines group by
-// account. engine prefixes the error line, as every worker's does.
+// of the mail for the whole batch, layout included; its error means there is no
+// mail to send. userID reads whose mail it is off the batch: every message is the
+// same account's, since the engines group by account. engine prefixes the error
+// line, as every worker's does.
 func NewEmail[T any](sender emailnotify.Sender, from string, links *emailprefs.Links, engine string,
-	userID func(ms []T) int64, render func(ms []T, unsubscribe string) (subject, htmlBody, textBody string)) *Email[T] {
+	userID func(ms []T) int64, render func(ms []T, unsubscribe string) (subject, htmlBody, textBody string, err error)) *Email[T] {
 	return &Email[T]{
 		sender: sender,
 		from:   emailnotify.From(senderName, from),
@@ -76,8 +77,10 @@ func NewEmail[T any](sender emailnotify.Sender, from string, links *emailprefs.L
 }
 
 // Send signs the unsubscribe link, renders the mail and delivers it to the
-// address in dest. A paused SES account soft-skips as
-// notify.ErrChannelNotConfigured rather than counting an attempt.
+// address in dest. A render error returns before anything is sent, so the engine
+// counts a failed attempt instead of mailing an empty or truncated body. A paused
+// SES account soft-skips as notify.ErrChannelNotConfigured rather than counting
+// an attempt.
 func (n *Email[T]) Send(ctx context.Context, _ string, dest string, ms []T) error {
 	if len(ms) == 0 {
 		return nil
@@ -87,7 +90,10 @@ func (n *Email[T]) Send(ctx context.Context, _ string, dest string, ms []T) erro
 	if err != nil {
 		return fmt.Errorf("%s: unsubscribe link for user %d: %w", n.engine, uid, err)
 	}
-	subject, htmlBody, textBody := n.render(ms, unsubscribe)
+	subject, htmlBody, textBody, err := n.render(ms, unsubscribe)
+	if err != nil {
+		return err
+	}
 	return emailnotify.SoftSkipIfPaused(n.sender.Send(ctx, emailnotify.Message{
 		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
 		Text:  textBody + emailprefs.TextFooter(unsubscribe),

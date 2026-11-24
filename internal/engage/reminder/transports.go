@@ -161,7 +161,7 @@ var batchTemplate = template.Must(mailtpl.Partials().New("reminder-batch").Parse
 {{template "button" .CTA}}`))
 
 // send renders the batch: a single reminder keeps its own mail, several share one.
-func (n emailCopy) send(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) send(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	if len(ms) == 1 {
 		return n.sendOne(ms[0], unsubscribe)
 	}
@@ -169,12 +169,12 @@ func (n emailCopy) send(ms []ReminderMessage, unsubscribe string) (subject, html
 }
 
 // sendOne is the single-reminder mail, kept as it was before grouping.
-func (n emailCopy) sendOne(m ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) sendOne(m ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	url := n.jobURL(m)
 	var content bytes.Buffer
-	// The template is a trusted constant and the data is escaped in context, so this
-	// fails only on a template bug — caught by the golden previews.
-	_ = oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url))
+	if err = oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
+		return "", "", "", err
+	}
 	htmlBody = n.layout.Render(mailtpl.Body{
 		Preheader:      "A job you saved is still open",
 		Heading:        "Still interested?",
@@ -186,11 +186,11 @@ func (n emailCopy) sendOne(m ReminderMessage, unsubscribe string) (subject, html
 	textBody = fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
 		m.JobTitle, m.Company, url)
 	subject = fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
-	return subject, htmlBody, textBody
+	return subject, htmlBody, textBody, nil
 }
 
 // sendBatch is the multi-reminder mail: digest-style job rows, one reason line, one action.
-func (n emailCopy) sendBatch(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) sendBatch(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
@@ -199,12 +199,12 @@ func (n emailCopy) sendBatch(ms []ReminderMessage, unsubscribe string) (subject,
 	reason := "You saved these jobs and haven’t applied yet."
 
 	var content bytes.Buffer
-	// The template is a trusted constant and the data is escaped in context, so this
-	// fails only on a template bug — caught by the golden previews.
-	_ = batchTemplate.Execute(&content, emailData{
+	if err = batchTemplate.Execute(&content, emailData{
 		Jobs: rows, More: more, Reason: reason,
 		CTA: mailtpl.Link{URL: n.savedURL(), Label: "Open your saved jobs"},
-	})
+	}); err != nil {
+		return "", "", "", err
+	}
 	htmlBody = n.layout.Render(mailtpl.Body{
 		Preheader:      fmt.Sprintf("%d jobs you saved are still open", len(ms)),
 		Heading:        fmt.Sprintf("%d saved jobs are still open", len(ms)),
@@ -215,7 +215,7 @@ func (n emailCopy) sendBatch(ms []ReminderMessage, unsubscribe string) (subject,
 
 	subject = fmt.Sprintf("Reminder: %d saved jobs", len(ms))
 	textBody = n.renderBatchText(shown, more, reason)
-	return subject, htmlBody, textBody
+	return subject, htmlBody, textBody, nil
 }
 
 // savedURL is the saved-jobs list, tagged with an email UTM source.

@@ -194,11 +194,13 @@ func newEmailCopy(origin string) emailCopy {
 // render renders the batch as one mail: a single nudge keeps its own wording, a
 // batch shares one list template. Every message of a batch carries the group's
 // kind, so the first one names it.
-func (n emailCopy) render(ms []Message, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) render(ms []Message, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	if len(ms) == 1 {
-		return n.renderOne(ms[0], unsubscribe)
+		subject, htmlBody, textBody = n.renderOne(ms[0], unsubscribe)
+		return subject, htmlBody, textBody, nil
 	}
-	return n.renderBatch(ms[0].Kind, ms, unsubscribe)
+	subject, htmlBody, textBody = n.renderBatch(ms[0].Kind, ms, unsubscribe)
+	return subject, htmlBody, textBody, nil
 }
 
 // batchBody is what the batch template renders from. Jobs carries the source data,
