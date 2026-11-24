@@ -106,7 +106,7 @@ WHERE id = $1;
 -- left the ATS range out of every alert on a posting the model had not reached yet
 -- (#4587). Zero / empty means unknown, so a card renders compensation only when known.
 -- The description's pay line, the projection's last fallback, is Go-only and not read here.
-SELECT id, title, company, public_slug, url, posted_at,
+SELECT id, title, company, public_slug, url, source, external_id, posted_at,
        COALESCE(CASE WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL THEN salary_min_manual
                      WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL THEN salary_min_source
                      ELSE (enrichment->>'salary_min')::int END, 0)::int AS salary_min,

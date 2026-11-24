@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/engage/deliverywindow"
+	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -470,6 +471,7 @@ func buildDigest(name string, jobs []db.GetJobsForDigestRow, covered int) Digest
 			Company:        j.Company,
 			Slug:           j.PublicSlug,
 			URL:            j.URL,
+			DirectApply:    job.IsDirectApply(j.Source, j.ExternalID),
 			SalaryMin:      int(j.SalaryMin),
 			SalaryMax:      int(j.SalaryMax),
 			SalaryCurrency: j.SalaryCurrency,

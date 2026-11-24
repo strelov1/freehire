@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 )
 
 // senderName is the display name on these mails: the product, not a person.
@@ -84,12 +85,11 @@ func (n *TelegramNotifier) render(ms []ReminderMessage) string {
 	return b.String()
 }
 
-// renderOne is the single-reminder body. Its link carries no UTM tag; a batch of
-// one must stay identical to the pre-grouping message.
+// renderOne is the single-reminder body.
 func (n *TelegramNotifier) renderOne(m ReminderMessage) string {
 	return fmt.Sprintf(
 		"⏰ Reminder: you saved <b>%s</b> at <b>%s</b>.\nStill interested? <a href=\"%s\">Open the job →</a>",
-		html.EscapeString(m.JobTitle), html.EscapeString(m.Company), n.jobBaseURL+"/jobs/"+m.Slug)
+		html.EscapeString(m.JobTitle), html.EscapeString(m.Company), n.jobURL(m))
 }
 
 // jobLine renders one saved job as a bullet linking to its freehire page.
@@ -115,9 +115,13 @@ func (n *TelegramNotifier) moreLine(more int) string {
 // savedURL is the saved-jobs list, for jobs the batch could not itemize.
 func (n *TelegramNotifier) savedURL() string { return n.jobBaseURL + "/my/activity" }
 
-// jobURL is the on-platform freehire job page, tagged with a telegram UTM source.
-// Slugs are our own normalized values, so the URL needs no escaping.
+// jobURL is the job's click redirect to the employer, counted as a telegram click. A job that
+// takes applications on freehire keeps its page, tagged with a telegram UTM source. Slugs are
+// our own normalized values, so the URL needs no escaping.
 func (n *TelegramNotifier) jobURL(m ReminderMessage) string {
+	if !m.DirectApply {
+		return outboundurl.ApplyURL(m.Slug, outboundurl.SrcTelegram)
+	}
 	return n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=telegram-bot"
 }
 
@@ -267,8 +271,11 @@ func (n *EmailNotifier) renderBatchText(shown []ReminderMessage, more int, reaso
 	return b.String()
 }
 
-// jobURL is the on-platform freehire job page, tagged with an email UTM source so
-// the channel's traffic is attributable.
+// jobURL is the job's click redirect to the employer, counted as an email click. A job that
+// takes applications on freehire keeps its page, tagged with an email UTM source.
 func (n *EmailNotifier) jobURL(m ReminderMessage) string {
+	if !m.DirectApply {
+		return outboundurl.ApplyURL(m.Slug, outboundurl.SrcEmail)
+	}
 	return n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=email"
 }

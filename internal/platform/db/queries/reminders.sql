@@ -118,7 +118,7 @@ SELECT id FROM claimed ORDER BY fire_at, id;
 -- cancel-and-skip a reminder whose job has since closed or is no longer
 -- saved-but-unapplied, closing the race between a cancel and the fire.
 SELECT r.id, r.user_id, r.job_id, r.channels,
-       j.title, j.company, j.public_slug, j.url,
+       j.title, j.company, j.public_slug, j.url, j.source, j.external_id,
        -- The live opt-out gate. COALESCE'd to TRUE, not FALSE: an account with no
        -- notification_settings row has never configured the rule, and the
        -- never-configured default is ENABLED (see notification-settings). Nudges

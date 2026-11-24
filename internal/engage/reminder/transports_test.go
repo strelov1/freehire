@@ -43,8 +43,8 @@ func TestEmailNotifier_RendersSubjectAndOnPlatformLink(t *testing.T) {
 	if !strings.Contains(sender.subject, "Go Dev") || !strings.Contains(sender.subject, "Acme") {
 		t.Errorf("subject = %q, want job + company", sender.subject)
 	}
-	if !strings.Contains(sender.html, "https://freehire.me/jobs/go-dev-acme") {
-		t.Errorf("html link must point on-platform, got %q", sender.html)
+	if !strings.Contains(sender.html, "https://freehire.me/api/v1/go/go-dev-acme?src=email") {
+		t.Errorf("html link must be the click redirect, got %q", sender.html)
 	}
 	if strings.Contains(sender.html, "https://ats/x") {
 		t.Errorf("must not leak the source URL, got %q", sender.html)
@@ -67,8 +67,8 @@ func TestEmailNotifier_EscapesUserData(t *testing.T) {
 func TestTelegramNotifier_RendersOnPlatformLink(t *testing.T) {
 	n := NewTelegramNotifier(nil, "https://freehire.me/")
 	got := n.render([]ReminderMessage{{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}})
-	if !strings.Contains(got, "https://freehire.me/jobs/go-dev-acme") {
-		t.Errorf("telegram render missing on-platform link: %q", got)
+	if !strings.Contains(got, "https://freehire.me/api/v1/go/go-dev-acme?src=telegram") {
+		t.Errorf("telegram render missing redirect link: %q", got)
 	}
 	if !strings.Contains(got, "Go Dev") || !strings.Contains(got, "Acme") {
 		t.Errorf("telegram render missing job/company: %q", got)
@@ -104,7 +104,7 @@ func TestEmailNotifier_BatchListsEveryJobUnderTheListLimit(t *testing.T) {
 		t.Errorf("subject = %q, want the batch count", sender.subject)
 	}
 	for i := 0; i < 4; i++ {
-		if !strings.Contains(sender.html, "jobs/job-"+strconv.Itoa(i)) {
+		if !strings.Contains(sender.html, "go/job-"+strconv.Itoa(i)) {
 			t.Errorf("html is missing job-%d: %q", i, sender.html)
 		}
 	}
@@ -126,7 +126,7 @@ func TestEmailNotifier_BatchOverTheListLimitCountsTheRest(t *testing.T) {
 	if !strings.Contains(sender.html, "5 more") {
 		t.Errorf("html = %q, want a tail counting the 5 omitted jobs", sender.html)
 	}
-	if strings.Contains(sender.html, "jobs/job-"+strconv.Itoa(notify.ListLimit)) {
+	if strings.Contains(sender.html, "go/job-"+strconv.Itoa(notify.ListLimit)) {
 		t.Errorf("html itemized past the list limit: %q", sender.html)
 	}
 	if !strings.Contains(sender.text, "+ 5 more") {
@@ -141,7 +141,7 @@ func TestTelegramNotifier_BatchListsJobsAndCountsTheRest(t *testing.T) {
 	if !strings.Contains(got, "+ 3 more") {
 		t.Errorf("render = %q, want a tail counting the 3 omitted jobs", got)
 	}
-	if !strings.Contains(got, "jobs/job-0") {
+	if !strings.Contains(got, "go/job-0") {
 		t.Errorf("render = %q, want the first job listed", got)
 	}
 }
@@ -186,5 +186,17 @@ func TestEmailNotifier_PausedTransportSoftSkips(t *testing.T) {
 	err := n.Send(context.Background(), "email", "u@x.com", []ReminderMessage{msg})
 	if !errors.Is(err, ErrChannelNotConfigured) {
 		t.Errorf("Send = %v, want a soft-skip (ErrChannelNotConfigured)", err)
+	}
+}
+
+// A job that takes applications on freehire has no employer destination, so its link stays the
+// freehire page.
+func TestReminderLinks_DirectApplyJobKeepsItsPage(t *testing.T) {
+	m := ReminderMessage{Slug: "native-acme", DirectApply: true}
+	if got, want := NewTelegramNotifier(nil, "https://freehire.me").jobURL(m), "https://freehire.me/jobs/native-acme?utm_source=telegram-bot"; got != want {
+		t.Errorf("telegram jobURL = %q, want %q", got, want)
+	}
+	if got, want := (&EmailNotifier{jobBaseURL: "https://freehire.me"}).jobURL(m), "https://freehire.me/jobs/native-acme?utm_source=email"; got != want {
+		t.Errorf("email jobURL = %q, want %q", got, want)
 	}
 }
