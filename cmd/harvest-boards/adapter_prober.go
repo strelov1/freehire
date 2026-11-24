@@ -17,9 +17,8 @@ import (
 // bespoke prober still wins (one cheap request instead of a full crawl, and on some platforms
 // the employer name that powers the corroboration gate).
 //
-// A source built by newSource (the fallback, and Taleo's cookie jar) does not inherit -pace or
-// the refusal counter: it carries its own sources.Client. One built by newSourceWith runs over
-// the run's paced, counting client, like a bespoke prober.
+// The fallback does not inherit -pace or the refusal counter: the adapter carries its own
+// sources.Client, bypassing the run's paced, counting client.
 func proberFor(provider string) (prober, bool) {
 	if p, ok := probers[provider]; ok {
 		return p, true
@@ -48,10 +47,6 @@ var adapterRegistry = sync.OnceValue(func() map[string]sources.Source {
 type adapterProber struct {
 	provider  string
 	newSource func() sources.Source
-	// newSourceWith builds the adapter over the RUN'S client, so the probe shares -pace and the
-	// refusal counter with the probers. It is set for a platform whose adapter needs no client
-	// of its own (Taleo's cookie jar is the case that does); when set, newSource is unused.
-	newSourceWith func(httpClient) sources.Source
 }
 
 func (a adapterProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
@@ -62,17 +57,12 @@ func (a adapterProber) probe(ctx context.Context, c httpClient, board string) (s
 // carry SOME company: several adapters (hrmanager, tencent) take the employer from the
 // catalogue row and drop every posting when it is empty, so a company-less probe reads every
 // live board as empty. With no seed company the board id stands in, as in chooseCompany.
-func (a adapterProber) probeSeeded(ctx context.Context, c httpClient, board, company string) (string, int, error) {
+func (a adapterProber) probeSeeded(ctx context.Context, _ httpClient, board, company string) (string, int, error) {
 	if company == "" {
 		company = board
 	}
 	e := sources.CompanyEntry{Provider: a.provider, Board: board, Company: company}
-	var src sources.Source
-	if a.newSourceWith != nil {
-		src = a.newSourceWith(c)
-	} else {
-		src = a.newSource()
-	}
+	src := a.newSource()
 	// A hydrating adapter is asked for its listing alone: every posting reads as already held,
 	// so the probe skips detail requests whose bodies it would throw away.
 	var (

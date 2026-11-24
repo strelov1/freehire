@@ -206,25 +206,3 @@ func TestAdapterProbeReadsErrBoardGoneAsASkip(t *testing.T) {
 		t.Fatalf("probe = (%q, %d, %v), want (\"\", 0, nil): the platform's own \"not a board\" is a skip, not a failure", name, n, err)
 	}
 }
-
-// clientSource records which client the adapter was built over.
-type clientSource struct{ c sources.JSONGetter }
-
-func (*clientSource) Provider() string { return "cliented" }
-
-func (s *clientSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
-	if _, ok := s.c.(fakeGetter); !ok {
-		return nil, fmt.Errorf("adapter built over %T, want the run's client", s.c)
-	}
-	return []sources.Job{{}}, nil
-}
-
-func TestAdapterProbeRunsOverTheRunsClient(t *testing.T) {
-	// The run's client carries -pace and the refusal counter; an adapter on a client of its
-	// own would leave both when a bespoke prober is replaced by this one.
-	p := adapterProber{provider: "cliented", newSourceWith: func(c httpClient) sources.Source { return &clientSource{c: c} }}
-
-	if _, n, err := p.probe(context.Background(), fakeGetter{}, "acme"); err != nil || n != 1 {
-		t.Fatalf("probe = (%d, %v), want (1, nil)", n, err)
-	}
-}

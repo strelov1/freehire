@@ -24,7 +24,7 @@ import (
 type concludisProber struct{}
 
 // concludisListURL is page one of the list every tenant serves, at the adapter's own path.
-var concludisListURL = "https://%s.concludis.de" + sources.ConcludisListPath
+const concludisListURL = "https://%s.concludis.de" + sources.ConcludisListPath
 
 var (
 	concludisStatedCount = regexp.MustCompile(`class="stellensum">\s*([0-9]+)\s+Stellen?\s+gefunden`)
