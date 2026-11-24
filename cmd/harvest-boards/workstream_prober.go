@@ -7,6 +7,9 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // workstreamProber validates a Workstream board (an employer's eight-hex career-site id) by counting
@@ -25,15 +28,6 @@ const workstreamJobHost = "www.workstream.us/j"
 // URL opens with. The legacy "/j/<employer-slug>" spelling 301-redirects to one of these and is
 // dropped: resolving it costs a request each and found only 4 boards against 63 redirects.
 var workstreamBoardID = regexp.MustCompile(`^[0-9a-f]{8}$`)
-
-// workstreamPositionLink matches a posting permalink's path, mirroring the adapter's own rule
-// (internal/ingest/sources/workstream.go): "/j/<board>/<brand>/<store>/<title>-<id>".
-var workstreamPositionLink = regexp.MustCompile(`^/j/[0-9a-f]{8}/[^/]+/[^/]+/[^/]+-([0-9a-f]{8})$`)
-
-// workstreamSearchBase captures the positions-listing URL a career-site page states for itself. A
-// single-brand employer redirects "/j/<board>/positions" to a brand root that lists LOCATIONS, so the
-// count must come from wherever this variable points.
-var workstreamSearchBase = regexp.MustCompile(`var searchBaseUrl = '([^']+)'`)
 
 // workstreamTitleSuffix is what a career site appends to the employer's name in its <title>. Only
 // its opening is matched, because a long title is TRUNCATED mid-suffix and trimming the whole phrase
@@ -68,7 +62,9 @@ func (workstreamProber) probe(ctx context.Context, c httpClient, board string) (
 	if err != nil {
 		return "", 0, nil // absent (404), retired (410) or unreachable — not a live board
 	}
-	base := firstSubmatch(workstreamSearchBase, workstreamScriptText(root))
+	// A single-brand employer redirects "/j/<board>/positions" to a brand root that lists LOCATIONS,
+	// so the count comes from wherever the page's searchBaseUrl points.
+	base := kit.FirstSubmatch(sources.WorkstreamSearchBasePattern, workstreamScriptText(root))
 	if base == "" {
 		return "", 0, nil // not a career site
 	}
@@ -105,7 +101,7 @@ func workstreamPostingCount(root *html.Node) int {
 					continue
 				}
 				if u, err := url.Parse(a.Val); err == nil {
-					if m := workstreamPositionLink.FindStringSubmatch(u.Path); m != nil {
+					if m := sources.WorkstreamPostingIDPattern.FindStringSubmatch(u.Path); m != nil {
 						ids[m[1]] = true
 					}
 				}

@@ -76,11 +76,11 @@ const (
 // workstreamBase is the site origin, parsed once so a listing href resolves against it.
 var workstreamBase, _ = url.Parse(workstreamBaseURL)
 
-// workstreamPostingIDPattern captures the posting id a career-site URL path ends with, and by
+// WorkstreamPostingIDPattern captures the posting id a career-site URL path ends with, and by
 // matching the WHOLE path it also rejects the brand, location and apply links a listing page
 // carries alongside its postings. The id is the trailing hex: the slug in front of it is built
 // from the job title and moves whenever the employer edits the title.
-var workstreamPostingIDPattern = regexp.MustCompile(
+var WorkstreamPostingIDPattern = regexp.MustCompile(
 	`^/j/[0-9a-f]{8}/[^/]+/[^/]+/[^/]+-([0-9a-f]{8})$`)
 
 // workstreamPostingID extracts the native posting id from a posting URL, "" when the URL is not
@@ -91,13 +91,14 @@ func workstreamPostingID(loc string) string {
 	if err != nil {
 		return ""
 	}
-	return firstSubmatch(workstreamPostingIDPattern, u.Path)
+	return firstSubmatch(WorkstreamPostingIDPattern, u.Path)
 }
 
-// workstreamSearchBasePattern captures the positions-listing URL a career-site page states for
+// WorkstreamSearchBasePattern captures the positions-listing URL a career-site page states for
 // itself. Every page of the site carries it, and it is the only thing that says where a
 // single-brand employer's positions live once "/j/<board>/positions" has redirected away.
-var workstreamSearchBasePattern = regexp.MustCompile(`var searchBaseUrl = '([^']+)'`)
+// Exported for cmd/harvest-boards, whose prober counts the postings of the same listing.
+var WorkstreamSearchBasePattern = regexp.MustCompile(`var searchBaseUrl = '([^']+)'`)
 
 // workstreamTotalPagesPattern captures the listing's page count, stated alongside searchBaseUrl.
 var workstreamTotalPagesPattern = regexp.MustCompile(`var totalPages = (\d+)`)
@@ -208,7 +209,7 @@ func (s workstream) listing(ctx context.Context, e CompanyEntry) (*html.Node, *u
 	if err != nil {
 		return nil, nil, fmt.Errorf("workstream: listing %s: %w", e.Board, err)
 	}
-	stated := firstSubmatch(workstreamSearchBasePattern, workstreamScripts(root))
+	stated := firstSubmatch(WorkstreamSearchBasePattern, workstreamScripts(root))
 	if stated == "" {
 		return nil, nil, fmt.Errorf("workstream: listing %s: no positions listing on the page", e.Board)
 	}

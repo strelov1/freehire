@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
@@ -14,16 +13,11 @@ import (
 
 // polymerProber validates a Polymer board (the <board> of jobs.polymer.co/<board>) with one
 // request: the first page of the public listing API states the posting count and the
-// organisation's name, where the adapter fallback would read every posting's body. It mirrors
-// the URL of internal/ingest/sources/polymer.go, which is unexported.
+// organisation's name, where the adapter fallback would read every posting's body.
 type polymerProber struct{}
 
-// polymerBoardPattern is the slug shape the adapter accepts; anything else would build an API
-// path the platform never serves.
-var polymerBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 func (polymerProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !polymerBoardPattern.MatchString(board) {
+	if !sources.PolymerBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var page struct {
@@ -32,7 +26,7 @@ func (polymerProber) probe(ctx context.Context, c httpClient, board string) (str
 			OrganizationName string `json:"organization_name"`
 		} `json:"meta"`
 	}
-	if err := c.GetJSON(ctx, "https://api.polymer.co/v1/hire/organizations/"+board+"/jobs?page=1", &page); err != nil {
+	if err := c.GetJSON(ctx, sources.PolymerAPI+board+"/jobs?page=1", &page); err != nil {
 		// The platform answers an unknown or disabled board with 422 ("no careers_page found").
 		// Anything else is a probe that did not happen, and is surfaced.
 		var se *sources.StatusError

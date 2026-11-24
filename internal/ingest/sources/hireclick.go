@@ -116,7 +116,7 @@ func (s hireclick) list(ctx context.Context, e CompanyEntry) ([]hireclickPosting
 	if err != nil {
 		return nil, fmt.Errorf("hireclick: board page %s: %w", e.Board, err)
 	}
-	guid := hireclickOrgGUID(root)
+	guid := HireclickOrgGUID(root)
 	if guid == "" {
 		return nil, fmt.Errorf("hireclick: board %s: no organisation id on the board page (no such tenant)", e.Board)
 	}
@@ -144,8 +144,9 @@ func (s hireclick) list(ctx context.Context, e CompanyEntry) ([]hireclickPosting
 	return out, nil
 }
 
-// hireclickOrgGUID returns the value of the board page's #hdnOrgGuid hidden input, or "".
-func hireclickOrgGUID(root *html.Node) string {
+// HireclickOrgGUID returns the value of the board page's #hdnOrgGuid hidden input, or "".
+// Exported for cmd/harvest-boards, whose prober reads the same input to address the same list.
+func HireclickOrgGUID(root *html.Node) string {
 	var guid string
 	walk(root, func(n *html.Node) bool {
 		if guid != "" {
@@ -159,13 +160,14 @@ func hireclickOrgGUID(root *html.Node) string {
 	return guid
 }
 
-// hireclickJobIDPattern captures the numeric posting id from a "/jb/<slug>/view/<id>" URL. The
-// id alone selects the posting (the slug is decorative), and it is unique platform-wide.
-var hireclickJobIDPattern = regexp.MustCompile(`/jb/[^/]+/view/(\d+)`)
+// HireclickJobIDPattern captures the numeric posting id from a "/jb/<slug>/view/<id>" URL. The
+// id alone selects the posting (the slug is decorative), and it is unique platform-wide. Exported
+// for cmd/harvest-boards, whose prober counts postings by the same id rule.
+var HireclickJobIDPattern = regexp.MustCompile(`/jb/[^/]+/view/(\d+)`)
 
 // hireclickJobID extracts the native posting id from a posting URL, or "" when absent.
 func hireclickJobID(u string) string {
-	return firstSubmatch(hireclickJobIDPattern, u)
+	return firstSubmatch(HireclickJobIDPattern, u)
 }
 
 // detail fetches one posting page and maps its JobPosting ld+json to a Job. A posting the

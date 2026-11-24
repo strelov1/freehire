@@ -49,8 +49,9 @@ const helixjobsHost = "helixjobs.com"
 const helixjobsMaxPages = 400
 
 var (
-	// helixjobsBoard is the shape of an iid.
-	helixjobsBoard = regexp.MustCompile(`^[1-9][0-9]*$`)
+	// HelixjobsBoard is the shape of an iid. Exported for cmd/harvest-boards, whose prober
+	// validates a board against the same shape the adapter addresses.
+	HelixjobsBoard = regexp.MustCompile(`^[1-9][0-9]*$`)
 	// helixjobsPosting captures a posting id from a line's address. The portal spells the
 	// separator either case (harvested links carry 100007p36), so it is folded to "P".
 	helixjobsPosting = regexp.MustCompile(`^([1-9][0-9]*)[Pp]([0-9]+)$`)
@@ -101,7 +102,7 @@ func (s helixjobs) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 // sweep must never read as closures.
 func (s helixjobs) list(ctx context.Context, rawBoard string) ([]helixjobsLine, error) {
 	board := strings.TrimSpace(rawBoard)
-	if !helixjobsBoard.MatchString(board) {
+	if !HelixjobsBoard.MatchString(board) {
 		return nil, fmt.Errorf("helixjobs: board %q is not an instance id", rawBoard)
 	}
 	var lines []helixjobsLine

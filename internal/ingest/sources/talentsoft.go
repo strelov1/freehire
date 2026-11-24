@@ -83,13 +83,15 @@ const (
 )
 
 var (
-	// talentsoftBoard is a bare lowercase host.
-	talentsoftBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
+	// TalentsoftBoard is a bare lowercase host. Exported for cmd/harvest-boards, whose prober
+	// validates a board against the same shape the adapter addresses.
+	TalentsoftBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 	// talentsoftPostingPath captures the offer id that ends every posting path, whatever the
 	// site's language (/offre-de-emploi/emploi-<slug>_<id>.aspx, /stelle/stelle-<slug>_<id>.aspx,
 	// /job/job-<slug>_<id>.aspx).
 	talentsoftPostingPath = regexp.MustCompile(`_(\d+)\.aspx$`)
-	talentsoftDigits      = regexp.MustCompile(`\d+`)
+	// TalentsoftDigits is exported for cmd/harvest-boards, whose prober reads the same stated count.
+	TalentsoftDigits = regexp.MustCompile(`\d+`)
 	// talentsoftListDate is the publication date a listing row may carry (dd/mm/yyyy, or with
 	// dots on German-language sites).
 	talentsoftListDate = regexp.MustCompile(`^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$`)
@@ -112,7 +114,7 @@ func (s talentsoft) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // is re-listed as a SeenRefresh; an unseen one left unread waits for a later run.
 func (s talentsoft) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(e.Board), "/"))
-	if !talentsoftBoard.MatchString(board) {
+	if !TalentsoftBoard.MatchString(board) {
 		return nil, fmt.Errorf("talentsoft: board %q is not a careers host", e.Board)
 	}
 	get := talentsoftPaced{s: s, site: s.siteLimiter()}
@@ -323,7 +325,7 @@ func talentsoftTotal(root *html.Node) (int, bool) {
 	if !found {
 		return 0, false
 	}
-	digits := talentsoftDigits.FindString(strings.Map(func(r rune) rune {
+	digits := TalentsoftDigits.FindString(strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) || r == '.' || r == ',' {
 			return -1 // thousands separators: "1 993", "1.993"
 		}

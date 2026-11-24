@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -13,17 +12,15 @@ import (
 
 // flatchrProber validates a Flatchr board (the <board> of careers.flatchr.io/<lang>/company/
 // <board>) by reading the board document the careers site itself loads, and counting its
-// published vacancies. It mirrors internal/ingest/sources/flatchr.go, which is unexported.
+// published vacancies.
 //
 // A board can be a holding's careers site listing its subsidiaries' vacancies, so the employer
 // name is taken only from a vacancy filed under the board's own company — a subsidiary's name
 // would reject a live board on the name gate — and left to the seed otherwise.
 type flatchrProber struct{}
 
-var flatchrBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 func (flatchrProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !flatchrBoardPattern.MatchString(board) {
+	if !sources.FlatchrBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var doc struct {

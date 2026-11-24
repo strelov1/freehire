@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -12,15 +11,13 @@ import (
 
 // hrofficeProber validates an HR Office career site (the <board> of middendelfland.inhroffice.com)
 // by counting the vacancies of the listing the adapter reads, /api/nl/vacancies; the employer is
-// the home page's og:site_name. It mirrors internal/ingest/sources/hroffice.go, which is
-// unexported. An unknown or switched-off label answers the listing with HTTP 500 and a
-// "MiniJobPortalNotFoundException" body, which is the skip: a live site has never answered 500.
+// the home page's og:site_name. An unknown or switched-off label answers the listing with HTTP
+// 500 and a "MiniJobPortalNotFoundException" body, which is the skip: a live site has never
+// answered 500.
 type hrofficeProber struct{}
 
-var hrofficeBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 func (hrofficeProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !hrofficeBoardPattern.MatchString(board) {
+	if !sources.HROfficeBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	host := "https://" + board + ".inhroffice.com"

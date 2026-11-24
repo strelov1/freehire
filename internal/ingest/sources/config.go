@@ -18,14 +18,14 @@ type Config struct {
 // boardIdentity maps a provider to the function that folds every spelling of a board into
 // the one thing it addresses. Case folding is not enough where a platform accepts more than
 // one FORM of board id: iCIMS boards are written both as a bare slug and as the full
-// "careers-<slug>.icims.com" host, and icimsHost resolves both to that host, so the two
+// "careers-<slug>.icims.com" host, and IcimsHost resolves both to that host, so the two
 // spellings are one crawl target.
 // Dayforce is the same shape for a different reason: its optional culture segment chooses
 // which translations of a site's postings to read, and one posting keeps the same id in every
 // culture, so two entries differing only in culture would store each shared posting twice.
 // A provider absent here folds on case alone.
 var boardIdentity = map[string]func(board string) string{
-	"icims":    icimsHost,
+	"icims":    IcimsHost,
 	"dayforce": dayforceSiteID,
 	"gusto":    gustoBoardIdentity,
 	"ukgready": ukgreadyTenant,

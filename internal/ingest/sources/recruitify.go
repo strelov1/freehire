@@ -70,8 +70,9 @@ func pacedRecruitifyGetter(c HeaderJSONGetter) HeaderJSONGetter {
 	}
 }
 
-// recruitifyBoard is the shape of a portal label.
-var recruitifyBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// RecruitifyBoard is the shape of a portal label. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var RecruitifyBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // recruitifyPosting is a posting as the listing and the detail both carry it; only the detail
 // fills Description.
@@ -128,7 +129,7 @@ func (s recruitify) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 // that keys them. A 404 on the first page is the platform's "no such portal".
 func (s recruitify) list(ctx context.Context, rawBoard string) (string, []recruitifyPosting, error) {
 	board := strings.ToLower(strings.TrimSpace(rawBoard))
-	if !recruitifyBoard.MatchString(board) {
+	if !RecruitifyBoard.MatchString(board) {
 		return "", nil, fmt.Errorf("recruitify: board %q is not a portal label", rawBoard)
 	}
 	headers := recruitifyHeaders(board)

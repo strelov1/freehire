@@ -3,13 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"regexp"
-)
 
-// jobviteJobLinkPattern matches a Jobvite job permalink's /<board>/job/<code> segment; the
-// /<board>/jobs listing and /<board>/jobAlerts nav links carry none and are not counted. Mirrors
-// sources.jobviteJobIDPattern (unexported).
-var jobviteJobLinkPattern = regexp.MustCompile(`/job/[A-Za-z0-9]+(?:[/?#]|$)`)
+	"github.com/strelov1/freehire/internal/ingest/sources"
+)
 
 // jobviteProber probes a Jobvite careersite. Jobvite exposes no public JSON list, so liveness
 // is judged from the server-rendered listing HTML: a live board links ≥1 job permalink. The
@@ -22,7 +18,7 @@ func (jobviteProber) probe(ctx context.Context, c httpClient, slug string) (stri
 	if err != nil {
 		return "", 0, nil
 	}
-	n := countMatchingLinks(root, jobviteJobLinkPattern)
+	n := countMatchingLinks(root, sources.JobviteJobIDPattern)
 	if n == 0 {
 		return "", 0, nil
 	}

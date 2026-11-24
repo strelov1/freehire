@@ -5,23 +5,20 @@ import (
 	"encoding/xml"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // easycruitProber validates a Visma EasyCruit career site (the <board> of lentis.easycruit.com)
-// by counting the vacancies in /export/xml/vacancy/list.xml, which the adapter reads. It mirrors
-// internal/ingest/sources/easycruit.go, which is unexported. The export names no site title, so
+// by counting the vacancies in /export/xml/vacancy/list.xml, which the adapter reads. The export
+// names no site title, so
 // the employer is the first vacancy's department; a site with no openings is reported without
 // one. An unknown label answers 404: a skip.
 type easycruitProber struct{}
 
-var easycruitBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 func (easycruitProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !easycruitBoardPattern.MatchString(board) {
+	if !sources.EasyCruitBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var list struct {

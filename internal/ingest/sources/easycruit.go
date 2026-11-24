@@ -40,8 +40,9 @@ func (easycruit) Provider() string { return "easycruit" }
 // fullBoardListing: the list export is one unpaginated document carrying every open vacancy.
 func (easycruit) FullBoardListing() {}
 
-// easycruitBoard is the shape of a career-site label.
-var easycruitBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// EasyCruitBoard is the shape of a career-site label. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var EasyCruitBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // easycruitList is the list export. XMLName is checked so an answer that is not the export is
 // told apart from a site with no openings, which the platform serves as an empty VacancyList.
@@ -145,7 +146,7 @@ func (s easycruit) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 // page a visitor would open.
 func (s easycruit) list(ctx context.Context, rawBoard string) (string, []easycruitVacancy, error) {
 	board := strings.ToLower(strings.TrimSpace(rawBoard))
-	if !easycruitBoard.MatchString(board) {
+	if !EasyCruitBoard.MatchString(board) {
 		return "", nil, fmt.Errorf("easycruit: board %q is not a career-site label", rawBoard)
 	}
 	var doc easycruitList

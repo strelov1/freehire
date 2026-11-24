@@ -42,8 +42,9 @@ func (flatchr) Provider() string { return "flatchr" }
 // vacancy — no loop that could stop early.
 func (flatchr) FullBoardListing() {}
 
-// flatchrBoard is the shape of a board slug.
-var flatchrBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// FlatchrBoard is the shape of a board slug. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var FlatchrBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // flatchrDocument is the board document. Items is a pointer so a reshaped answer is told apart
 // from a board with no vacancies, which the platform serves as an empty array.
@@ -78,7 +79,7 @@ type flatchrVacancy struct {
 
 func (s flatchr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))
-	if !flatchrBoard.MatchString(board) {
+	if !FlatchrBoard.MatchString(board) {
 		return nil, fmt.Errorf("flatchr: board %q is not a company slug", e.Board)
 	}
 	docURL := "https://careers.flatchr.io/company/" + board + ".json"

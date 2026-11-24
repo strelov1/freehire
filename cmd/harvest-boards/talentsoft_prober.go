@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -15,21 +14,17 @@ import (
 
 // talentsoftProber validates a Talentsoft career site (the board is its host) by reading page one of
 // the adapter's listing, /offre-de-emploi/liste-toutes-offres.aspx?all=1&mode=list, which states the
-// posting count in #…_Pagination_TotalOffers. It mirrors the unexported internal/ingest/sources/talentsoft.go.
+// posting count in #…_Pagination_TotalOffers, taking the board's shape and the count's digits
+// from internal/ingest/sources/talentsoft.go.
 //
 // The employer is the page title's lead ("GEODIS - Résultat de votre recherche (520 offres…)").
 // A site with no open posting renders the platform's own empty result and is reported with a
 // zero count; a page carrying neither is not a Talentsoft listing.
 type talentsoftProber struct{}
 
-var (
-	talentsoftProbeBoard  = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
-	talentsoftProbeDigits = regexp.MustCompile(`\d+`)
-)
-
 func (talentsoftProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
 	board = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(board), "/"))
-	if !talentsoftProbeBoard.MatchString(board) {
+	if !sources.TalentsoftBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	root, err := c.GetHTML(ctx, "https://"+board+"/offre-de-emploi/liste-toutes-offres.aspx?all=1&mode=list")
@@ -76,7 +71,7 @@ func talentsoftProbeTotal(root *html.Node) (int, bool) {
 		}
 		return r
 	}, bizneoNodeText(total))
-	n, err := strconv.Atoi(talentsoftProbeDigits.FindString(text))
+	n, err := strconv.Atoi(sources.TalentsoftDigits.FindString(text))
 	return n, err == nil
 }
 

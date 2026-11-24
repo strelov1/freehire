@@ -36,8 +36,10 @@ func (dvinci) Provider() string { return "dvinci" }
 // publication — no loop that could stop early.
 func (dvinci) FullBoardListing() {}
 
-// dvinciBoard is the shape of a careers host: lowercase DNS labels, at least one dot.
-var dvinciBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
+// DvinciBoard is the shape of a careers host: lowercase DNS labels, at least one dot.
+// Exported for cmd/harvest-boards, whose prober validates a board against the same shape the
+// adapter addresses.
+var DvinciBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
 // dvinciPublication is one publication of a vacancy on the careers site.
 type dvinciPublication struct {
@@ -92,7 +94,7 @@ type dvinciOpening struct {
 
 func (s dvinci) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))
-	if !dvinciBoard.MatchString(board) {
+	if !DvinciBoard.MatchString(board) {
 		return nil, fmt.Errorf("dvinci: board %q is not a careers host", e.Board)
 	}
 	// A pointer, so a document that decodes to JSON null is told apart from a board with no

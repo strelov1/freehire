@@ -87,7 +87,7 @@ var gustoBoardUUIDPattern = regexp.MustCompile(
 // entry sources.boardIdentity needs for gusto. A renamed employer keeps its OLD slug resolving
 // against the same uuid, and a trailing ".json" is accepted because the route ignores the
 // format suffix. Left unfolded they would be crawled as two boards and, since external ids are
-// namespaced by board, every posting would be stored twice (the failure icimsHost exists for).
+// namespaced by board, every posting would be stored twice (the failure IcimsHost exists for).
 // A board carrying no uuid folds to itself, so a malformed entry is never quietly merged into
 // another.
 func gustoBoardIdentity(board string) string {
