@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 type captureSender struct {

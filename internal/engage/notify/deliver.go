@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/application/deliverywindow"
+	"github.com/strelov1/freehire/internal/engage/deliverywindow"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )

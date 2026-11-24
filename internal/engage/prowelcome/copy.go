@@ -3,7 +3,7 @@ package prowelcome
 import (
 	"html/template"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // body parses the letter's markup with the shell's sign-off appended, like
