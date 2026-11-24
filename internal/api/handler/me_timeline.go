@@ -125,21 +125,6 @@ func scheduledInterviewsWire(found []apptimeline.Interview) []apigen.ScheduledIn
 	return out
 }
 
-func optInt64(n int64) apigen.OptInt64 {
-	if n == 0 {
-		return apigen.OptInt64{}
-	}
-	return apigen.NewOptInt64(n)
-}
-
-// optTime renders a zero time as absent rather than as the year 1.
-func optTime(at time.Time) apigen.OptDateTime {
-	if at.IsZero() {
-		return apigen.OptDateTime{}
-	}
-	return apigen.NewOptDateTime(at)
-}
-
 // timelineRequest reads the caller and the range both calendar layers are asked for. Shared
 // so a bound cannot be parsed differently by each layer on the same grid.
 func timelineRequest(ctx context.Context, rawFrom, rawTo apigen.OptString) (userID int64, from, to time.Time, err error) {

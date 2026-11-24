@@ -39,8 +39,8 @@ tailored CV's reports (delta.go). Consumers: `GET`/`POST /me/profile/ats-report`
   alone is not a difference, and reporting it against an implied zero would invent a change
   nobody made (delta.go:13-16). `WorstCategory` is set only when the overall fell, and an
   equal drop resolves to the earlier category in the tailored report's own order, never map
-  iteration order (delta.go:44-79). Only the TAILORED side's line items travel — a
-  before/after checklist is a diff nobody asked for (delta.go:33-37).
+  iteration order (`delta.Compare`). Only the TAILORED side's line items travel — a
+  before/after checklist is a diff nobody asked for.
 
 ## How it works
 `POST /me/profile/ats-report` runs the LLM review under the caller's own gateway

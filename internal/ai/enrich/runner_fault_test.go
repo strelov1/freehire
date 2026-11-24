@@ -4,19 +4,21 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
 // recordingStore captures the policy each failure was recorded under, so the runner's
 // classification is observable rather than inferred from a dead-letter count.
 type recordingStore struct {
 	fakeStore
-	policies []FailurePolicy
+	policies []outbox.FailurePolicy
 }
 
 // Reap is a no-op here: these tests are about failure bounding, not housekeeping.
 func (s *recordingStore) Reap(context.Context, int) (int64, error) { return 0, nil }
 
-func (s *recordingStore) Fail(ctx context.Context, outboxID int64, msg string, policy FailurePolicy) (bool, error) {
+func (s *recordingStore) Fail(ctx context.Context, outboxID int64, msg string, policy outbox.FailurePolicy) (bool, error) {
 	s.policies = append(s.policies, policy)
 	return s.fakeStore.Fail(ctx, outboxID, msg, policy)
 }
@@ -59,8 +61,8 @@ func TestRunnerReportsFaultToTheStore(t *testing.T) {
 				t.Fatal("no failure was recorded")
 			}
 			got := store.policies[0]
-			if got.PostingAtFault != tc.wantAtFault {
-				t.Errorf("PostingAtFault = %v, want %v for %v", got.PostingAtFault, tc.wantAtFault, tc.providerErr)
+			if got.AtFault != tc.wantAtFault {
+				t.Errorf("AtFault = %v, want %v for %v", got.AtFault, tc.wantAtFault, tc.providerErr)
 			}
 			if got.UpstreamGraceDays != o.UpstreamGraceDays {
 				t.Errorf("UpstreamGraceDays = %d, want the configured %d", got.UpstreamGraceDays, o.UpstreamGraceDays)
