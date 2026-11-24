@@ -11,10 +11,10 @@ interface ErrorTelemetryOptions {
   version?: string;
   exporter?: LogRecordExporter;
   logToConsole?: boolean;
+  signinIncident?: () => string | undefined;
 }
 
-// Only exception fields enter telemetry. Never serialize a thrown object, a request,
-// or a rejection value: these often contain API responses or personal input.
+// Thrown objects, requests and rejection values can contain API responses or personal input.
 function sanitize(value: string, limit: number): string {
   return value
     .slice(0, limit * 2)
@@ -50,7 +50,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         'deployment.environment.name': options.environment || 'development',
       }),
       logRecordLimits: {
-        attributeCountLimit: 9,
+        attributeCountLimit: 10,
         attributeValueLengthLimit: 8192,
       },
       processors: [
@@ -119,7 +119,9 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             /* Continue exporting if local logging fails. */
           }
         }
-        const key = `${route}\n${message}\n${stack}`;
+        const location = typeof window === 'undefined' ? undefined : window.location;
+        const onSignin = location?.pathname === '/signin' || location?.pathname === '/signin/';
+        const key = `${route || (onSignin ? '/signin' : '')}\n${message}\n${stack}`;
         const now = Date.now();
         if (now - windowStart >= 60_000) {
           windowStart = now;
@@ -128,9 +130,9 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         if (seen.size >= 20 || seen.has(key)) return;
         seen.add(key);
         // The Location fields exclude credentials, query parameters, and fragments.
-        const url =
-          typeof window === 'undefined' ? '' : sanitize(window.location.origin + window.location.pathname, 256);
+        const url = location ? sanitize(location.origin + location.pathname, 256) : '';
         const userAgent = typeof window === 'undefined' ? '' : sanitize(window.navigator.userAgent, 256);
+        const signinIncident = onSignin ? options.signinIncident?.() : undefined;
         logger.emit({
           severityNumber: SeverityNumber.ERROR,
           severityText: 'ERROR',
@@ -145,6 +147,22 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             ...(url && { url }),
             ...(userAgent && { user_agent: userAgent }),
             ...(context.errorId && { 'error.id': sanitize(context.errorId, 64) }),
+            ...(signinIncident && { 'signin.incident_id': signinIncident }),
+          },
+        });
+      } catch {
+        /* Reporting must never become an application error. */
+      }
+    },
+    reportSigninSession(incidentID: string) {
+      try {
+        logger.emit({
+          severityNumber: SeverityNumber.INFO,
+          severityText: 'INFO',
+          body: 'Signed-in session observed after sign-in page exception',
+          attributes: {
+            'event.name': 'signin.session_observed',
+            'signin.incident_id': incidentID,
           },
         });
       } catch {
