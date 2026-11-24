@@ -197,7 +197,8 @@ function main() {
   }
   // --base <commit>: what to compare the tree with. CI passes the previous tip of main, so
   // the list is what the push added. Without it the message names no file.
-  const base = process.argv[process.argv.indexOf('--base') + 1];
+  const baseAt = process.argv.indexOf('--base');
+  const base = baseAt < 0 ? '' : process.argv[baseAt + 1];
   const { ok, errors } = checkMigrationNumbers(names, ALLOWED_DUPLICATE_COUNTS);
   if (!ok) {
     console.error(`check-migration-numbers: ${errors.length} problem(s):`);
