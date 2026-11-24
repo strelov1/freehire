@@ -138,9 +138,21 @@
     </figure>
   </section>
 
+  <section
+    class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-brand-muted p-5 sm:p-6"
+  >
+    <div>
+      <h2 class="font-semibold">Interview scheduling agent</h2>
+      <p class="mt-1 text-sm text-muted-foreground">
+        In a limited pilot, Freehire can reply to recruiter invitations and book the agreed time.
+      </p>
+    </div>
+    <Button href={resolve('/features/interview-scheduling')} variant="outline">Explore interview scheduling</Button>
+  </section>
+
   <!-- Connect. The hosted address leads because it works for everyone; Gmail is
        second while its OAuth app is still in Google review (test users only). -->
-  <section class="border-t border-border py-16 sm:py-20">
+  <section class="py-16 sm:py-20">
     <SectionLabel text="Connect" />
     <div class="mt-6 max-w-2xl">
       <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">Two ways to get mail in.</h2>
