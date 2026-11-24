@@ -54,11 +54,15 @@ const onlyfyPageSize = 100
 const onlyfyMaxPages = 100
 
 var (
-	onlyfyBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-	// onlyfyJobPath captures a posting id from a listing row's link ("/job/qqeva17cjz1x...").
-	onlyfyJobPath = regexp.MustCompile(`^/job/([a-z0-9]+)$`)
-	// onlyfyTotal reads the board's posting count out of the fragment's pager script.
-	onlyfyTotal = regexp.MustCompile(`#pageInfoTotalCount'\)\.text\((\d+)\)`)
+	// OnlyfyBoard is the shape of a site name. Exported for cmd/harvest-boards, whose prober
+	// validates a board against the same shape the adapter addresses.
+	OnlyfyBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+	// OnlyfyJobPath captures a posting id from a listing row's link ("/job/qqeva17cjz1x...").
+	// Exported for cmd/harvest-boards, whose prober reads the same link.
+	OnlyfyJobPath = regexp.MustCompile(`^/job/([a-z0-9]+)$`)
+	// OnlyfyTotal reads the board's posting count out of the fragment's pager script. Exported
+	// for cmd/harvest-boards, whose prober takes liveness from that same count.
+	OnlyfyTotal = regexp.MustCompile(`#pageInfoTotalCount'\)\.text\((\d+)\)`)
 	// onlyfyRowDate is a listing row's publication date, dd.mm.yy.
 	onlyfyRowDate = regexp.MustCompile(`^\d{2}\.\d{2}\.\d{2}$`)
 )
@@ -72,7 +76,7 @@ func (s onlyfy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // does not already have; a seen posting is emitted as a liveness refresh.
 func (s onlyfy) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))
-	if !onlyfyBoard.MatchString(board) {
+	if !OnlyfyBoard.MatchString(board) {
 		return nil, fmt.Errorf("onlyfy: board %q is not a site name", e.Board)
 	}
 	site := "https://" + board + ".onlyfy.jobs"
@@ -142,7 +146,7 @@ func onlyfyCount(root *html.Node) (int, bool) {
 			return false
 		}
 		if node.Type == html.ElementNode && node.Data == "script" {
-			if m := onlyfyTotal.FindStringSubmatch(textContent(node)); m != nil {
+			if m := OnlyfyTotal.FindStringSubmatch(textContent(node)); m != nil {
 				n, _ = strconv.Atoi(m[1])
 				found = true
 			}
@@ -169,7 +173,7 @@ func onlyfyRows(root *html.Node) []onlyfyRow {
 			}
 			switch {
 			case c.Data == "a" && r.id == "":
-				if m := onlyfyJobPath.FindStringSubmatch(Attr(c, "href")); m != nil {
+				if m := OnlyfyJobPath.FindStringSubmatch(Attr(c, "href")); m != nil {
 					r.id, r.title = m[1], strings.TrimSpace(textContent(c))
 				}
 			case c.Data == "i" && HasClass(c, "icon-map-marker") && c.Parent != nil:

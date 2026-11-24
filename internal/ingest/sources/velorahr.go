@@ -50,7 +50,9 @@ func (velorahr) Provider() string { return "velorahr" }
 func (velorahr) FullBoardListing() {}
 
 const (
-	velorahrAPIBase = "https://api.velorahr.com/api/public/career-site/"
+	// VelorahrAPIBase is the career-site API root. Exported for cmd/harvest-boards, whose prober
+	// validates a board with the same requests.
+	VelorahrAPIBase = "https://api.velorahr.com/api/public/career-site/"
 	// velorahrWindow is how many offers the listing request asks for, far more than any site lists.
 	velorahrWindow = 1000
 	// velorahrRequestInterval spaces the provider's requests to the one API host.
@@ -58,9 +60,12 @@ const (
 )
 
 var (
-	velorahrBoard = regexp.MustCompile(`^[1-9][0-9]{0,8}$`)
-	// velorahrListingQuery asks for every offer, newest first, in one window.
-	velorahrListingQuery = url.Values{
+	// VelorahrBoard is the shape of a career-site id. Exported for cmd/harvest-boards, whose prober
+	// validates a board against the same shape the adapter addresses.
+	VelorahrBoard = regexp.MustCompile(`^[1-9][0-9]{0,8}$`)
+	// VelorahrListingQuery asks for every offer, newest first, in one window. Exported for
+	// cmd/harvest-boards, whose prober counts the offers of the same listing.
+	VelorahrListingQuery = url.Values{
 		"filter": {"{}"},
 		"range":  {fmt.Sprintf("[0,%d]", velorahrWindow-1)},
 		"sort":   {`["id","DESC"]`},
@@ -107,13 +112,13 @@ type velorahrOffer struct {
 // Fetch reads the site and its whole listing.
 func (s velorahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.TrimSpace(e.Board)
-	if !velorahrBoard.MatchString(board) {
+	if !VelorahrBoard.MatchString(board) {
 		return nil, fmt.Errorf("velorahr: board %q is not a career-site id", e.Board)
 	}
 	siteID, _ := strconv.ParseInt(board, 10, 64)
 
 	var site velorahrSite
-	if err := s.http.GetJSON(ctx, velorahrAPIBase+board, &site); err != nil {
+	if err := s.http.GetJSON(ctx, VelorahrAPIBase+board, &site); err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && se.Code == http.StatusNotFound {
 			return nil, fmt.Errorf("velorahr: board %s: %w", board, ErrBoardGone)
@@ -121,7 +126,7 @@ func (s velorahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("velorahr: board %s: %w", board, err)
 	}
 	var listing velorahrListing
-	if err := s.http.GetJSON(ctx, velorahrAPIBase+board+"/offers?"+velorahrListingQuery, &listing); err != nil {
+	if err := s.http.GetJSON(ctx, VelorahrAPIBase+board+"/offers?"+VelorahrListingQuery, &listing); err != nil {
 		return nil, fmt.Errorf("velorahr: board %s: offers: %w", board, err)
 	}
 	if len(listing.Data) >= velorahrWindow {

@@ -17,9 +17,9 @@ import (
 // the same portal) and is stored as the platform spells it in a posting's jobPortalUrl.
 //
 // Two public JSON endpoints serve the portal and posting pages, both Angular SPAs:
-//   - apponePortalURL lists a portal's open postings with title, location, job type, workplace
+//   - ApponePortalURL lists a portal's open postings with title, location, job type, workplace
 //     type, structured salary and the posted date, but no body;
-//   - apponePostingURL is one posting's detail, the only source of its description.
+//   - ApponePostingURL is one posting's detail, the only source of its description.
 //
 // So this is a HydratingSource: the detail is read once, for postings the catalogue does not
 // hold yet.
@@ -48,7 +48,7 @@ func NewAppOnePortalResolver(c JSONGetter) func(context.Context, string) string 
 			ID     string `json:"jobPostId"`
 			Portal string `json:"jobPortalUrl"`
 		}
-		if err := a.getJSON(ctx, apponePostingURL+id, &detail); err != nil || detail.ID != id {
+		if err := a.getJSON(ctx, ApponePostingURL+id, &detail); err != nil || detail.ID != id {
 			return ""
 		}
 		return detail.Portal
@@ -60,8 +60,12 @@ var apponePostingID = regexp.MustCompile(`^[0-9a-f]{24}$`)
 func (appone) Provider() string { return "appone" }
 
 const (
-	apponePortalURL  = "https://jobs.appone.com/api/portal/v1/companyjobposts/"
-	apponePostingURL = "https://apply.appone.com/api/apply/v2/jobposting/"
+	// ApponePortalURL lists a portal's open postings. Exported for cmd/harvest-boards, whose prober
+	// validates a board with this same request.
+	ApponePortalURL = "https://jobs.appone.com/api/portal/v1/companyjobposts/"
+	// ApponePostingURL is one posting's detail. Exported for cmd/harvest-boards, whose prober
+	// resolves a posting-link seed with this same request.
+	ApponePostingURL = "https://apply.appone.com/api/apply/v2/jobposting/"
 	apponeJobURL     = "https://apply.appone.com/job/"
 )
 
@@ -139,7 +143,7 @@ func (a appone) list(ctx context.Context, board string) ([]apponePosting, error)
 	var resp struct {
 		JobPosts []apponePosting `json:"jobPosts"`
 	}
-	if err := a.getJSON(ctx, apponePortalURL+url.PathEscape(board), &resp); err != nil {
+	if err := a.getJSON(ctx, ApponePortalURL+url.PathEscape(board), &resp); err != nil {
 		return nil, fmt.Errorf("appone: list portal %s: %w", board, err)
 	}
 	return resp.JobPosts, nil
@@ -161,7 +165,7 @@ func (a appone) detail(ctx context.Context, e CompanyEntry, p apponePosting) (Jo
 	}
 	jobURL := p.jobURL()
 	var d apponeDetail
-	if err := a.getJSON(ctx, apponePostingURL+url.PathEscape(p.ID), &d); err != nil {
+	if err := a.getJSON(ctx, ApponePostingURL+url.PathEscape(p.ID), &d); err != nil {
 		if detailUnreadable(err) {
 			return unreadableDetail(p.ID, jobURL, e.Company), true
 		}

@@ -8,10 +8,8 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 )
-
-// greenhouseBoardsAPI mirrors the unexported sources.greenhouseBaseURL.
-const greenhouseBoardsAPI = "https://boards-api.greenhouse.io/v1/boards"
 
 // httpClient is the transport a prober needs: GetJSON, PostJSON (Workday CXS), GetXML (iCIMS/Deel
 // sitemaps) and GetHTML (Freshteam). *sources.Client implements all of them.
@@ -55,7 +53,7 @@ type idProber interface {
 type greenhouseProber struct{}
 
 func greenhouseJobsURL(slug string) string {
-	return fmt.Sprintf("%s/%s/jobs", greenhouseBoardsAPI, slug)
+	return fmt.Sprintf("%s/%s/jobs", ats.GreenhouseBaseURL, slug)
 }
 
 // postingIDs lists the live posting ids; one response carries the complete list.
@@ -91,7 +89,7 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 	var meta struct {
 		Name string `json:"name"`
 	}
-	_ = c.GetJSON(ctx, fmt.Sprintf("%s/%s", greenhouseBoardsAPI, slug), &meta)
+	_ = c.GetJSON(ctx, fmt.Sprintf("%s/%s", ats.GreenhouseBaseURL, slug), &meta)
 	name := meta.Name
 	if name == "" {
 		name = slug
@@ -100,7 +98,7 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 }
 
 // greenhouseBoardsHost is the web host Common Crawl actually visits. Validation still goes through
-// greenhouseBoardsAPI.
+// ats.GreenhouseBaseURL.
 const greenhouseBoardsHost = "boards.greenhouse.io"
 
 // discover finds Greenhouse board candidates from the Common Crawl CDX index: every URL
@@ -265,15 +263,6 @@ type icimsProber struct{}
 // widening the sources API.
 var icimsJobLocPattern = regexp.MustCompile(`/jobs/\d+/`)
 
-// icimsHost mirrors internal/ingest/sources/icims.go: a board containing a dot IS the careers host,
-// anything else is a bare slug. Rebuilding a vanity host would resolve nowhere and report it dead.
-func icimsHost(board string) string {
-	if strings.Contains(board, ".") {
-		return board
-	}
-	return "careers-" + board + ".icims.com"
-}
-
 // dedupKey folds "careers-<slug>.icims.com" to "<slug>", since the catalogue holds both spellings.
 // Only that form folds: "pppl-princeton.icims.com" and bare "pppl-princeton" are different hosts.
 func (icimsProber) dedupKey(boardID string) string {
@@ -292,7 +281,7 @@ func (icimsProber) probe(ctx context.Context, c httpClient, slug string) (string
 			Loc string `xml:"loc"`
 		} `xml:"url"`
 	}
-	if err := c.GetXML(ctx, "https://"+icimsHost(slug)+"/sitemap.xml", &sitemap); err != nil {
+	if err := c.GetXML(ctx, "https://"+sources.IcimsHost(slug)+"/sitemap.xml", &sitemap); err != nil {
 		return "", 0, nil
 	}
 	n := 0

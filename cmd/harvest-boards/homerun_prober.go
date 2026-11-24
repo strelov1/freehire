@@ -12,8 +12,7 @@ import (
 )
 
 // homerunProber validates a Homerun tenant (the <board> of douglas.homerun.co) by counting the
-// entries of the Atom feed the adapter lists from, feed.homerun.co/<board>. It mirrors
-// internal/ingest/sources/homerun.go, which is unexported.
+// entries of the Atom feed the adapter lists from, feed.homerun.co/<board>.
 // The feed's title is the career site's: the employer's name, or a heading built on it
 // ("Werken bij Belsimpel"); the heading words are cut. An unknown or switched-off tenant's feed
 // redirects to 404.homerun.co, which answers 404: a skip.
@@ -21,13 +20,11 @@ import (
 // internal/ingest/sources/pacer.go): run it with -pace 2 or slower.
 type homerunProber struct{}
 
-var homerunBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 // homerunTitleHeading matches the career-site heading Homerun tenants put before their name.
 var homerunTitleHeading = regexp.MustCompile(`(?i)^(vacatures\s*[-–|:]\s*)?(werken bij|working at|jobs at|careers at)\s+`)
 
 func (homerunProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !homerunBoardPattern.MatchString(board) {
+	if !sources.HomerunBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var feed struct {

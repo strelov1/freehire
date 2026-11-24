@@ -15,16 +15,14 @@ import (
 
 // helixjobsProber validates a helixjobs iid (the <board> of helixjobs.com/_/joblist?iid=146) by
 // reading page one of the list the adapter walks, which states the iid's posting count and names
-// the employer on every line. It mirrors internal/ingest/sources/helixjobs.go, which is
-// unexported. The portal answers an unknown iid like one with no posting ("Keine Ergebnisse
-// gefunden"), so both are skipped.
+// the employer on every line. The portal answers an unknown iid like one with no posting ("Keine
+// Ergebnisse gefunden"), so both are skipped.
 type helixjobsProber struct{}
 
 const helixjobsListURL = "https://helixjobs.com/_/joblist?iid=%s&page=%d"
 
 var (
-	helixjobsBoardPattern = regexp.MustCompile(`^[1-9][0-9]*$`)
-	helixjobsStatedCount  = regexp.MustCompile(`(?s)class="result-text"[^>]*>.*?<strong>\s*([0-9][0-9.]*)\s*</strong>\s*Treffer`)
+	helixjobsStatedCount = regexp.MustCompile(`(?s)class="result-text"[^>]*>.*?<strong>\s*([0-9][0-9.]*)\s*</strong>\s*Treffer`)
 	// helixjobsLineCompany reads the employer a list line names.
 	helixjobsLineCompany = regexp.MustCompile(`(?s)<li class="company-name">.*?<span>([^<]+)</span>`)
 	// helixjobsLineIID reads the iid prefix of every posting a page links.
@@ -35,7 +33,7 @@ var (
 const helixjobsDiscoveryMaxPages = 2000
 
 func (helixjobsProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !helixjobsBoardPattern.MatchString(board) {
+	if !sources.HelixjobsBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	body, err := c.GetText(ctx, fmt.Sprintf(helixjobsListURL, board, 1))

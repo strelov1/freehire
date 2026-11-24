@@ -15,7 +15,7 @@ import (
 
 // concludisProber validates a concludis tenant (the <board> of hhla.concludis.de) by reading
 // page one of the complete list the adapter walks, which states the tenant's number of open
-// positions. It mirrors internal/ingest/sources/concludis.go, which is unexported.
+// positions.
 //
 // A tenant that publishes on its own site redirects the list there, so the page carries no
 // concludis count and the candidate is skipped. The employer is the first entry of the list
@@ -23,17 +23,17 @@ import (
 // byte-order marks) or with its own label, which names nobody and is dropped.
 type concludisProber struct{}
 
-const concludisListURL = "https://%s.concludis.de/prj/lst/a181a603769c1f98ad927e7367c7aa51/GesamtlisteOffenePositionen.htm"
+// concludisListURL is page one of the list every tenant serves, at the adapter's own path.
+var concludisListURL = "https://%s.concludis.de" + sources.ConcludisListPath
 
 var (
-	concludisBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-	concludisStatedCount  = regexp.MustCompile(`class="stellensum">\s*([0-9]+)\s+Stellen?\s+gefunden`)
-	concludisNoneStated   = regexp.MustCompile(`class="stellensum">[^<]*keine offenen Stellen`)
-	concludisKeywords     = regexp.MustCompile(`<meta name="keywords" content="([^",]*)`)
+	concludisStatedCount = regexp.MustCompile(`class="stellensum">\s*([0-9]+)\s+Stellen?\s+gefunden`)
+	concludisNoneStated  = regexp.MustCompile(`class="stellensum">[^<]*keine offenen Stellen`)
+	concludisKeywords    = regexp.MustCompile(`<meta name="keywords" content="([^",]*)`)
 )
 
 func (concludisProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !concludisBoardPattern.MatchString(board) {
+	if !sources.ConcludisBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	body, err := c.GetText(ctx, fmt.Sprintf(concludisListURL, board))

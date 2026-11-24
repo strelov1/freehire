@@ -37,15 +37,18 @@ func (polymer) Provider() string { return "polymer" }
 func (polymer) FullBoardListing() {}
 
 const (
-	polymerAPI = "https://api.polymer.co/v1/hire/organizations/"
+	// PolymerAPI is the organisations root every board's listing and postings hang off. Exported
+	// for cmd/harvest-boards, whose prober validates a board with this same request.
+	PolymerAPI = "https://api.polymer.co/v1/hire/organizations/"
 	// polymerMaxPages bounds the listing walk; boards are small (one page), so the cap only
 	// stops a pager that never ends.
 	polymerMaxPages = 50
 )
 
-// polymerBoard is the shape of a board slug: the organisation's URL name, sometimes with a
-// UUID suffix the platform adds to disambiguate a repeated name.
-var polymerBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// PolymerBoard is the shape of a board slug: the organisation's URL name, sometimes with a
+// UUID suffix the platform adds to disambiguate a repeated name. Exported for cmd/harvest-boards,
+// whose prober validates a board against the same shape the adapter addresses.
+var PolymerBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // polymerPage is one page of the listing. Count is the board's total number of postings and
 // Total the number of PAGES; IsLast is reliable only on a real page — a page past the end
@@ -84,7 +87,7 @@ type polymerDetail struct {
 
 func (s polymer) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	board := strings.ToLower(strings.TrimSpace(e.Board))
-	if !polymerBoard.MatchString(board) {
+	if !PolymerBoard.MatchString(board) {
 		return nil, fmt.Errorf("polymer: board %q is not an organisation slug", e.Board)
 	}
 	postings, err := s.list(ctx, board)
@@ -104,7 +107,7 @@ func (s polymer) list(ctx context.Context, board string) ([]polymerPosting, erro
 			return nil, fmt.Errorf("polymer: no end of the listing after %d pages", polymerMaxPages)
 		}
 		var resp polymerPage
-		if err := s.http.GetJSON(ctx, polymerAPI+board+"/jobs?page="+strconv.Itoa(page), &resp); err != nil {
+		if err := s.http.GetJSON(ctx, PolymerAPI+board+"/jobs?page="+strconv.Itoa(page), &resp); err != nil {
 			if page == 1 && polymerNotFound(err) {
 				return nil, fmt.Errorf("polymer: board %q: %w", board, ErrBoardGone)
 			}
@@ -143,7 +146,7 @@ func (s polymer) detail(ctx context.Context, board string, e CompanyEntry, p pol
 	id := strconv.FormatInt(p.ID, 10)
 	jobURL := "https://jobs.polymer.co/" + board + "/" + id
 	var d polymerDetail
-	if err := s.http.GetJSON(ctx, polymerAPI+board+"/jobs/"+id, &d); err != nil {
+	if err := s.http.GetJSON(ctx, PolymerAPI+board+"/jobs/"+id, &d); err != nil {
 		if polymerNotFound(err) || !detailUnreadable(err) {
 			return Job{}, false
 		}

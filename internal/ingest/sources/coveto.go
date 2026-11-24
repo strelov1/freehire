@@ -51,8 +51,9 @@ func (coveto) Provider() string { return "coveto" }
 // fullBoardListing: the RSS feed is one unpaginated document carrying every open posting.
 func (coveto) FullBoardListing() {}
 
-// covetoBoard is the shape of a tenant label: the customer number.
-var covetoBoard = regexp.MustCompile(`^k[0-9]{3,7}$`)
+// CovetoBoard is the shape of a tenant label: the customer number. Exported for
+// cmd/harvest-boards, whose prober validates a board against the same shape the adapter addresses.
+var CovetoBoard = regexp.MustCompile(`^k[0-9]{3,7}$`)
 
 // covetoGoneNotice is the switched-off tenant's page, served in place of the feed.
 const covetoGoneNotice = "Diese Seite ist nicht mehr aktiv"
@@ -120,7 +121,7 @@ func (s coveto) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 // list reads the tenant's RSS feed.
 func (s coveto) list(ctx context.Context, board string) ([]covetoPosting, error) {
 	board = strings.ToLower(strings.TrimSpace(board))
-	if !covetoBoard.MatchString(board) {
+	if !CovetoBoard.MatchString(board) {
 		return nil, fmt.Errorf("coveto: board %q is not a k<number> customer label", board)
 	}
 	feedURL := "https://" + board + ".coveto.de/public/rss/"

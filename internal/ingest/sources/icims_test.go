@@ -69,8 +69,8 @@ func TestICIMSHost(t *testing.T) {
 		"careers.docusign.com": "careers.docusign.com",      // vanity domain passes through
 	}
 	for board, want := range cases {
-		if got := icimsHost(board); got != want {
-			t.Errorf("icimsHost(%q) = %q, want %q", board, got, want)
+		if got := IcimsHost(board); got != want {
+			t.Errorf("IcimsHost(%q) = %q, want %q", board, got, want)
 		}
 	}
 }

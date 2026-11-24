@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -13,16 +12,14 @@ import (
 
 // dvinciProber validates a d.vinci board (a careers HOST: <tenant>.dvinci-hr.com,
 // <tenant>.dvinci-easy.com, or an employer's own domain) by counting the publications in
-// /jobPublication/list.json. It mirrors internal/ingest/sources/dvinci.go, which is unexported.
+// /jobPublication/list.json.
 // The name is the first publication's employer; a group site files vacancies under several, and
 // the seed's name stands when the list names none.
 type dvinciProber struct{}
 
-var dvinciHostPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
-
 func (dvinciProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
 	board = strings.ToLower(strings.TrimSpace(board))
-	if !dvinciHostPattern.MatchString(board) {
+	if !sources.DvinciBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	var doc *[]struct {

@@ -45,8 +45,9 @@ func (hroffice) Provider() string { return "hroffice" }
 // fullBoardListing: the listing is one unpaginated answer carrying every open vacancy.
 func (hroffice) FullBoardListing() {}
 
-// hrofficeBoard is the shape of a career-site label.
-var hrofficeBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+// HROfficeBoard is the shape of a career-site label. Exported for cmd/harvest-boards, whose prober
+// validates a board against the same shape the adapter addresses.
+var HROfficeBoard = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // hrofficeVacancy is one listing entry.
 type hrofficeVacancy struct {
@@ -95,7 +96,7 @@ func (s hroffice) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 // reach it.
 func (s hroffice) list(ctx context.Context, rawBoard string) (string, []hrofficeVacancy, error) {
 	board := strings.ToLower(strings.TrimSpace(rawBoard))
-	if !hrofficeBoard.MatchString(board) {
+	if !HROfficeBoard.MatchString(board) {
 		return "", nil, fmt.Errorf("hroffice: board %q is not a career-site label", rawBoard)
 	}
 	var vacancies []hrofficeVacancy

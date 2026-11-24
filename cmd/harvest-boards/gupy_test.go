@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 func TestGupyRegisteredAsDiscoverer(t *testing.T) {
@@ -21,12 +23,12 @@ func TestGupyProbe(t *testing.T) {
 	g := gupyProber{}
 	// Shapes trimmed from live responses (2026-10-19).
 	getter := fakeGetter{
-		gupyListURL + "?subdomain=origoenergiainterno": `{"data":[{"id":12679978,"name":"Analista Sênior de Garantia da Receita","workplaceType":"hybrid"}]}`,
-		gupyCareerPageURL + "origoenergiainterno":      `{"careerPage":{"id":134980,"companyId":48481,"name":"Órigo Energia Recrutamento Interno","publicationName":"Órigo Energia - Recrutamento Interno","subdomain":"origoenergiainterno"}}`,
+		sources.GupyJobsURL + "?subdomain=origoenergiainterno": `{"data":[{"id":12679978,"name":"Analista Sênior de Garantia da Receita","workplaceType":"hybrid"}]}`,
+		gupyCareerPageURL + "origoenergiainterno":              `{"careerPage":{"id":134980,"companyId":48481,"name":"Órigo Energia Recrutamento Interno","publicationName":"Órigo Energia - Recrutamento Interno","subdomain":"origoenergiainterno"}}`,
 		// postings but no career-page description reachable -> falls back to the subdomain
-		gupyListURL + "?subdomain=caju": `{"data":[{"id":12691526},{"id":12691527}]}`,
+		sources.GupyJobsURL + "?subdomain=caju": `{"data":[{"id":12691526},{"id":12691527}]}`,
 		// a live page with nothing published -> skip
-		gupyListURL + "?subdomain=datalawyer": `{"data":[]}`,
+		sources.GupyJobsURL + "?subdomain=datalawyer": `{"data":[]}`,
 	}
 
 	cases := []struct {

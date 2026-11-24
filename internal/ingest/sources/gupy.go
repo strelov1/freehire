@@ -12,7 +12,7 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 )
 
-// gupyJobsURL is Gupy's public job-publication API — the one every career page
+// GupyJobsURL is Gupy's public job-publication API — the one every career page
 // (<subdomain>.gupy.io) renders from. Gupy is the dominant Brazilian ATS. Queried with
 // ?subdomain=<board> it lists that career page's published postings; /<id> is one posting's
 // sectioned detail.
@@ -20,8 +20,9 @@ import (
 // The board is the career-page SUBDOMAIN, not a numeric companyId: the companyId-keyed listing
 // (employability-portal.gupy.io/api/v1/jobs) answers an nginx 404 to every query, and nothing
 // public lists by companyId. One company may own several career pages (internal mobility, a
-// confidential one) and each is its own board.
-const gupyJobsURL = "https://private-api.gupy.io/job-publication/public/jobs"
+// confidential one) and each is its own board. Exported for cmd/harvest-boards, whose prober
+// validates a career page with this same request.
+const GupyJobsURL = "https://private-api.gupy.io/job-publication/public/jobs"
 
 // gupy adapts Gupy career pages. The listing carries title, address and workplace type but
 // no body, so each posting's description comes from its detail — the posting's only source,
@@ -89,7 +90,7 @@ func (g gupy) list(ctx context.Context, board string) ([]gupyPosting, error) {
 	var resp struct {
 		Data []gupyPosting `json:"data"`
 	}
-	listURL := gupyJobsURL + "?subdomain=" + url.QueryEscape(board)
+	listURL := GupyJobsURL + "?subdomain=" + url.QueryEscape(board)
 	if err := g.http.GetJSON(ctx, listURL, &resp); err != nil {
 		return nil, fmt.Errorf("gupy: list career page %s: %w", board, err)
 	}
@@ -115,7 +116,7 @@ func (g gupy) detail(ctx context.Context, e CompanyEntry, p gupyPosting) (Job, b
 	jobURL := fmt.Sprintf("https://%s.gupy.io/jobs/%s", e.Board, id)
 
 	var d gupyDetail
-	if err := g.http.GetJSON(ctx, gupyJobsURL+"/"+id, &d); err != nil {
+	if err := g.http.GetJSON(ctx, GupyJobsURL+"/"+id, &d); err != nil {
 		if detailUnreadable(err) {
 			return unreadableDetail(id, jobURL, e.Company), true
 		}

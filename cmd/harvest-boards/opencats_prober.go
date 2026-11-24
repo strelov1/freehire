@@ -9,11 +9,9 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
-)
 
-// opencatsListingPath is the portal's "show all" route, appended to a board (mirrors the
-// unexported constant in the sources package; this tool lives outside it).
-const opencatsListingPath = "index.php?m=careers&p=showAll"
+	"github.com/strelov1/freehire/internal/ingest/sources"
+)
 
 // opencatsPostingLink matches a portal link that is a posting. It is the liveness signal: a
 // portal serving at least one is a live board.
@@ -123,7 +121,7 @@ func opencatsResolveMount(ctx context.Context, c httpClient, host string) string
 
 // opencatsListingURL builds the portal listing URL for a board (host plus optional mount).
 func opencatsListingURL(board string) string {
-	return "https://" + strings.Trim(board, "/") + "/" + opencatsListingPath
+	return "https://" + strings.Trim(board, "/") + "/" + sources.OpencatsListingQuery
 }
 
 // opencatsIneligibleSuffixes name hosts that must never enter the board file: commercial CATS

@@ -14,10 +14,11 @@ import (
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
-// greenhouseBaseURL is the Greenhouse public boards API root. Unlike Lever, Greenhouse
+// GreenhouseBaseURL is the Greenhouse public boards API root. Unlike Lever, Greenhouse
 // serves EU-hosted boards (job-boards.eu.greenhouse.io front-ends) from this same single
-// API host, so no per-region host selection is needed.
-const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
+// API host, so no per-region host selection is needed. Exported for cmd/harvest-boards, whose
+// prober asks the same API root.
+const GreenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
 
 // greenhouse adapts the Greenhouse public boards API. The list endpoint carries the
 // description inline when asked with content=true, so no per-posting detail request
@@ -42,7 +43,7 @@ func (greenhouse) EmptyBoardListing() {}
 func (g greenhouse) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	// pay_transparency=true is what unlocks pay_input_ranges; without it the API omits
 	// the field entirely rather than returning it empty.
-	url := fmt.Sprintf("%s/%s/jobs?content=true&pay_transparency=true", greenhouseBaseURL, e.Board)
+	url := fmt.Sprintf("%s/%s/jobs?content=true&pay_transparency=true", GreenhouseBaseURL, e.Board)
 
 	var resp struct {
 		Jobs []GreenhousePosting `json:"jobs"`
@@ -69,7 +70,7 @@ func (g greenhouse) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, e
 // content=true field, this one is raw (not entity-encoded) HTML. An employer who has not
 // filled the field in yields ("", nil), not an error.
 func (g greenhouse) CompanyDescription(ctx context.Context, e kit.CompanyEntry) (string, error) {
-	url := fmt.Sprintf("%s/%s", greenhouseBaseURL, e.Board)
+	url := fmt.Sprintf("%s/%s", GreenhouseBaseURL, e.Board)
 
 	var resp struct {
 		Content string `json:"content"`

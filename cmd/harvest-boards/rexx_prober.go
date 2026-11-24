@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -15,18 +14,14 @@ import (
 
 // rexxProber validates a rexx portal (a host, optionally with a path) by walking its listing,
 // <base>/stellenangebote.html?start=<offset>, 100 postings a page, and counting the distinct posting
-// permalinks (/<slug>-<lang>-j<id>.html). It mirrors the unexported internal/ingest/sources/rexx.go.
+// permalinks (/<slug>-<lang>-j<id>.html), taking the board's shape and the permalink's id rule
+// from internal/ingest/sources/rexx.go.
 //
 // It then reads ONE posting page and requires its schema.org JobPosting, the only thing the adapter
 // reads a posting from. That page also names the employer (hiringOrganization, minus a " Jobportal" suffix).
 type rexxProber struct{}
 
-var (
-	rexxProbeBoard     = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(/[A-Za-z0-9._-]+)*$`)
-	rexxProbePermalink = regexp.MustCompile(`-[a-z]{2,3}-j(\d+)\.html$`)
-)
-
-// rexxProbeMaxPages bounds the walk the way the adapter does.
+// rexxProbeMaxPages caps the walk as the adapter's does; a probe stops at the listing's end.
 const rexxProbeMaxPages = 100
 
 func (rexxProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
@@ -34,7 +29,7 @@ func (rexxProber) probe(ctx context.Context, c httpClient, board string) (string
 	if host, rest, _ := strings.Cut(board, "/"); host != "" {
 		board = strings.ToLower(host) + strings.TrimSuffix("/"+rest, "/")
 	}
-	if !rexxProbeBoard.MatchString(board) {
+	if !sources.RexxBoard.MatchString(board) {
 		return "", 0, nil
 	}
 	base, err := url.Parse("https://" + board + "/")
@@ -117,7 +112,7 @@ func rexxProbeID(u string) string {
 	if err != nil {
 		return ""
 	}
-	if m := rexxProbePermalink.FindStringSubmatch(p.Path); m != nil {
+	if m := sources.RexxPermalink.FindStringSubmatch(p.Path); m != nil {
 		return m[1]
 	}
 	return ""

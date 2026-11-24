@@ -11,6 +11,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // paycorProber validates a Paycor Recruiting clientId by counting the postings its CareerHome
@@ -41,10 +42,6 @@ var paycorPlaceholderTitle = regexp.MustCompile(strings.Join([]string{
 	`\btest\s+\d`,
 	`\b(?:demo|sample)[-_\s]*(?:job|posting|listing|position|role)\b`,
 }, "|"))
-
-// paycorJobAction is the last path segment of a posting page, the shape enumeration matches
-// on. It mirrors internal/ingest/sources/paycor.go, whose constants are unexported.
-const paycorJobAction = "JobIntroduction.action"
 
 // dedupKey folds a Paycor client id to lower case. The id is hex and the portal serves the
 // same employer in either case, so without folding an upper-case spelling of a held board
@@ -142,7 +139,7 @@ func paycorListingTitle(n *html.Node) string {
 // board the crawl then reads differently.
 func paycorPostingID(href, clientID string) string {
 	u, err := url.Parse(href)
-	if err != nil || path.Base(u.Path) != paycorJobAction {
+	if err != nil || path.Base(u.Path) != sources.PaycorJobAction {
 		return ""
 	}
 	q := u.Query()

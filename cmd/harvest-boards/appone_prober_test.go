@@ -28,12 +28,12 @@ func (g apponeGetter) GetJSON(ctx context.Context, url string, v any) error {
 func TestAppOneProbe(t *testing.T) {
 	g := apponeGetter{
 		fakeGetter: fakeGetter{
-			apponePortalAPI + "CRWA":  `{"companyName":"Charles River Watershed Association ","jobPosts":[{"jobPostId":"6ab41fa965690128921b7d13"},{"jobPostId":"6ab41b34cb7530b72b454b9e"}]}`,
-			apponePortalAPI + "quiet": `{"companyName":"Quiet LLC","jobPosts":[]}`,
+			sources.ApponePortalURL + "CRWA":  `{"companyName":"Charles River Watershed Association ","jobPosts":[{"jobPostId":"6ab41fa965690128921b7d13"},{"jobPostId":"6ab41b34cb7530b72b454b9e"}]}`,
+			sources.ApponePortalURL + "quiet": `{"companyName":"Quiet LLC","jobPosts":[]}`,
 		},
 		status: map[string]int{
-			apponePortalAPI + "gone":    http.StatusNotFound,
-			apponePortalAPI + "refused": http.StatusForbidden,
+			sources.ApponePortalURL + "gone":    http.StatusNotFound,
+			sources.ApponePortalURL + "refused": http.StatusForbidden,
 		},
 	}
 	p := apponeProber{}
@@ -64,13 +64,13 @@ func TestAppOneDedupFoldsCase(t *testing.T) {
 func TestAppOneResolveSeed(t *testing.T) {
 	g := apponeGetter{
 		fakeGetter: fakeGetter{
-			apponePostingAPI + "6ac801466826443a3bbf043c": `{"jobPostId":"6ac801466826443a3bbf043c","jobPortalUrl":"https://jobs.appone.com/athomecareagency"}`,
-			apponePostingAPI + "6abc28ad695e40521fe45170": `{"jobPostId":"6abc28ad695e40521fe45170","jobPortalUrl":"https://jobs.appone.com/QCRP"}`,
-			apponePostingAPI + "6a906fced2155dfaf69c5eca": `{"jobPostId":"6a906fced2155dfaf69c5eca","jobPortalUrl":""}`,
+			sources.ApponePostingURL + "6ac801466826443a3bbf043c": `{"jobPostId":"6ac801466826443a3bbf043c","jobPortalUrl":"https://jobs.appone.com/athomecareagency"}`,
+			sources.ApponePostingURL + "6abc28ad695e40521fe45170": `{"jobPostId":"6abc28ad695e40521fe45170","jobPortalUrl":"https://jobs.appone.com/QCRP"}`,
+			sources.ApponePostingURL + "6a906fced2155dfaf69c5eca": `{"jobPostId":"6a906fced2155dfaf69c5eca","jobPortalUrl":""}`,
 		},
 		status: map[string]int{
-			apponePostingAPI + "6a99918b807ccd6e466971c1": http.StatusNotFound,
-			apponePostingAPI + "6acfbfde937210e754cfeaf7": http.StatusForbidden,
+			sources.ApponePostingURL + "6a99918b807ccd6e466971c1": http.StatusNotFound,
+			sources.ApponePostingURL + "6acfbfde937210e754cfeaf7": http.StatusForbidden,
 		},
 	}
 	cases := []struct {
@@ -100,8 +100,8 @@ func TestAppOneResolveSeed(t *testing.T) {
 
 func TestResolveCandidatesResolvesPostingSeeds(t *testing.T) {
 	g := apponeGetter{fakeGetter: fakeGetter{
-		apponePostingAPI + "6ac801466826443a3bbf043c": `{"jobPortalUrl":"https://jobs.appone.com/athomecareagency"}`,
-		apponePostingAPI + "6a906fced2155dfaf69c5eca": `{"jobPortalUrl":""}`,
+		sources.ApponePostingURL + "6ac801466826443a3bbf043c": `{"jobPortalUrl":"https://jobs.appone.com/athomecareagency"}`,
+		sources.ApponePostingURL + "6a906fced2155dfaf69c5eca": `{"jobPortalUrl":""}`,
 	}}
 	seed := filepath.Join(t.TempDir(), "seed.json")
 	body := `[{"board":"https://apply.appone.com/job/6ac801466826443a3bbf043c","company":"At Home InfuCare"},
