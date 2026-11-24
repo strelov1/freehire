@@ -75,7 +75,10 @@ func (h *goHandlers) Redirect(c *fiber.Ctx) error {
 
 	ua := string(c.Request().Header.UserAgent())
 	client := tracerlink.Classify(c.Method(), ua)
-	_ = h.store.RecordJobOutboundClick(c.Context(), db.RecordJobOutboundClickParams{
+	// Its own deadline: a saturated pool must delay the click record, never the redirect.
+	ctx, cancel := context.WithTimeout(c.UserContext(), clickTimeout)
+	defer cancel()
+	_ = h.store.RecordJobOutboundClick(ctx, db.RecordJobOutboundClickParams{
 		JobID:        row.ID,
 		Src:          string(outboundurl.ParseSrc(c.Query("src"))),
 		IsLikelyBot:  client.IsBot,

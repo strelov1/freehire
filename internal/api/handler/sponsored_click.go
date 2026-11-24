@@ -20,7 +20,8 @@ import (
 // campaigns before further ones stop being charged. A click is never refused.
 const (
 	sponsoredClicksPerMinute = 20
-	sponsoredClickTimeout    = 2 * time.Second
+	// clickTimeout bounds the database work of any click redirect; the redirect itself never waits on more.
+	clickTimeout = 2 * time.Second
 )
 
 type clickCharger interface {
@@ -63,7 +64,7 @@ func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
 	if err != nil {
 		return s.redirect(c, jobsPage)
 	}
-	ctx, cancel := context.WithTimeout(c.UserContext(), sponsoredClickTimeout)
+	ctx, cancel := context.WithTimeout(c.UserContext(), clickTimeout)
 	defer cancel()
 
 	row, err := s.queries.GetJob(ctx, claims.JobID)

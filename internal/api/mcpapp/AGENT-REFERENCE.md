@@ -188,9 +188,9 @@ shows. Neither is a trade worth making.
   per-provider predicate, and each call rebuilt all 223 adapters (35µs, 394 allocations),
   which a ten-result page paid ten times over. An
   aggregator's stored URL points at the aggregator, and this channel renders it as a link a
-  person clicks expecting the employer. The link a person is sent out by is `apply_url`
-  (`outboundurl.ApplyURL`, `src=mcp`), which counts the click; `url` stays the canonical
-  employer URL a consumer deduplicates and domain-verifies against.
+  person clicks expecting the employer. This field is the employer's own URL and is
+  not click-counted yet: the MCP projector will hand out `outboundurl.ApplyURL(slug,
+  outboundurl.SrcMCP)` once the agent surfaces move to the redirect.
 - **Narrow on a value the catalogue cannot filter on.** Measured against production on
   2026-09-18: `/jobs/search?category=ai` answers 0 results and reports nothing ignored. Over
   REST that is a client's problem; here the client summarises the zero as "freehire has no
