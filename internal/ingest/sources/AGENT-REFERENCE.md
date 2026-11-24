@@ -80,6 +80,16 @@ There is deliberately no threshold: "some candidates, none read" is the whole si
 many consecutive failures matter is `board_health`'s question. No candidates at all still
 succeeds — a quiet source is not a broken one.
 
+A bounded, per-page aggregator (a per-run budget, a deadline margin, the coverage gate judged on
+the listing) writes that walk once: `hydrateNew` (`kit.HydrateNew`) partitions the listing into
+seen refreshes, covered body-less postings and the pages the budget buys, reads them through
+`FetchDetails`, fails on none-answered and logs the deferrals. An adapter supplies its `Hydration`
+(log names, budget, workers, margin), its base-job builder, and — only when its listing is not
+newest first — an `order` for the unseen slice. The adapters it does not fit keep their own loop:
+one that drops postings before the gate (`netempregos`' hidden employers), spends the budget on
+fresh and backlog lanes (`jobsch`, `jobteaser`), stops at a rate limit (`pracuj`), or has no
+none-answered failure (`vagas`, `infojobsbr`, `devglobaljobs`).
+
 ## The Scrapling tier (the sources no plain client reaches)
 
 `scraplingProviders` (scraplingtier.go) sends a provider's requests through

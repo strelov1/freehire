@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/MoeForge/moego/regexp"
@@ -128,53 +126,14 @@ func (s shine) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(exte
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(postings))
-		for _, p := range postings {
-			companies = append(companies, p.company)
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []shinePosting
-	deferred := 0
-	for _, p := range postings {
-		base := Job{ExternalID: p.externalID(), URL: p.url, Title: p.title, Company: p.company, FallbackCountries: []string{"in"}}
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[p.company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, p)
-	}
-	var answered atomic.Int64
-	read := fetchDetails(unseen, shineDetailWorkers, func(p shinePosting) (Job, bool) {
-		job, ok, err := s.detail(ctx, p)
-		if err != nil {
-			log.Printf("shine: posting %d failed; deferring: %v", p.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone.
-	if len(unseen) > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("shine: requested %d posting pages and none answered", len(unseen))
-	}
-	if deferred > 0 {
-		log.Printf("shine: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
+	return hydrateNew(ctx, hydration{Provider: "shine", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: shineDetailWorkers, Deadline: 0}, postings, seen, gate,
+		nil,
+		func(p shinePosting) Job {
+			return Job{ExternalID: p.externalID(), URL: p.url, Title: p.title, Company: p.company, FallbackCountries: []string{"in"}}
+		},
+		func(p shinePosting) any { return p.id },
+		s.detail)
 }
 
 // list reads every posting sitemap the index names and returns their postings, newest id first.
