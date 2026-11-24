@@ -51,12 +51,22 @@ func (h *billingHandlers) register(api fiber.Router, mw middleware, contract fib
 	// verified before anything is read out of the body.
 	api.Post("/billing/stripe/webhook", webhookFor(h.billing))
 	// Cookie only: a checkout link decides who gets charged, so it is never minted for an API key.
-	api.Get("/billing/checkout", mw.cookie, contract)
+	api.Get("/billing/checkout", mw.cookie, markCheckoutFeedback, contract)
 	// Cookie only, like checkout. Its own route, not a field on /me/plan, so the plan surface keeps answering when the provider is down.
 	api.Get("/billing/manage", mw.cookie, contract)
 	// Read through to the provider; its own route for the same reason as manage.
 	api.Get("/billing/subscription", mw.cookie, contract)
 	api.Get("/billing/attempts", mw.cookie, contract)
+}
+
+const localsCheckoutFeedback = "billing.checkout_feedback"
+
+// markCheckoutFeedback recognizes the site's checkout fetch. The session cookie also rides
+// cross-site top-level GETs, which must not put an account into a follow-up email campaign.
+func markCheckoutFeedback(c *fiber.Ctx) error {
+	c.Locals(localsCheckoutFeedback, c.Method() == fiber.MethodGet &&
+		c.Get(headerSecFetchSite) == secFetchSiteSameOrigin && c.Get("Sec-Fetch-Dest") == "empty")
+	return c.Next()
 }
 
 // GetBillingAttempts reads only the session account's history, including failed first purchases.
@@ -163,7 +173,8 @@ func (h *billingHandlers) GetBillingCheckout(ctx context.Context, params apigen.
 
 	// The price comes from the pricing page's monthly/annual choice. It is validated
 	// against the configured list inside the service — never trusted as sent.
-	url, applied, err := h.billing.CheckoutURL(ctx, userID, params.Price.Value, discount)
+	recordFeedback, _ := ctx.Value(localsCheckoutFeedback).(bool)
+	url, applied, err := h.billing.CheckoutURL(ctx, userID, params.Price.Value, discount, recordFeedback)
 	if billingAbsent(err) {
 		// Checkout is unconfigured or the price is not offered: the surface omits the offer.
 		return nil, fiber.NewError(fiber.StatusNotFound, "checkout is not available")

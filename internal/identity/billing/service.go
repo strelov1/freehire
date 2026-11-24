@@ -264,7 +264,7 @@ func NewWithBase(cfg Config, q *db.Queries, baseURL string) *Service {
 //
 // The returned Discount is what was actually APPLIED: an in-place update never applies one, and
 // echoing the input would tell a subscriber a discount was used when their bill never showed it.
-func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount) (string, Discount, error) {
+func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string, discount Discount, recordFeedback bool) (string, Discount, error) {
 	if !s.cfg.CanCheckout() {
 		return "", Discount{}, ErrNoCheckout
 	}
@@ -344,12 +344,24 @@ func (s *Service) CheckoutURL(ctx context.Context, userID int64, priceID string,
 	}
 
 	// Success and cancel differ by one marker; see Config.SuccessURL.
-	url, err := s.client.createCheckoutSession(ctx, userID, "",
+	session, err := s.client.createCheckoutSession(ctx, userID, "",
 		priceID, s.cfg.SuccessURL(), s.cfg.ReturnURL(), customerID, couponID)
 	if err != nil {
 		return "", Discount{}, err
 	}
-	return url, discount, nil
+	if recordFeedback && !s.cfg.isAPIPrice(priceID) && session.ID != "" && session.Created > 0 {
+		// Feedback is optional. Keep a stalled bookkeeping write off the redirect's critical path.
+		recordCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		if err := s.q.RecordCheckoutFeedbackSession(recordCtx, db.RecordCheckoutFeedbackSessionParams{
+			UserID:          userID,
+			StripeSessionID: session.ID,
+			CreatedAt:       pgconv.Instant(time.Unix(session.Created, 0)),
+		}); err != nil {
+			log.Printf("billing: could not record checkout feedback session for user %d: %v", userID, err)
+		}
+	}
+	return session.URL, discount, nil
 }
 
 // spendableCoupon is the coupon this checkout may carry.

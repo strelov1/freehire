@@ -137,13 +137,13 @@ func TestClientCheckoutSession(t *testing.T) {
 		_, _ = w.Write([]byte(`{"url":"https://checkout.stripe.com/c/pay/cs_test_123"}`))
 	})
 
-	url, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
+	session, err := c.createCheckoutSession(context.Background(), 601, "buyer@example.com",
 		"price_pro_monthly", "https://freehire.me/my/plan", "https://freehire.me/my/plan", "", "")
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
-	if url != "https://checkout.stripe.com/c/pay/cs_test_123" {
-		t.Fatalf("url: got %q", url)
+	if session.URL != "https://checkout.stripe.com/c/pay/cs_test_123" {
+		t.Fatalf("url: got %q", session.URL)
 	}
 	for _, want := range []string{"client_reference_id=601", "freehire_user_id", "mode=subscription", "price_pro_monthly"} {
 		if !strings.Contains(gotForm, want) {

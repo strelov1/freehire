@@ -166,12 +166,18 @@ func (c *client) subscriberState(ctx context.Context, customerID string) (subscr
 	return out, nil
 }
 
-// createCheckoutSession opens a hosted payment page for one account and returns where to
-// send the browser.
+type checkoutSession struct {
+	ID      string `json:"id"`
+	URL     string `json:"url"`
+	Created int64  `json:"created"`
+}
+
+// createCheckoutSession opens a hosted payment page for one account and returns its ID, creation time
+// and the URL to send the browser to.
 //
 // The account id travels in two places: client_reference_id attributes the first purchase
 // (no customer binding yet), and the customer metadata attributes later renewals.
-func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer, couponID string) (string, error) {
+func (c *client) createCheckoutSession(ctx context.Context, userID int64, email, priceID, successURL, cancelURL, existingCustomer, couponID string) (checkoutSession, error) {
 	id := strconv.FormatInt(userID, 10)
 
 	form := url.Values{}
@@ -201,16 +207,14 @@ func (c *client) createCheckoutSession(ctx context.Context, userID int64, email,
 		form.Set("discounts[0][coupon]", couponID)
 	}
 
-	var out struct {
-		URL string `json:"url"`
-	}
+	var out checkoutSession
 	if err := c.do(ctx, http.MethodPost, "/checkout/sessions", form, "", &out); err != nil {
-		return "", err
+		return checkoutSession{}, err
 	}
 	if out.URL == "" {
-		return "", fmt.Errorf("billing: provider returned a checkout session with no URL")
+		return checkoutSession{}, fmt.Errorf("billing: provider returned a checkout session with no URL")
 	}
-	return out.URL, nil
+	return out, nil
 }
 
 // updateSubscriptionPrice swaps an existing subscription's item to another price with

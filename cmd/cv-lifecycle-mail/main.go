@@ -2,8 +2,8 @@
 // started paying, enrolls accounts whose CV has just parsed, and sends each due letter (up
 // to three, on days 1, 6 and 13 after the upload) to a free user who has not paid or
 // unsubscribed. The same run sends the paywall letter, one letter about an hour after a
-// free user pressed a paid AI button, ahead of the CV letters. Run it on a schedule (hourly
-// is plenty) and it exits. The rules and the reports are in
+// free user pressed a paid AI button, and checkout feedback after an expired unpaid Stripe
+// checkout. Run it on a schedule (hourly is plenty) and it exits. The rules and the reports are in
 // internal/engage/cvlifecycle/AGENTS.md.
 //
 // It needs the SES transport (AWS_REGION + NOTIFY_EMAIL_FROM) and ONBOARDING_REPLY_TO, the
@@ -16,13 +16,13 @@
 //
 // Flags:
 //
+//	-checkout-only           send only checkout feedback; requires Stripe configuration
 //	-dry-run                 count what a pass would do; writes nothing, sends nothing
 //	-to ADDR -to-user ID     send ONE letter for inspection and exit; touches no table
-//	-step N                  which letter -to sends (1, 2, 3 or 4, the paywall letter); default 1
+//	-step N                  which letter -to sends (1–5); default 1
 //
 // The preview of letters 1 and 2 computes the account's real score, so it needs the same CV
-// and search configuration as a pass; letter 3 needs the promo code; letter 4 is a fixed
-// sample, since it is about a refused attempt rather than the CV.
+// and search configuration as a pass; letter 3 needs the promo code; letters 4 and 5 use fixed sample copy.
 //
 // Environment: CV_LIFECYCLE_MAX_PER_RUN (default 200) bounds one run's letters.
 // It exits non-zero when a send failed or an input could not be read, so the timer's
@@ -40,19 +40,22 @@ import (
 	"github.com/strelov1/freehire/internal/engage/cvlifecycle"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/identity/promo"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
+	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
 var (
-	dryRun   = flag.Bool("dry-run", false, "count what a pass would do and exit; nothing is written or sent")
-	sendTo   = flag.String("to", "", "send one letter to this address and exit (no ledger, no claim)")
-	sendUser = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, the letter carries that account's unsubscribe link and score")
-	sendStep = flag.Int("step", 1, "which letter -to sends: 1 | 2 | 3 | 4")
+	checkoutOnly = flag.Bool("checkout-only", false, "send only checkout feedback")
+	dryRun       = flag.Bool("dry-run", false, "count what a pass would do and exit; nothing is written or sent")
+	sendTo       = flag.String("to", "", "send one letter to this address and exit (no ledger, no claim)")
+	sendUser     = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, the letter carries that account's unsubscribe link and score")
+	sendStep     = flag.Int("step", 1, "which letter -to sends: 1 | 2 | 3 | 4 | 5")
 )
 
 func main() {
@@ -78,34 +81,16 @@ func run() int {
 		log.Print("cv-lifecycle-mail: ONBOARDING_REPLY_TO is unset — refusing to send letters that ask for a reply")
 		return 1
 	}
-	if cfg.MeiliURL == "" {
-		log.Print("cv-lifecycle-mail: MEILI_URL is unset — the ATS score cannot be computed, refusing to run")
-		return 1
-	}
-
-	blobs, err := blobstore.New(blobstore.Config{
-		Endpoint:  cfg.S3Endpoint,
-		Bucket:    cfg.S3Bucket,
-		AccessKey: cfg.S3AccessKey,
-		SecretKey: cfg.S3SecretKey,
-	})
-	if err != nil {
-		log.Printf("cv-lifecycle-mail: blobstore: %v", err)
-		return 1
-	}
 	queries := db.New(pool)
-	resumes := resume.New(blobs, resume.NewQueriesRepository(queries))
-	if !resumes.Enabled() {
-		log.Print("cv-lifecycle-mail: CV storage (S3_*) is not configured — the ATS score cannot be computed, refusing to run")
-		return 1
+	var content *cvlifecycle.Content
+	previewCheckout := *sendTo != "" && *sendStep == int(cvlifecycle.StepCheckoutFeedback)
+	if !*checkoutOnly && !previewCheckout {
+		content, err = newContent(cfg, queries)
+		if err != nil {
+			log.Printf("cv-lifecycle-mail: %v", err)
+			return 1
+		}
 	}
-	content := cvlifecycle.NewContent(
-		resumes,
-		userprofile.New(userprofile.NewQueriesRepository(queries)),
-		search.NewClient(cfg.MeiliURL, cfg.MeiliKey),
-		promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv()),
-		os.Getenv("CV_LETTER_PROMO_CODE"),
-	)
 
 	ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion)
 	if err != nil {
@@ -117,6 +102,10 @@ func run() int {
 	// A single letter, for looking at it in a real client. It goes out untracked, so it
 	// cannot count toward a campaign's rates, and touches neither the ledger nor the claim.
 	if *sendTo != "" {
+		if *checkoutOnly && *sendStep != int(cvlifecycle.StepCheckoutFeedback) {
+			log.Print("cv-lifecycle-mail: -checkout-only preview requires -step 5")
+			return 2
+		}
 		return preview(ctx, content, cvlifecycle.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links))
 	}
 
@@ -128,20 +117,37 @@ func run() int {
 
 	trackedSES := ses.WithSendingBreaker().WithEngagementTracking(cfg.SESEngagementConfigurationSet)
 	mailer := cvlifecycle.NewMailer(trackedSES, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
-	runner, err := cvlifecycle.New(queries, content, mailer, runnerCfg)
+	var checkout cvlifecycle.CheckoutVerifier
+	if *checkoutOnly {
+		stripe := billing.New(billing.ConfigFromEnv(), queries)
+		if !stripe.Enabled() {
+			log.Print("cv-lifecycle-mail: Stripe is not configured for checkout feedback")
+			return 1
+		}
+		checkout = stripe
+	}
+	runner, err := cvlifecycle.New(queries, content, mailer, checkout, runnerCfg)
 	if err != nil {
 		log.Printf("cv-lifecycle-mail: %v", err)
 		return 1
 	}
 
+	run, dry, steps := runner.Run, runner.DryRun, cvlifecycle.PassOrder
+	if *checkoutOnly {
+		run, dry, steps = runner.RunCheckoutFeedback, runner.DryRunCheckoutFeedback, []cvlifecycle.Step{cvlifecycle.StepCheckoutFeedback}
+	}
 	if *dryRun {
-		stats, err := runner.DryRun(ctx)
+		stats, err := dry(ctx)
 		if err != nil {
 			log.Printf("cv-lifecycle-mail: %v", err)
 			return 1
 		}
-		log.Printf("cv-lifecycle-mail: dry run: %d accounts would enroll; due letters 1=%d 2=%d 3=%d paywall=%d (cap %d per run)",
-			stats.Enrollable, stats.Due[cvlifecycle.StepATS], stats.Due[cvlifecycle.StepPotential], stats.Due[cvlifecycle.StepOffer], stats.Due[cvlifecycle.StepPaywall], runnerCfg.MaxPerRun)
+		if *checkoutOnly {
+			log.Printf("cv-lifecycle-mail: dry run: checkout_feedback=%d (cap %d per run)", stats.Due[cvlifecycle.StepCheckoutFeedback], runnerCfg.MaxPerRun)
+		} else {
+			log.Printf("cv-lifecycle-mail: dry run: %d accounts would enroll; due letters 1=%d 2=%d 3=%d paywall=%d (cap %d per run)",
+				stats.Enrollable, stats.Due[cvlifecycle.StepATS], stats.Due[cvlifecycle.StepPotential], stats.Due[cvlifecycle.StepOffer], stats.Due[cvlifecycle.StepPaywall], runnerCfg.MaxPerRun)
+		}
 		return 0
 	}
 
@@ -152,15 +158,17 @@ func run() int {
 		return 1
 	}
 
-	stats, err := runner.Run(ctx)
+	stats, err := run(ctx)
 	if err != nil {
 		log.Printf("cv-lifecycle-mail: %v", err)
 		return 1
 	}
-	log.Printf("cv-lifecycle-mail: enrolled=%d paid=%d entitled=%d unsubscribed=%d pruned_claims=%d",
-		stats.Enrolled, stats.Paid, stats.Entitled, stats.Unsubscribed, stats.Pruned)
+	if !*checkoutOnly {
+		log.Printf("cv-lifecycle-mail: enrolled=%d paid=%d entitled=%d unsubscribed=%d pruned_claims=%d",
+			stats.Enrolled, stats.Paid, stats.Entitled, stats.Unsubscribed, stats.Pruned)
+	}
 	failed := 0
-	for _, step := range append([]cvlifecycle.Step{cvlifecycle.StepPaywall}, cvlifecycle.Steps...) {
+	for _, step := range steps {
 		log.Printf("cv-lifecycle-mail: letter %d sent=%d failed=%d skipped=%d deferred=%d",
 			step, stats.Sent[step], stats.Failed[step], stats.Skipped[step], stats.Deferred[step])
 		failed += stats.Failed[step]
@@ -172,6 +180,33 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+func newContent(cfg config.Settings, queries *db.Queries) (*cvlifecycle.Content, error) {
+	if cfg.MeiliURL == "" {
+		return nil, errors.New("MEILI_URL is unset")
+	}
+
+	blobs, err := blobstore.New(blobstore.Config{
+		Endpoint:  cfg.S3Endpoint,
+		Bucket:    cfg.S3Bucket,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+	})
+	if err != nil {
+		return nil, err
+	}
+	resumes := resume.New(blobs, resume.NewQueriesRepository(queries))
+	if !resumes.Enabled() {
+		return nil, errors.New("CV storage (S3_*) is not configured")
+	}
+	return cvlifecycle.NewContent(
+		resumes,
+		userprofile.New(userprofile.NewQueriesRepository(queries)),
+		search.NewClient(cfg.MeiliURL, cfg.MeiliKey),
+		promo.New(promo.NewQueriesRepository(queries), promo.ConfigFromEnv()),
+		os.Getenv("CV_LETTER_PROMO_CODE"),
+	), nil
 }
 
 // preview composes one letter for the named account and sends it to -to.
@@ -198,10 +233,12 @@ func preview(ctx context.Context, content *cvlifecycle.Content, mailer *cvlifecy
 	return 0
 }
 
-// composePreview is Compose, except for the paywall letter, which is about a refused
-// attempt and so has no account data to compute: it previews as a fixed sample.
+// composePreview supplies sample copy for letters that need no CV data.
 func composePreview(ctx context.Context, content *cvlifecycle.Content, step cvlifecycle.Step, userID int64) (cvlifecycle.Letter, error) {
-	if step == cvlifecycle.StepPaywall {
+	switch step {
+	case cvlifecycle.StepCheckoutFeedback:
+		return cvlifecycle.Letter{Step: step}, nil
+	case cvlifecycle.StepPaywall:
 		return cvlifecycle.Letter{Step: step, Paywall: &cvlifecycle.Paywall{
 			Feature: "tailor", JobTitle: "Senior Go Engineer", Company: "Example Co", JobSlug: "senior-go-engineer-example-co",
 		}}, nil

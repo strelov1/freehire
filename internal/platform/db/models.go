@@ -440,6 +440,12 @@ type ChangeWebhook struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
+type CheckoutFeedbackSession struct {
+	UserID          int64              `json:"user_id"`
+	StripeSessionID string             `json:"stripe_session_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`
@@ -706,7 +712,7 @@ type CvLifecycleEnrollment struct {
 	ExitedAt pgtype.Timestamptz `json:"exited_at"`
 }
 
-// CV lifecycle letters step ledger. PK (user_id, step) = one claim per pair, ever; error is the transport failure that burned the step. Steps 1-3 are the CV letters, step 4 the paywall letter.
+// Lifecycle mail ledger. One claim per (user_id, step), ever. Steps 1-3 are CV letters, step 4 is paywall and step 5 is checkout feedback.
 type CvLifecycleSend struct {
 	UserID int64              `json:"user_id"`
 	Step   int16              `json:"step"`

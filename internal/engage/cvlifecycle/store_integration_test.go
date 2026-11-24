@@ -78,7 +78,7 @@ func newRunner(t *testing.T, q *db.Queries) (*Runner, *fakeSender) {
 	t.Helper()
 	store := newFakeStore()
 	sender := &fakeSender{store: store, err: map[int64]error{}}
-	r, err := New(q, &fakeComposer{err: map[int64]error{}}, sender, DefaultConfig())
+	r, err := New(q, &fakeComposer{err: map[int64]error{}}, sender, nil, DefaultConfig())
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
