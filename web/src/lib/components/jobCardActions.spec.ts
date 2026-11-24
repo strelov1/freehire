@@ -22,11 +22,11 @@ vi.mock('#lib/savedJobs.svelte.js', () => ({
 }));
 
 const { JobCardActions } = await import('./jobCardActions.svelte.js');
-const make = (onUnauthorized?: () => void) =>
+const make = (onUnauthorized?: () => void, onHide?: (slug: string) => void) =>
   new JobCardActions(
     () => 'a',
     () => async () => {},
-    () => undefined,
+    () => onHide,
     onUnauthorized && (() => onUnauthorized),
   );
 
@@ -35,6 +35,7 @@ describe('JobCardActions session loss', () => {
     userID = 'u1';
     dismissJob.mockReset();
     saveJob.mockReset();
+    markUndismissed.mockClear();
   });
 
   it.each([
@@ -52,6 +53,20 @@ describe('JobCardActions session loss', () => {
     await pending;
 
     expect(lost).not.toHaveBeenCalled();
+    expect(markUndismissed).not.toHaveBeenCalled();
+  });
+
+  it('does not offer Undo for a hide completed under a previous account', async () => {
+    const onHide = vi.fn();
+    const write = Promise.withResolvers<undefined>();
+    dismissJob.mockReturnValueOnce(write.promise);
+    const pending = make(undefined, onHide).hide();
+
+    userID = 'u2';
+    write.resolve(undefined);
+    await pending;
+
+    expect(onHide).not.toHaveBeenCalled();
   });
 
   it('tells an opted-in surface about a 401 on hide and on save, after the usual rollback', async () => {

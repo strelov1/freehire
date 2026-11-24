@@ -83,10 +83,11 @@ export class JobCardActions {
     markDismissed(slug);
     try {
       await api.dismissJob(slug);
-      this.onHide()?.(slug);
+      if (currentUser()?.id === userID) this.onHide()?.(slug);
     } catch (e) {
+      if (currentUser()?.id !== userID) return;
       markUndismissed(slug);
-      if (currentUser()?.id === userID && isUnauthorized(e)) this.onUnauthorized()?.();
+      if (isUnauthorized(e)) this.onUnauthorized()?.();
     } finally {
       this.hiding = false;
     }
