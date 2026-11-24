@@ -76,14 +76,15 @@ SET status = $2, reviewed_by = $3, reviewed_at = now(), reject_reason = sqlc.nar
 WHERE id = $1;
 
 -- name: ListSponsoredTopupsToRefund :many
--- Money that must go back: every top-up of a rejected campaign, and any top-up that arrived
--- for a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
+-- Money that must go back: every top-up of a rejected campaign, of a campaign that ended
+-- before any moderator approved it (it never served a click), and any top-up that arrived for
+-- a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
 SELECT t.id, t.campaign_id, t.payment_intent_id
 FROM sponsored_topups t
 JOIN sponsored_campaigns c ON c.id = t.campaign_id
 WHERE t.refunded_at IS NULL
   AND t.payment_intent_id IS NOT NULL
-  AND (c.status = 'rejected' OR NOT t.credited)
+  AND (c.status = 'rejected' OR (c.status = 'ended' AND c.reviewed_at IS NULL) OR NOT t.credited)
   AND (sqlc.narg(campaign_id)::bigint IS NULL OR t.campaign_id = sqlc.narg(campaign_id)::bigint)
 ORDER BY t.id
 LIMIT sqlc.arg(max_rows);

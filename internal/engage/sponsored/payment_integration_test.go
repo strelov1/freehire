@@ -186,10 +186,13 @@ func TestCreditTopupOnADeadCampaignRefundRetriesLater(t *testing.T) {
 
 func TestRefundPendingLeavesLegitTopupsOfAnEndedCampaign(t *testing.T) {
 	pool := testdb.Pool(t)
-	id, _ := seedCampaign(t, pool, 50, 0, StatusActive)
+	id, _ := seedCampaign(t, pool, 50, 0, StatusDraft)
 	rf := &fakeRefunder{}
 	svc := New(pool).WithRefunder(rf)
 	if err := svc.CreditTopup(context.Background(), topup(t, pool, id, "cs_f", 4000)); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Approve(context.Background(), id, ownerOf(t, pool, id)); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Transition(context.Background(), id, StatusEnded); err != nil {
@@ -279,5 +282,26 @@ func TestRejectOnlyFromPendingReview(t *testing.T) {
 	id, _ := seedCampaign(t, pool, 50, 0, StatusActive)
 	if err := New(pool).WithRefunder(&fakeRefunder{}).Reject(context.Background(), id, moderator(t, pool), "x"); !errors.Is(err, ErrBadTransition) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// A campaign that ends before any moderator approved it (its job closed, or the buyer stopped
+// it while in review) never served a click: everything paid into it goes back.
+func TestRefundPendingReturnsTopupsOfANeverApprovedEndedCampaign(t *testing.T) {
+	pool := testdb.Pool(t)
+	id, jobID := seedCampaign(t, pool, 50, 0, StatusDraft)
+	rf := &fakeRefunder{}
+	svc := New(pool).WithRefunder(rf)
+	if err := svc.CreditTopup(context.Background(), topup(t, pool, id, "cs_g", 4000)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.EndForJob(context.Background(), jobID); err != nil || n != 1 {
+		t.Fatalf("EndForJob = %d, %v", n, err)
+	}
+	if n, err := svc.RefundPending(context.Background(), 10); err != nil || n != 1 || len(rf.pis) != 1 || rf.pis[0] != "pi_cs_g" {
+		t.Fatalf("never-approved ended campaign must be refunded: n=%d err=%v calls=%v", n, err, rf.pis)
+	}
+	if refundedCount(t, pool, id) != 1 {
+		t.Fatal("refund not stamped")
 	}
 }

@@ -54,8 +54,10 @@ The product decision is "anyone who pays", not only verified companies. So:
 - `active → exhausted` when the budget runs out; a top-up returns it to `active`.
 - `rejected` (refunded) or `ended` when the buyer stops it or the job closes.
 
-A job closing (`closed_at` set) ends its campaigns; the unused budget stays recorded but does
-not serve.
+A job closing (`closed_at` set) ends its campaigns (an hourly sweep, since `closed_at` is set in
+many statements). The unused budget of a campaign that was approved and served stays recorded
+but does not serve. A campaign that ends before any moderator approved it never served a click,
+so everything paid into it is refunded, like a rejected one.
 
 ### D4. Index fields, kept in sync by `search_outbox`
 
