@@ -354,10 +354,10 @@ export interface Job {
    */
   recruiter_contacts_available?: boolean;
   /**
-   * AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
-   * "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
-   * caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
-   * (caller_id, job_id), so the shared job query stays free of it.
+   * AutoApplyStatus is the caller's own auto-apply status for this job: "queued", "failed"
+   * or "declined" (see autoApplyEntryStatus in internal/api/handler), nil for no attempt or
+   * an anonymous caller. Caller-scoped like MyVote: only the detail handler overlays it,
+   * keyed by (caller_id, job_id), so the shared job query stays free of it.
    */
   auto_apply_status?: string;
 }
