@@ -17,6 +17,7 @@ import {
   Building2,
   ChartColumn,
   Compass,
+  GalleryHorizontal,
   Info,
   Layers,
   ListChecks,
@@ -38,6 +39,13 @@ export type SiteNavItem = {
   label: string;
   icon: LucideIcon;
 };
+
+// Matches has its own gated entry points and is excluded from the public sitemap.
+export const MATCHES_LINK = {
+  href: '/matches',
+  label: 'Matches',
+  icon: GalleryHorizontal,
+} as const satisfies SiteNavItem;
 
 export const NAV = {
   // The catalogue itself — what a visitor came to walk. Talent is the one that reads

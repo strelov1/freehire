@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '#lib/api-core.js';
 
 const meFeed = vi.fn();
@@ -39,8 +39,15 @@ vi.stubGlobal(
   },
 );
 
+const goto = vi.fn();
+// A sign-in navigation that has not finished; released after each test so the next one starts clean.
+let finishNavigation = () => {};
+const pendingNavigation = () => new Promise<void>((resolve) => (finishNavigation = resolve));
+vi.mock('$app/navigation', () => ({ goto: (...a: unknown[]) => goto(...a) }));
+
 const { default: MatchFeedList } = await import('./MatchFeedList.svelte');
 const { feedSource } = await import('#lib/feedSource.svelte.js');
+const { feedSession } = await import('#lib/feedSession.svelte.js');
 
 const card = (slug: string, is_new = false) => ({
   is_new,
@@ -289,7 +296,83 @@ describe('MatchFeedList', () => {
     it('keeps the profile empty-state for a profile reason', async () => {
       meFeed.mockResolvedValueOnce({ data: [], meta: { source: 'profile', total: 0, reason: 'no_profile' } });
       render(MatchFeedList);
-      expect(await screen.findByText('Tell us what you are looking for')).toBeTruthy();
+      expect(await screen.findByText('Tell us about yourself — upload a CV or fill in your profile')).toBeTruthy();
+      expect(screen.getByText('Edit profile').getAttribute('href')).toBe('/my/profile/skills');
+    });
+  });
+
+  describe('first-time and edge states', () => {
+    beforeEach(() => {
+      goto.mockReset();
+      goto.mockResolvedValue(undefined);
+      feedSession.reset();
+      dismissed.clear();
+    });
+    afterEach(async () => {
+      finishNavigation();
+      await Promise.resolve();
+    });
+
+    it('says all caught up with the profile and source actions on a spent profile feed', async () => {
+      meFeed.mockResolvedValueOnce({ data: [], meta: { source: 'profile', total: 0 } });
+      render(MatchFeedList);
+      expect(await screen.findByText("You're all caught up")).toBeTruthy();
+      expect(screen.getByText('Edit profile').getAttribute('href')).toBe('/my/profile/skills');
+      expect(screen.getByText('Choose another search')).toBeTruthy();
+    });
+
+    it('offers Edit search, not Edit profile, once a saved search is spent', async () => {
+      dismissed.add('a'); // the one match was already judged: the source is spent, not empty
+      meFeed.mockResolvedValueOnce(page(['a'], { source: 'saved_search', saved_search_id: 2 }));
+      render(MatchFeedList);
+      await screen.findByText("You're all caught up");
+      expect(screen.getByText('Edit search').getAttribute('href')).toBe('/my/notifications/searches');
+      expect(screen.queryByText('Edit profile')).toBeNull();
+    });
+
+    it('explains a date-sorted feed and keeps the cards coming', async () => {
+      meFeed.mockResolvedValueOnce(page(['a'], { degraded: 'no_match_vector' }));
+      render(MatchFeedList);
+      expect(await screen.findByText('add skills')).toBeTruthy();
+      expect(screen.getByText('add skills').getAttribute('href')).toBe('/my/profile/skills');
+      expect(await screen.findByText('a')).toBeTruthy();
+    });
+
+    it('sends an ended session back through sign-in, never showing caught up or an error', async () => {
+      goto.mockReturnValue(pendingNavigation()); // the navigation is still pending
+      meFeed.mockRejectedValueOnce(new ApiError(401, 'unauthorized'));
+      render(MatchFeedList);
+      expect(await screen.findByText('Your session ended')).toBeTruthy();
+      expect(goto).toHaveBeenCalledTimes(1);
+      expect(goto).toHaveBeenCalledWith('/signin?returnTo=%2Fmatches&mode=login', { replaceState: true });
+      expect(screen.queryByText("You're all caught up")).toBeNull();
+      expect(screen.queryByText('Failed to load your matches.')).toBeNull();
+    });
+
+    it('offers to sign in again when the navigation is refused', async () => {
+      goto.mockRejectedValueOnce(new Error('offline'));
+      meFeed.mockRejectedValueOnce(new ApiError(401, 'unauthorized'));
+      render(MatchFeedList);
+      await fireEvent.click(await screen.findByText('Sign in again'));
+      expect(goto).toHaveBeenCalledTimes(2);
+    });
+
+    it('a source switch refused with 401 takes the feed to sign-in', async () => {
+      goto.mockReturnValue(pendingNavigation());
+      meFeed.mockResolvedValueOnce(page(['a']));
+      setFeedSource.mockRejectedValueOnce(new ApiError(401, 'unauthorized'));
+      render(MatchFeedList);
+      await screen.findByText('a');
+      expect(await feedSource.choose({ source: 'profile' })).toBe(false);
+      expect(await screen.findByText('Your session ended')).toBeTruthy();
+    });
+
+    it('retries a failed cold load', async () => {
+      meFeed.mockRejectedValueOnce(new Error('500'));
+      meFeed.mockResolvedValueOnce(page(['a']));
+      render(MatchFeedList);
+      await fireEvent.click(await screen.findByText('Retry'));
+      expect(await screen.findByText('a')).toBeTruthy();
     });
   });
 
@@ -318,6 +401,7 @@ describe('MatchFeedList', () => {
     };
     beforeEach(() => {
       avoidCompany.mockReset();
+      feedSession.reset();
     });
 
     it('cancel keeps the cards, writes nothing and returns focus to the trigger', async () => {
@@ -326,7 +410,7 @@ describe('MatchFeedList', () => {
       await vi.waitFor(() => expect(screen.queryByText('Hide Acme from Matches?')).toBeNull());
       expect(avoidCompany).not.toHaveBeenCalled();
       expect(meFeed).toHaveBeenCalledTimes(1);
-      expect(screen.getByText('a')).toBeTruthy();
+      expect(await screen.findByText('a')).toBeTruthy();
       await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
     });
 
@@ -335,8 +419,19 @@ describe('MatchFeedList', () => {
       await open();
       await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
       expect((await screen.findByRole('alert')).textContent).toContain('list is full');
-      expect(screen.getByText('a')).toBeTruthy();
+      expect(await screen.findByText('a')).toBeTruthy();
       expect(meFeed).toHaveBeenCalledTimes(1);
+    });
+
+    it('a hide refused with 401 takes the feed to sign-in instead of keeping the dialog', async () => {
+      goto.mockReset();
+      goto.mockReturnValue(pendingNavigation());
+      feedSession.reset();
+      avoidCompany.mockRejectedValue(new ApiError(401, 'unauthorized'));
+      await open();
+      await fireEvent.click(screen.getByRole('button', { name: 'Hide company' }));
+      expect(await screen.findByText('Your session ended')).toBeTruthy();
+      expect(screen.queryByText('Hide Acme from Matches?')).toBeNull();
     });
 
     it('reloads page 1 on the same source after a successful hide, dropping stale cards and cursor', async () => {

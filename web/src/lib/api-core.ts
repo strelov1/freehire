@@ -49,6 +49,11 @@ export function isPlanRefusal(e: unknown): boolean {
   return e instanceof ApiError && e.status === 402;
 }
 
+/** Whether a failure is the server saying the session is gone (HTTP 401). */
+export function isUnauthorized(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 401;
+}
+
 /** Whether a failure is the server's same-origin refusal — HTTP 403 with code
  *  "cross_site_refused" — rather than a fault. The server refuses any sign-in that
  *  names another site in Origin/Referer (or whose own Sec-Fetch-Site says

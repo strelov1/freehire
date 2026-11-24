@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { announce } from '#lib/announce.svelte.js';
+  import { feedSession } from '#lib/feedSession.svelte.js';
   import { feedSource } from '#lib/feedSource.svelte.js';
   import { Button } from '#lib/ui/index.js';
 
@@ -29,7 +30,7 @@
 
   async function backToProfile() {
     failed = false;
-    if (!(await feedSource.choose({ source: 'profile' }, mode))) {
+    if (!(await feedSource.choose({ source: 'profile' }, mode)) && !feedSession.ended) {
       failed = true;
       announce("Didn't switch — try again", 'assertive');
     }

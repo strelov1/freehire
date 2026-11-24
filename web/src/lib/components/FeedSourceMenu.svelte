@@ -1,13 +1,17 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { ChevronDown } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { menuNav } from '#lib/actions/menuNav.js';
   import { announce } from '#lib/announce.svelte.js';
+  import { feedSession } from '#lib/feedSession.svelte.js';
   import { feedSource } from '#lib/feedSource.svelte.js';
   import type { FeedSourceChoice } from '#lib/types.js';
 
-  // The source pill: what the feed matches on, and a menu to switch it.
+  // The source pill: what the feed matches on, and a menu to switch it. Each mode mounts
+  // exactly one; the host reaches it by ref (openMenu, focusPill), never through the DOM.
+  // `onpicked`: where focus goes after a switch (default: this pill; swipe remounts its own).
+  let { onpicked }: { onpicked?: () => void } = $props();
   let open = $state(false);
   let failed = $state(false);
   let root = $state<HTMLElement | null>(null);
@@ -17,6 +21,14 @@
     'flex min-h-11 w-full items-center px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none aria-checked:font-semibold aria-disabled:opacity-60';
 
   onMount(() => void feedSource.loadSearches());
+
+  export function openMenu() {
+    open = true;
+    if (feedSource.status === 'failed') void feedSource.loadSearches();
+  }
+  export function focusPill() {
+    pill?.focus();
+  }
 
   async function pick(choice: FeedSourceChoice) {
     if (feedSource.busy) return; // the previous pick is still being stored
@@ -31,9 +43,8 @@
     }
     if (await feedSource.choose(choice)) {
       announce(feedSource.label);
-      await tick(); // swipe remounts its own pill: focus the live (topmost) one
-      [...document.querySelectorAll<HTMLElement>('[data-source-pill]')].at(-1)?.focus();
-    } else {
+      (onpicked ?? focusPill)();
+    } else if (!feedSession.ended) {
       failed = true;
       announce("Didn't switch — try again", 'assertive');
     }
@@ -45,15 +56,14 @@
 <div class="relative" bind:this={root}>
   <button
     bind:this={pill}
-    data-source-pill
     type="button"
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={`Match source: ${feedSource.label}`}
     class="flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium transition hover:bg-accent"
     onclick={() => {
-      open = !open;
-      if (open && feedSource.status === 'failed') void feedSource.loadSearches();
+      if (open) open = false;
+      else openMenu();
     }}
   >
     <span class="max-w-48 truncate">{feedSource.label}</span>
