@@ -5,8 +5,8 @@
 -- remote jobs (work_mode='remote'), and domains/company_types/company_sizes from the
 -- jobs.enrichment JSONB. Each array is the distinct union across the company's open
 -- jobs (closed_at IS NULL) — except company_sizes, one bucket (see csize) — aggregated
--- with a stable ORDER BY so the guard below compares deterministically. A company with no open jobs (or no remote/enriched
--- jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
+-- with a stable ORDER BY so the guard below compares deterministically. A company with
+-- no open jobs (or no remote/enriched jobs) is zeroed/emptied via COALESCE. The per-column `IS DISTINCT FROM` guard skips
 -- rows already current, so re-running rewrites nothing and the affected-rows count
 -- reports real churn. This is cmd/recount-companies' whole job; run periodically
 -- (eventual consistency).
@@ -110,7 +110,8 @@ ctype AS (
 -- band: 8,023 Dollar Tree postings said 1000+ 7,973 times and 1-10 25 times, and the
 -- union put Dollar Tree under "11-50" (an external benchmark, 2026-10-28, scored every
 -- such row wrong). A tie goes to the larger bucket, the size the most postings at least
--- imply; a value outside the vocabulary sorts last.
+-- imply; a value outside the vocabulary sorts last, and the value itself breaks any
+-- remaining tie so a re-run picks the same bucket.
 csize_votes AS (
     SELECT company_slug, enrichment->>'company_size' AS size, count(*) AS n
     FROM oj
@@ -121,7 +122,8 @@ csize AS (
     SELECT DISTINCT ON (company_slug) company_slug, ARRAY[size] AS arr
     FROM csize_votes
     ORDER BY company_slug, n DESC,
-             array_position(ARRAY['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'], size) DESC NULLS LAST
+             array_position(ARRAY['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+'], size) DESC NULLS LAST,
+             size
 ),
 -- gov marks a company whose open jobs come from an exclusively-government source
 -- (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
@@ -201,7 +203,8 @@ mat AS (
 -- csize_final is the employee_count-authoritative company_sizes hybrid: the company's
 -- own recorded headcount (bucketed into the company_size vocabulary) is a single, more
 -- accurate value than the LLM's per-posting guess, so it wins when present; otherwise
--- fall back to the bucket most of its open postings name (the csize CTE). Computed once so the SET and the IS DISTINCT FROM guard share one value.
+-- fall back to the bucket most of its open postings name (the csize CTE). Computed once
+-- so the SET and the IS DISTINCT FROM guard share one value.
 csize_final AS (
     SELECT co.slug AS company_slug,
            CASE
