@@ -1,32 +1,32 @@
 ## 1. Database schema
 
-- [ ] 1.1 Migration `sponsored_campaigns`:
+- [x] 1.1 Migration `sponsored_campaigns`:
       - id, `job_id` FK, `owner_user_id` FK, `status` CHECK, `cpc_cents` >= 1
       - `daily_cap_cents` NULL, `budget_cents`, `spent_cents`, CHECK spent <= budget
       - `reviewed_by`, `reviewed_at`, `reject_reason`, timestamps
       - index on (status, job_id)
-- [ ] 1.2 Migration `sponsored_topups`:
+- [x] 1.2 Migration `sponsored_topups`:
       - campaign_id, `stripe_session_id` UNIQUE, `payment_intent_id`, `amount_cents`
       - `refunded_at`, created_at
-- [ ] 1.3 Migration `sponsored_clicks`:
+- [x] 1.3 Migration `sponsored_clicks`:
       - campaign_id, ts, placement, `visitor_hash`, `valid`, `reason`, `cost_cents`
       - index on (campaign_id, visitor_hash, ts)
-- [ ] 1.4 Migration `sponsored_daily(campaign_id, day, impressions, valid_clicks,
+- [x] 1.4 Migration `sponsored_daily(campaign_id, day, impressions, valid_clicks,
       invalid_clicks, spent_cents)`
-- [ ] 1.5 sqlc queries:
+- [x] 1.5 sqlc queries:
       - create, get-for-update, state transitions
       - charge (an UPDATE that checks budget and daily cap)
       - daily rollup upserts, owner listing, moderation queue
 
 ## 2. Campaign domain (`internal/engage/sponsored`)
 
-- [ ] 2.1 Lifecycle transitions with tests for every allowed and refused transition
+- [x] 2.1 Lifecycle transitions with tests for every allowed and refused transition
       (TDD first)
-- [ ] 2.2 `Charge(campaign, visitor, now)`:
+- [x] 2.2 `Charge(campaign, visitor, now)`:
       - validity reasons, `min(cpc, budget_left, daily_left)`
       - a concurrency test proving no overspend
 - [ ] 2.3 Close hook: closing a job ends its campaigns
-- [ ] 2.4 Enqueue `search_outbox` on every state change and on budget or cap exhaustion
+- [x] 2.4 Enqueue `search_outbox` on every state change and on budget or cap exhaustion
 
 ## 3. Billing
 
