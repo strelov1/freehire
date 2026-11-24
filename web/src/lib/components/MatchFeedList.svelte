@@ -1,12 +1,16 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
+  import { feedSession } from '#lib/feedSession.svelte.js';
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { ensureDismissedLoaded, isDismissed } from '#lib/dismissedJobs.svelte.js';
   import { feedSource } from '#lib/feedSource.svelte.js';
   import { Badge } from '#lib/ui/index.js';
+  import FeedCaughtUp from './FeedCaughtUp.svelte';
+  import FeedDegraded from './FeedDegraded.svelte';
+  import FeedNoProfile from './FeedNoProfile.svelte';
+  import FeedSessionEnded from './FeedSessionEnded.svelte';
   import FeedSourceEmpty from './FeedSourceEmpty.svelte';
   import FeedNewEnd from './FeedNewEnd.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
@@ -19,7 +23,7 @@
   import MatchesUpgrade from './MatchesUpgrade.svelte';
   import States from './States.svelte';
 
-  let { active = true }: { active?: boolean } = $props();
+  let { active = true, onChooseSource }: { active?: boolean; onChooseSource?: () => void } = $props();
 
   // The match feed as a list: every card with its explanation, save and hide in the corner.
   // "Show more" rather than scroll-to-load, like /jobs: an auto-growing page puts the
@@ -47,7 +51,6 @@
   // The company being hidden, its confirmation, and the button to give focus back to on cancel.
   let hideTarget = $state<{ slug: string; name: string } | null>(null);
   let hideTrigger: HTMLElement | null = null;
-  let caughtUp = $state<HTMLElement | null>(null);
   // Numbers every page-1 restart: a reply from before a hide-company reload belongs to the old list.
   let epoch = 0;
   const visible = $derived(cards.filter((c) => !isDismissed(c.public_slug)));
@@ -120,6 +123,12 @@
     cards = [...kept, ...res.data.filter((c) => !have.has(c.public_slug))];
   }
 
+  // A lapsed plan gets the upgrade screen, an ended session goes back through sign-in; the rest is an error.
+  function onLoadError(e: unknown) {
+    if (isPlanRefusal(e)) paywalled = true;
+    else if (!feedSession.lost(e)) failed = true;
+  }
+
   // A restart lands on page 1 again; cards already shown are skipped, not repeated.
   async function showMore() {
     const mine = epoch;
@@ -127,8 +136,7 @@
     try {
       await fetchPage(cursor);
     } catch (e) {
-      if (isPlanRefusal(e)) paywalled = true;
-      else failed = true;
+      onLoadError(e);
     } finally {
       if (mine === epoch) loadingMore = false;
     }
@@ -158,26 +166,25 @@
     try {
       await fetchPage();
     } catch (e) {
-      if (isPlanRefusal(e)) paywalled = true;
-      else failed = true;
+      onLoadError(e);
     } finally {
       if (!stale()) loading = false;
     }
     await tick();
-    const target = active && (list?.querySelector<HTMLElement>('h3') || caughtUp);
+    const target = active && list?.querySelector<HTMLElement>('h3');
     if (target) {
       target.tabIndex = -1;
       target.focus();
     }
   }
 
-  onMount(async () => {
-    void ensureDismissedLoaded();
+  async function start() {
+    failed = false;
+    loading = true;
     try {
       await fetchPage();
     } catch (e) {
-      if (isPlanRefusal(e)) paywalled = true;
-      else failed = true;
+      onLoadError(e);
     } finally {
       loading = false;
       if (!stale() && feedSource.takeCardFocus(rev, 'list')) {
@@ -189,22 +196,27 @@
         }
       }
     }
+  }
+
+  onMount(() => {
+    void ensureDismissedLoaded();
+    void start();
   });
 </script>
 
 {#if meta?.degraded === 'no_match_vector'}
-  <p class="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-    Your profile has no skills, so these are the newest jobs that fit your filters, not ranked by match.
-    <a class="underline" href={resolve('/my/profile')}>Add skills</a>
-  </p>
+  <FeedDegraded />
 {/if}
 
-{#if paywalled}
+{#if feedSession.ended}
+  <!-- Only the visible list acts: swipe mode mounts its own over this one. -->
+  {#if active}<FeedSessionEnded />{/if}
+{:else if paywalled}
   <MatchesUpgrade price={null} />
 {:else if loading}
   <States state="loading" />
 {:else if failed && cards.length === 0}
-  <States state="error" message="Failed to load your matches." />
+  <States state="error" message="Failed to load your matches." onRetry={start} />
 {:else if meta?.reason === 'search_deleted'}
   <FeedSourceEmpty kind="deleted" focus={active} />
 {:else if meta?.source === 'saved_search' && meta.reason}
@@ -212,26 +224,14 @@
 {:else if meta?.source === 'saved_search' && firstEmpty}
   <FeedSourceEmpty kind="no_matches" focus={active} />
 {:else if meta?.reason}
-  <div class="flex flex-col items-center gap-3 py-16 text-center">
-    <p class="text-lg font-semibold">Tell us what you are looking for</p>
-    <p class="text-sm text-muted-foreground">
-      Matches are built from your profile: skills, level and where you want to work.
-    </p>
-    <a
-      class="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"
-      href={resolve('/my/profile')}>Fill in my profile</a
-    >
-  </div>
+  <FeedNoProfile focus={active} />
 {:else if visible.length === 0 && !cursor}
-  <div class="flex flex-col items-center gap-3 py-16 text-center" bind:this={caughtUp}>
-    <p class="text-lg font-semibold">You're all caught up</p>
-    <p class="text-sm text-muted-foreground">No more jobs match your profile right now.</p>
-  </div>
+  <FeedCaughtUp focus={active} {onChooseSource} />
 {:else}
   <ul class="flex flex-col gap-3" bind:this={list}>
     {#each paused ? newCards : visible as card (card.public_slug)}
       <li>
-        <JobRow job={card} onHide={hidden.onHide}>
+        <JobRow job={card} onHide={hidden.onHide} onUnauthorized={feedSession.end}>
           {#snippet footer()}
             {#if card.is_new}<Badge variant="brand" class="mb-2">New</Badge>{/if}
             <MatchBlock match={card.match} />
@@ -261,7 +261,7 @@
   {/if}
 {/if}
 
-{#if hideTarget}
+{#if hideTarget && !feedSession.ended}
   <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
 {/if}
 

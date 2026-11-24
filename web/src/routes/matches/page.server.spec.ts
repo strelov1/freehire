@@ -28,6 +28,16 @@ describe('matches load: paid gate', () => {
     expect(await run(undefined)).toEqual({ paid: false, price: null });
   });
 
+  it('a signed-out visitor gets the explainer, not a redirect, and no plans call', async () => {
+    const res = await load({
+      parent: async () => ({ user: null }),
+      url: new URL('https://x/matches'),
+      fetch,
+    } as unknown as LoadEvent);
+    expect(res).toEqual({ signedOut: true, paid: false, price: null });
+    expect(api.plans).not.toHaveBeenCalled();
+  });
+
   it.each(['pro', 'ultra'])('%s account gets the feed, no plans call', async (tier) => {
     expect(await run(tier)).toEqual({ paid: true, price: null });
     expect(api.plans).not.toHaveBeenCalled();

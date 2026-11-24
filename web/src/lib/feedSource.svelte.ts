@@ -1,5 +1,6 @@
 import { untrack } from 'svelte';
 import { api } from '#lib/api.js';
+import { feedSession } from '#lib/feedSession.svelte.js';
 import type { FeedMeta, FeedSourceChoice, SavedSearch } from '#lib/types.js';
 import { UserResource } from '#lib/userResource.svelte.js';
 
@@ -49,8 +50,11 @@ class FeedSource extends UserResource<SavedSearch[]> {
     this.status = 'loading';
     try {
       if (await this.reload()) this.status = 'ready';
-    } catch {
-      if (generation === this.generation) this.status = 'failed';
+    } catch (e) {
+      if (generation === this.generation) {
+        this.status = 'failed'; // the next visit can ask again
+        feedSession.lost(e);
+      }
     }
   }
 
@@ -62,7 +66,8 @@ class FeedSource extends UserResource<SavedSearch[]> {
     this.busy = true;
     try {
       await api.setFeedSource(choice);
-    } catch {
+    } catch (e) {
+      if (generation === this.generation) feedSession.lost(e);
       return false;
     } finally {
       if (generation === this.generation) this.busy = false;

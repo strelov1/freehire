@@ -18,7 +18,9 @@
   import WorkspaceSwitcher from './WorkspaceSwitcher.svelte';
   import { ensureAccountSetupLoaded, setupOutstanding } from '#lib/accountSetup.svelte.js';
   import { ProviderIcon } from '#lib/ui/index.js';
-  import { NAV } from '#lib/siteNav.js';
+  import { MATCHES_LINK, NAV } from '#lib/siteNav.js';
+  import { PUBLIC_MATCHES } from '$app/env/public';
+  import { matchesEnabled } from '#lib/features.js';
   import { DISCORD_URL } from '#lib/socialLinks.js';
   import { isAccountArea } from '#lib/shellLayout.js';
 
@@ -62,6 +64,7 @@
 
   // About and Open are rendered on their own at the foot of the list, so their
   // glyphs are lifted out of NAV here rather than spelled a second time.
+  const matchesOn = matchesEnabled({ PUBLIC_MATCHES });
   const AboutIcon = NAV.about.icon;
   const OpenIcon = NAV.open.icon;
 
@@ -281,6 +284,19 @@
 
       <!-- Middle: scrollable, sectioned links. -->
       <div class="max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain max-sm:px-2 max-sm:pb-3">
+        <!-- Matches rides the bar from 360px; below that there is no room, so it leads the menu. -->
+        {#if matchesOn}
+          <a
+            href={resolve(MATCHES_LINK.href)}
+            role="menuitem"
+            onclick={() => (open = false)}
+            class={cn(linkClass(MATCHES_LINK.href), 'min-[360px]:hidden')}
+            aria-current={isActive(MATCHES_LINK.href) ? 'page' : undefined}
+          >
+            <MATCHES_LINK.icon class="size-4 shrink-0" />
+            {MATCHES_LINK.label}
+          </a>
+        {/if}
         <!-- Primary destinations pinned to the top, then a divider before the
              signed-in personal items and the rest of the site nav. -->
         {#each primaryLinks as link (link.href)}

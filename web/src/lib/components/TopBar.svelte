@@ -6,6 +6,7 @@
   import { signinUrl } from '#lib/signin.js';
   import HeaderSearch from './HeaderSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
+  import MatchesLink from './MatchesLink.svelte';
   import BrandMark from './BrandMark.svelte';
   import { isApiReferenceRoute, isWideHeaderRoute } from '#lib/shellLayout.js';
   import { HEADER_LINKS } from '#lib/siteNav.js';
@@ -195,8 +196,9 @@
     </div>
 
     <!-- One cluster, not two: the bell lives inside HeaderMenu beside the profile it
-         notifies about, so this slot is just the menu. -->
+         notifies about, so this slot is the Matches link and the menu. -->
     <div class={['flex shrink-0 items-center gap-1', wideHeader && 'flex-1 basis-0 justify-end']}>
+      <MatchesLink />
       <HeaderMenu />
     </div>
   </div>

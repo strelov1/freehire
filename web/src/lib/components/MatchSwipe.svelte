@@ -4,9 +4,10 @@
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { ApiError, isPlanRefusal } from '#lib/api-core.js';
+  import { feedSession } from '#lib/feedSession.svelte.js';
   import type { FeedCard, FeedMeta } from '#lib/types.js';
   import { feedSource } from '#lib/feedSource.svelte.js';
-  import { Badge } from '#lib/ui/index.js';
+  import { Badge, Button } from '#lib/ui/index.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import { menuNav } from '#lib/actions/menuNav.js';
   import { track } from '#lib/analytics.js';
@@ -15,7 +16,11 @@
   import SwipeCard from './SwipeCard.svelte';
   import SwipeCardBody from './SwipeCardBody.svelte';
   import { FLY_MS, SwipeGesture } from './swipeGesture.svelte.js';
+  import FeedCaughtUp from './FeedCaughtUp.svelte';
+  import FeedDegraded from './FeedDegraded.svelte';
   import FeedNewEnd from './FeedNewEnd.svelte';
+  import FeedNoProfile from './FeedNoProfile.svelte';
+  import FeedSessionEnded from './FeedSessionEnded.svelte';
   import FeedSourceEmpty from './FeedSourceEmpty.svelte';
   import FeedSourceMenu from './FeedSourceMenu.svelte';
   import HideCompanyConfirm from './HideCompanyConfirm.svelte';
@@ -25,7 +30,15 @@
 
   // The match feed one card at a time, full screen like the swipe deck. Skip and Save write
   // the same tracking records; the server excludes them, so an empty page just refetches.
-  let { onClose, onCompanyHidden }: { onClose: () => void; onCompanyHidden?: () => void } = $props();
+  let {
+    onClose,
+    onCompanyHidden,
+    onSourcePicked,
+  }: { onClose: () => void; onCompanyHidden?: () => void; onSourcePicked?: () => void } = $props();
+  let sourceMenu = $state<ReturnType<typeof FeedSourceMenu>>();
+  export function focusSourcePill() {
+    sourceMenu?.focusPill();
+  }
 
   const PAGE = 20;
   // The source revision this instance was mounted for: a response that lands after a pick
@@ -43,7 +56,7 @@
   let firstEmpty = $state(false);
   // The plan lapsed while swipe was open: the API refuses with 402.
   let paywalled = $state(false);
-  type Outcome = 'ok' | 'gone' | 'failed';
+  type Outcome = 'ok' | 'gone' | 'failed' | 'expired';
   // The last judgment and its write: Undo waits for the write so its DELETE cannot overtake it.
   // `ref.id` is the application an apply wrote, filled when its write lands, so Undo can delete just it.
   type Action = 'save' | 'dismiss' | 'apply';
@@ -113,7 +126,7 @@
     } catch (e) {
       if (stale() || epoch !== loadEpoch) return;
       if (isPlanRefusal(e)) paywalled = true;
-      else failed = true;
+      else if (!feedSession.lost(e)) failed = true;
     } finally {
       if (!stale() && epoch === loadEpoch) {
         loading = false;
@@ -171,7 +184,10 @@
     // Settled either way so a rejection is handled below, not as an unhandled one here.
     const written: Promise<Outcome> = write.then(
       () => 'ok',
-      (e) => (e instanceof ApiError && e.status === 404 ? 'gone' : 'failed'),
+      (e) => {
+        if (feedSession.lost(e)) return 'expired';
+        return e instanceof ApiError && e.status === 404 ? 'gone' : 'failed';
+      },
     );
     last = { card, action, written, ref };
     await new Promise((r) => setTimeout(r, FLY_MS));
@@ -179,6 +195,8 @@
     if (action === 'apply') applying = false;
     else gesture.settle();
     const outcome = await written;
+    // The session is gone: no rollback and no failure toast, FeedSessionEnded owns the screen.
+    if (outcome === 'expired') return;
     if (sourceChanged(revision)) return;
     if (outcome === 'failed') {
       // Restore unless undo already put it back, or the card would be queued twice.
@@ -286,8 +304,8 @@
         }
         await api.untrackApplication(ref.id);
       } else await (action === 'save' ? api.unsaveJob(card.public_slug) : api.undismissJob(card.public_slug));
-    } catch {
-      if (sourceChanged(revision)) return;
+    } catch (e) {
+      if (feedSession.lost(e) || sourceChanged(revision)) return;
       cards = cards.filter((c) => c !== card);
       last = { card, action, written, ref };
       fail(toastCopy.undo);
@@ -338,7 +356,7 @@
   <header class="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-safe">
     <div class="flex min-w-0 items-center gap-3">
       <h1 id="match-swipe-title" class="text-sm font-medium text-muted-foreground">Matches</h1>
-      <FeedSourceMenu />
+      <FeedSourceMenu bind:this={sourceMenu} onpicked={onSourcePicked} />
     </div>
     <div class="ml-auto flex items-center gap-2">
       {#if current && !paused}
@@ -396,7 +414,13 @@
     </div>
   </header>
 
-  {#if current && paused}
+  {#if meta?.degraded === 'no_match_vector' && !feedSession.ended}
+    <div class="shrink-0 px-4 pb-2"><FeedDegraded /></div>
+  {/if}
+
+  {#if feedSession.ended}
+    <FeedSessionEnded />
+  {:else if current && paused}
     <FeedNewEnd onContinue={() => (restShown = true)} />
   {:else if current}
     {#key current.public_slug}
@@ -489,7 +513,7 @@
     <div class="flex flex-1 items-center justify-center"><States state="loading" /></div>
   {:else if failed}
     <div class="flex flex-1 items-center justify-center">
-      <States state="error" message="Failed to load your matches." />
+      <States state="error" message="Failed to load your matches." onRetry={load} />
     </div>
   {:else if meta?.reason === 'search_deleted'}
     <FeedSourceEmpty kind="deleted" mode="swipe" />
@@ -497,26 +521,15 @@
     <FeedSourceEmpty kind="unusable" mode="swipe" />
   {:else if meta?.source === 'saved_search' && firstEmpty}
     <FeedSourceEmpty kind="no_matches" mode="swipe" />
+  {:else if meta?.reason}
+    <FeedNoProfile />
   {:else}
-    <div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-      <p class="text-lg font-semibold">You're all caught up</p>
+    <FeedCaughtUp onChooseSource={() => sourceMenu?.openMenu()}>
       {#if last}
-        <button
-          type="button"
-          class="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"
-          onclick={undo}
-        >
-          Undo last
-        </button>
+        <Button variant="secondary" onclick={undo}>Undo last</Button>
       {/if}
-      <button
-        type="button"
-        class="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"
-        onclick={onClose}
-      >
-        Back to the feed
-      </button>
-    </div>
+      <Button variant="secondary" onclick={onClose}>Back to the feed</Button>
+    </FeedCaughtUp>
   {/if}
   {#if toast}
     {#key toast.id}
@@ -525,6 +538,6 @@
   {/if}
 </div>
 
-{#if hideTarget}
+{#if hideTarget && !feedSession.ended}
   <HideCompanyConfirm slug={hideTarget.slug} name={hideTarget.name} onclose={onHideClosed} />
 {/if}
