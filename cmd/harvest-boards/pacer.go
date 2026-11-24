@@ -15,20 +15,20 @@ type waiter interface {
 	Wait(ctx context.Context) error
 }
 
-// call waits for admission, then runs the probe: the one wait line every verb below is written
+// paceCall waits for admission, then runs the probe: the one wait line every verb below is written
 // over. A refused admission (a cancelled run) is returned as is and the probe never runs: the
 // pacer exists to keep requests off the wire.
-func call(ctx context.Context, limiter waiter, probe func() error) error {
+func paceCall(ctx context.Context, limiter waiter, probe func() error) error {
 	if err := limiter.Wait(ctx); err != nil {
 		return err
 	}
 	return probe()
 }
 
-// gated is call for a verb that returns a value beside its error; a refusal yields the zero value.
-func gated[T any](ctx context.Context, limiter waiter, probe func() (T, error)) (T, error) {
+// paceGated is paceCall for a verb that returns a value beside its error; a refusal yields the zero value.
+func paceGated[T any](ctx context.Context, limiter waiter, probe func() (T, error)) (T, error) {
 	var out T
-	err := call(ctx, limiter, func() (err error) {
+	err := paceCall(ctx, limiter, func() (err error) {
 		out, err = probe()
 		return err
 	})
@@ -48,31 +48,31 @@ type pacedClient struct {
 }
 
 func (c pacedClient) GetJSON(ctx context.Context, url string, v any) error {
-	return call(ctx, c.limiter, func() error { return c.inner.GetJSON(ctx, url, v) })
+	return paceCall(ctx, c.limiter, func() error { return c.inner.GetJSON(ctx, url, v) })
 }
 
 func (c pacedClient) PostJSON(ctx context.Context, url string, body, v any) error {
-	return call(ctx, c.limiter, func() error { return c.inner.PostJSON(ctx, url, body, v) })
+	return paceCall(ctx, c.limiter, func() error { return c.inner.PostJSON(ctx, url, body, v) })
 }
 
 func (c pacedClient) GetXML(ctx context.Context, url string, v any) error {
-	return call(ctx, c.limiter, func() error { return c.inner.GetXML(ctx, url, v) })
+	return paceCall(ctx, c.limiter, func() error { return c.inner.GetXML(ctx, url, v) })
 }
 
 func (c pacedClient) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	return gated(ctx, c.limiter, func() (*html.Node, error) { return c.inner.GetHTML(ctx, url) })
+	return paceGated(ctx, c.limiter, func() (*html.Node, error) { return c.inner.GetHTML(ctx, url) })
 }
 
 func (c pacedClient) GetText(ctx context.Context, url string) (string, error) {
-	return gated(ctx, c.limiter, func() (string, error) { return c.inner.GetText(ctx, url) })
+	return paceGated(ctx, c.limiter, func() (string, error) { return c.inner.GetText(ctx, url) })
 }
 
 func (c pacedClient) GetJSONWithHeaders(ctx context.Context, url string, headers map[string]string, v any) error {
-	return call(ctx, c.limiter, func() error { return c.inner.GetJSONWithHeaders(ctx, url, headers, v) })
+	return paceCall(ctx, c.limiter, func() error { return c.inner.GetJSONWithHeaders(ctx, url, headers, v) })
 }
 
 func (c pacedClient) PostJSONWithHeaders(ctx context.Context, url string, headers map[string]string, body, v any) error {
-	return call(ctx, c.limiter, func() error { return c.inner.PostJSONWithHeaders(ctx, url, headers, body, v) })
+	return paceCall(ctx, c.limiter, func() error { return c.inner.PostJSONWithHeaders(ctx, url, headers, body, v) })
 }
 
 // paced wraps a client to admit at most ratePerSec requests per second, or returns it
