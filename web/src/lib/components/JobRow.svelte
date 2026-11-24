@@ -109,8 +109,7 @@
   // `jobview.Job` carries that flag, like `url`.
   // A closed posting takes no applications, so it offers no Apply at all.
   const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);
-  // A paid slot (search hits only): its links go through the click-tracking redirect so the click is
-  // counted and charged, and carry `rel="sponsored"`. Without a redirect URL it is just an organic card.
+  // A paid slot: its links go through the click redirect that counts and charges the click.
   const sponsoredUrl = $derived('sponsored_url' in job && job.sponsored ? (job.sponsored_url ?? null) : null);
   const directApply = $derived('direct_apply' in job && job.direct_apply === true && !job.closed_at);
   // The freshness badge, through the card's own gate: a projection that carries no
