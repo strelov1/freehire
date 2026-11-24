@@ -10,7 +10,8 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { loadOAuthProviders, PROVIDER_LABELS } from '#lib/oauthProviders.js';
-  import { beginProviderLink, consumeReauthDraft } from '#lib/recentAuth.js';
+  import { beginProviderLink } from '#lib/providerLink.js';
+  import { consumeReauthDraft } from '#lib/recentAuth.js';
   import { Badge, Button, Dialog } from '#lib/ui/index.js';
   import { messages } from './messages';
 

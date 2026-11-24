@@ -1,4 +1,4 @@
-import { ApiError, api } from '#lib/api.js';
+import { api } from '#lib/api.js';
 
 const verifierKey = 'freehire.reauth.verifier';
 const returnKey = 'freehire.reauth.return';
@@ -152,14 +152,11 @@ export async function beginProviderReauthentication(
   await startProviderTrip(provider, 'reauth', returnTo, draft);
 }
 
-/** Leave for `provider` to attach it to the signed-in account. The server spends a recent-auth
- *  proof on the link, so the caller makes sure one is held first (`ConfirmIdentity.prove()`).
- *  The trip ends on /my/reauth, which hands the code to `completeProviderLink`. */
-export async function beginProviderLink(provider: string): Promise<void> {
-  await startProviderTrip(provider, 'link', '/my/account');
-}
-
-async function startProviderTrip(
+/** Leave for `provider` with PKCE, recording what the return leg needs. Exported for the
+ *  provider-link flow (`providerLink.ts`), which shares this transport but lives in its own
+ *  module: this one is loaded on every page that can ask for confirmation, the link flow
+ *  only on the account page and the callback. */
+export async function startProviderTrip(
   provider: string,
   purpose: 'reauth' | 'link',
   returnTo: ReauthReturnPath,
@@ -236,29 +233,10 @@ export function pendingProviderLink(): boolean {
   return readSession(purposeKey) === 'link';
 }
 
-/** How a link trip ended: the provider attached, or the server's refusal code
- *  (`identity_in_use`, `provider_already_linked`, `recent_auth_required`, …) for the account
- *  page to word. Never throws: every ending goes back to that page. */
-type LinkOutcome = { linked: string } | { error: string };
-
-export async function completeProviderLink(code: string | null): Promise<LinkOutcome> {
+/** End a provider-link trip: hand back its PKCE verifier (null when none survived) and
+ *  forget everything the trip stored, so nothing outlives it. */
+export function takeProviderLinkTrip(): string | null {
   const verifier = readSession(verifierKey);
-  forgetSession(verifierKey);
-  forgetSession(purposeKey);
-  forgetSession(returnKey);
-  forgetSession(draftKey);
-  // No code: the provider refused or the member declined consent.
-  if (!code) return { error: 'cancelled' };
-  if (!verifier) return { error: 'expired' };
-  try {
-    const { provider } = await api.exchangeOAuthLink(code, verifier);
-    // The link spent the proof server-side; a hint that it is still held would let the next
-    // gated action skip the question and meet a 428.
-    forgetRecentAuthExpiry();
-    return { linked: provider };
-  } catch (e) {
-    if (!(e instanceof ApiError)) return { error: 'failed' };
-    if (e.status === 428) forgetRecentAuthExpiry();
-    return { error: typeof e.body?.code === 'string' ? e.body.code : 'failed' };
-  }
+  for (const key of [verifierKey, purposeKey, returnKey, draftKey]) forgetSession(key);
+  return verifier;
 }

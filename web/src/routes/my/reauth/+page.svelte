@@ -5,7 +5,8 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { announce } from '#lib/announce.svelte.js';
-  import { completeProviderLink, completeProviderReauthentication, pendingProviderLink } from '#lib/recentAuth.js';
+  import { completeProviderLink } from '#lib/providerLink.js';
+  import { completeProviderReauthentication, pendingProviderLink } from '#lib/recentAuth.js';
 
   let error = $state<string | null>(null);
   onMount(async () => {

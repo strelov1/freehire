@@ -30,7 +30,8 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   only remedy is signing in again.
 - A pending action survives the provider round trip in `sessionStorage` (`recentAuth.ts`,
   `ReauthDraft`), because confirming leaves the site entirely. Connecting a provider
-  (`beginProviderLink`) is a trip of its own that ends on the same `/my/reauth` callback;
+  (`beginProviderLink`, `providerLink.ts`, kept out of `recentAuth.ts` so every page that
+  can ask for confirmation does not ship it) is a trip of its own that ends on the same `/my/reauth` callback;
   a `sessionStorage` marker tells that page to run the link exchange, and it sends the
   outcome back to `/my/account` as `?linked=` / `?link_error=`. Secrets and anti-mistake
   barriers never go in it: the typed key name is restored, the typed address confirming an

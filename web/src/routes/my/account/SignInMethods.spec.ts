@@ -34,10 +34,7 @@ vi.mock('#lib/oauthProviders.js', () => ({
   PROVIDER_LABELS: { google: 'Google', github: 'GitHub', linkedin: 'LinkedIn', apple: 'Apple' },
   loadOAuthProviders: vi.fn().mockResolvedValue(['apple', 'github', 'google']),
 }));
-vi.mock('#lib/recentAuth.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('#lib/recentAuth.js')>()),
-  beginProviderLink,
-}));
+vi.mock('#lib/providerLink.js', () => ({ beginProviderLink }));
 
 beforeEach(() => {
   user.current = { id: 1, email: 'a@b.test', has_password: true, email_verified: true } as User;
