@@ -151,8 +151,8 @@ func (c *client) createPaymentCheckoutSession(ctx context.Context, p paymentChec
 	return out.URL, nil
 }
 
-// checkoutSession is the provider's current record of one checkout session.
-type checkoutSession struct {
+// paymentSession is the provider's current record of one checkout session.
+type paymentSession struct {
 	ID            string            `json:"id"`
 	Mode          string            `json:"mode"`
 	PaymentStatus string            `json:"payment_status"`
@@ -162,8 +162,8 @@ type checkoutSession struct {
 	Metadata      map[string]string `json:"metadata"`
 }
 
-func (c *client) checkoutSession(ctx context.Context, id string) (checkoutSession, error) {
-	var out checkoutSession
+func (c *client) checkoutSession(ctx context.Context, id string) (paymentSession, error) {
+	var out paymentSession
 	err := c.do(ctx, http.MethodGet, "/checkout/sessions/"+url.PathEscape(id), nil, "", &out)
 	return out, err
 }
