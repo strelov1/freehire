@@ -50,7 +50,7 @@ func TestListCompaniesIdentityAndHQ(t *testing.T) {
 
 	list := func(t *testing.T, url string) map[string]companyIdentityRow {
 		t.Helper()
-		resp, err := app.Test(httptest.NewRequest("GET", url, nil), -1)
+		resp, err := app.Test(httptest.NewRequestWithContext(ctx, "GET", url, nil), -1)
 		if err != nil {
 			t.Fatalf("request %q: %v", url, err)
 		}
