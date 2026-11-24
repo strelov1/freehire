@@ -10,21 +10,15 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/foundermail"
 	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
-// senderName is what the recipient's list shows. The letters are first-person from the
-// founder and invite a reply, so the sender reads as a person, as in the onboarding mails.
-const senderName = "Ilya from freehire"
-
 // Mailer renders and sends the letters.
 type Mailer struct {
-	sender  emailnotify.Sender
-	from    string
-	replyTo string
+	*foundermail.Mailer
 	baseURL string
 	layout  *mailtpl.Layout
-	links   *emailprefs.Links
 }
 
 // NewMailer builds a Mailer. replyTo is the human inbox that answers: the letters ask for
@@ -32,19 +26,16 @@ type Mailer struct {
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
-		sender:  sender,
-		from:    emailnotify.From(senderName, from),
-		replyTo: replyTo,
+		Mailer:  foundermail.New(sender, from, replyTo, links),
 		baseURL: base,
 		layout:  mailtpl.New(base),
-		links:   links,
 	}
 }
 
 // Send implements Sender: it delivers one composed letter, tagged with the step's campaign
 // so SES engagement tracking reports each letter on its own.
 func (m *Mailer) Send(ctx context.Context, letter Letter, userID int64, to string) error {
-	unsubscribe, err := m.links.For(userID, emailprefs.GroupNews)
+	unsubscribe, err := m.Unsubscribe(userID)
 	if err != nil {
 		return fmt.Errorf("cvlifecycle: unsubscribe link for user %d: %w", userID, err)
 	}
@@ -52,10 +43,8 @@ func (m *Mailer) Send(ctx context.Context, letter Letter, userID int64, to strin
 	if err != nil {
 		return err
 	}
-	return m.sender.Send(ctx, emailnotify.Message{
-		From: m.from, To: to, ReplyTo: m.replyTo, Subject: mail.subject,
-		HTML: mail.html, Text: mail.text,
-		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+	return m.Mailer.Send(ctx, to, unsubscribe, emailnotify.Message{
+		Subject: mail.subject, HTML: mail.html, Text: mail.text,
 		Campaign: letter.Step.Campaign(),
 	})
 }
