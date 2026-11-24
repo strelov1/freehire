@@ -8,7 +8,10 @@ import JobMatch from './JobMatch.svelte';
 // (no sveltekit() plugin in the `components` vitest project — see vitest.config.ts).
 // None of their real behavior is under test here.
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/jobs/rust-job') } }));
-vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+vi.mock('$app/paths', () => ({
+  resolve: (path: string, params?: { slug: string }) =>
+    params ? path.replace('[slug]', encodeURIComponent(params.slug)) : path,
+}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 const { addSkill, removeSkill, avoidSkill, unavoidSkill, getJobMatch, getMatchAnalysis, syncProfileAlert } = vi.hoisted(
@@ -92,6 +95,23 @@ async function openClaimRow() {
 }
 
 describe('JobMatch', () => {
+  it('links to the selected skill and returns focus to its chip on close', async () => {
+    render(JobMatch, { props: { job, matchAnalysis: null } });
+    const chip = await screen.findByRole('button', { name: /^rust$/i });
+    await fireEvent.click(chip);
+
+    expect(screen.getByRole('link', { name: 'About Rust' }).getAttribute('href')).toBe('/skills/rust');
+    const close = screen.getByRole('button', { name: 'Close skill actions' });
+    close.focus();
+    await fireEvent.click(close);
+
+    expect(screen.queryByRole('link', { name: 'About Rust' })).toBeNull();
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(chip);
+    expect(addSkill).not.toHaveBeenCalled();
+    expect(avoidSkill).not.toHaveBeenCalled();
+  });
+
   it('calls syncProfileAlert after claiming a missing skill', async () => {
     render(JobMatch, { props: { job, matchAnalysis: null } });
     await openClaimRow();
