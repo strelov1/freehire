@@ -19,6 +19,21 @@ func TestSchemaEmploymentType(t *testing.T) {
 	}
 }
 
+func TestIsTelecommute(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"TELECOMMUTE", true}, {"telecommute", true}, {"Telecommute", true}, {" TELECOMMUTE ", true},
+		{"TELE_COMMUTE", false}, {"ON_SITE", false}, {"", false},
+	}
+	for _, tc := range cases {
+		if got := IsTelecommute(tc.in); got != tc.want {
+			t.Errorf("IsTelecommute(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestSchemaNamedAreasDecodesSingleObjectOrArray(t *testing.T) {
 	cases := []struct {
 		name string

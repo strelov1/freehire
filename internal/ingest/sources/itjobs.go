@@ -418,7 +418,7 @@ func itjobsWorkMode(workModel, locationType string) string {
 	case "presencial":
 		return "onsite"
 	}
-	if strings.EqualFold(strings.TrimSpace(locationType), "TELECOMMUTE") {
+	if IsTelecommute(locationType) {
 		return "remote"
 	}
 	return ""

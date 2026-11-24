@@ -130,7 +130,7 @@ func (s icims) detail(ctx context.Context, e CompanyEntry, host, loc string) (Jo
 	// jobLocationType is the authoritative remote signal; isRemote(location) is only a
 	// fallback. WorkMode carries the structured signal alone, so it is set only from
 	// TELECOMMUTE, never the location heuristic.
-	remote := p.JobLocationType == "TELECOMMUTE"
+	remote := IsTelecommute(p.JobLocationType)
 
 	return Job{
 		ExternalID:  id,

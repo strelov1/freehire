@@ -208,7 +208,7 @@ func (p torrePosting) place(job *Job) {
 		parts = append(parts, distinctJoin([]string{city, a.AddressRegion, country}, ", ", strings.TrimSpace))
 	}
 	where := distinctJoin(parts, "; ", strings.TrimSpace)
-	if p.JobLocationTyp == "TELECOMMUTE" {
+	if IsTelecommute(p.JobLocationTyp) {
 		job.Remote, job.WorkMode = true, "remote"
 		if where == "" {
 			where = "Worldwide"

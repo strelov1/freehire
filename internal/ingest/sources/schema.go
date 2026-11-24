@@ -12,6 +12,13 @@ import (
 // schema.org JobPosting ld+json block share the same field shapes; these types and mappers let
 // each adapter decode the common parts without redeclaring them.
 
+// IsTelecommute reports whether a schema.org JobPosting's jobLocationType states a fully
+// remote role: the enum is TELECOMMUTE, compared without regard to case or surrounding space,
+// since some boards write it in lower case.
+func IsTelecommute(jobLocationType string) bool {
+	return strings.EqualFold(strings.TrimSpace(jobLocationType), "TELECOMMUTE")
+}
+
 // schemaEmploymentType maps a schema.org JobPosting employmentType enum onto the freehire
 // vocabulary, returning "" for an unknown/absent value (e.g. "OTHER") so the description parser
 // decides. Shared by the ld+json adapters (northstone, briefhq, djinni, talentlyft,

@@ -79,7 +79,7 @@ func (r remoteYeah) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 		Title:       p.Title,
 		Company:     p.HiringOrganization.Name,
 		Description: desc,
-		Remote:      isTelecommute(p.JobLocationType),
+		Remote:      sources.IsTelecommute(p.JobLocationType),
 		PostedAt:    sources.ParseRFC3339(p.DatePosted),
 	}, true, nil
 }

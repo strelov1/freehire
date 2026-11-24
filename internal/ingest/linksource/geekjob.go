@@ -81,7 +81,7 @@ func (g geekjob) Resolve(ctx context.Context, raw string) (sources.Job, bool, er
 		Title:       p.Title,
 		Company:     p.HiringOrganization.Name,
 		Description: desc,
-		Remote:      isTelecommute(p.JobLocationType),
+		Remote:      sources.IsTelecommute(p.JobLocationType),
 		PostedAt:    sources.ParseDate(p.DatePosted),
 	}, true, nil
 }

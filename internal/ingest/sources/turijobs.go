@@ -360,7 +360,7 @@ func turijobsJob(ld turijobsLD, p turijobsPosting) (Job, bool) {
 	}
 	j.Location = strings.Join(places, "; ")
 	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
-	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
+	if IsTelecommute(ld.JobLocationType) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	for _, t := range turijobsOneOrMany[string](ld.EmploymentType) {

@@ -179,7 +179,7 @@ func (s sitemapldjson) detail(ctx context.Context, e CompanyEntry, hit sitemapld
 	if title == "" || company == "" {
 		return Job{}, false
 	}
-	remote := strings.EqualFold(strings.TrimSpace(p.JobLocationType), "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	loc := p.location()
 	return Job{
 		ExternalID:     hit.id,

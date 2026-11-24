@@ -97,7 +97,7 @@ func (s onstrider) detail(ctx context.Context, ce CompanyEntry, jobURL string) (
 	if p.Identifier.Value == "" {
 		return Job{}, false // no native id → would collide on the dedup key; skip it
 	}
-	remote := strings.EqualFold(p.JobLocationType, "TELECOMMUTE")
+	remote := IsTelecommute(p.JobLocationType)
 	return Job{
 		ExternalID:     p.Identifier.Value,
 		URL:            s.applyURL(jobURL),

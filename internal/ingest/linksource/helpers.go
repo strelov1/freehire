@@ -37,11 +37,6 @@ func salaryParagraph(s monetaryAmount) string {
 	}
 }
 
-// isTelecommute reports whether a schema.org jobLocationType marks a fully-remote role.
-func isTelecommute(jobLocationType string) bool {
-	return strings.EqualFold(jobLocationType, "TELECOMMUTE")
-}
-
 // salaryUnit maps a schema.org UnitText to a "/period" suffix, or "" when absent/unknown.
 func salaryUnit(u string) string {
 	switch strings.ToUpper(u) {

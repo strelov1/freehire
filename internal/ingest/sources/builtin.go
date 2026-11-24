@@ -370,7 +370,7 @@ func parseBuiltInPosting(root *xhtml.Node, base Job) (Job, bool) {
 	if company := strings.TrimSpace(p.HiringOrganization.Name); company != "" {
 		job.Company = company
 	}
-	if job.WorkMode == "" && strings.EqualFold(p.JobLocationType, "TELECOMMUTE") {
+	if job.WorkMode == "" && IsTelecommute(p.JobLocationType) {
 		job.WorkMode = "remote"
 	}
 	job.Remote = job.WorkMode == "remote"

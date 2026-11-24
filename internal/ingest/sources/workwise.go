@@ -291,7 +291,7 @@ var workwiseHomeOfficeDays = regexp.MustCompile(`<span>\s*\d+(?:\s*-\s*\d+)?\s+T
 // show it, and the form cannot tell an employer who chose it from one who left the field alone.
 func workwiseWorkMode(locationType, description string) string {
 	switch {
-	case strings.Contains(description, "<span>Remote Job</span>") && locationType == "TELECOMMUTE":
+	case strings.Contains(description, "<span>Remote Job</span>") && IsTelecommute(locationType):
 		return "remote"
 	case strings.Contains(description, "<span>Remote möglich</span>"), workwiseHomeOfficeDays.MatchString(description):
 		return "hybrid"
