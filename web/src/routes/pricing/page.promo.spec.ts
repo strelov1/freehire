@@ -60,7 +60,9 @@ beforeEach(() => {
 
 describe('/pricing — the promo code box', () => {
   it('tells an account that already used a code by the 409, not by the error wording', async () => {
-    promoPreview.mockRejectedValue(new ApiError(409, 'you have already used a promo code'));
+    // The message deliberately does NOT contain "already": a regression to matching on the
+    // wording as well as the status would still pass a fixture that did.
+    promoPreview.mockRejectedValue(new ApiError(409, 'redemption exists'));
     renderPricing();
 
     await fireEvent.input(codeInput(), { target: { value: 'SPRING' } });
@@ -83,7 +85,7 @@ describe('/pricing — the promo code box', () => {
   });
 
   it('keeps selling to an account that already holds a code, and still opens checkout', async () => {
-    promoRedeem.mockRejectedValue(new ApiError(409, 'you have already used a promo code'));
+    promoRedeem.mockRejectedValue(new ApiError(409, 'redemption exists'));
     renderPricing();
 
     await fireEvent.input(codeInput(), { target: { value: 'SPRING' } });
