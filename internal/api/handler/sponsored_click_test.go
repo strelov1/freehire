@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 type fakeCharger struct {
@@ -155,5 +156,21 @@ func TestSponsoredClickDirectApplyJobGoesToItsFreehirePage(t *testing.T) {
 	app := clickApp(&fakeCharger{}, fakeClickQueries{job: j, campaignJob: 7})
 	if status, loc := getClick(t, app, clickToken(), clickUA); status != 302 || loc != "https://site.test/jobs/dev-7" {
 		t.Errorf("got %d %q", status, loc)
+	}
+}
+
+// A job closed since its card was served still takes the seeker to it, but costs nothing: the
+// hourly sweep that ends its campaign may not have run yet.
+func TestSponsoredClickClosedJobIsNotCharged(t *testing.T) {
+	ch := &fakeCharger{}
+	job := clickJob()
+	job.ClosedAt = pgconv.Instant(time.Now().Add(-time.Hour))
+	app := clickApp(ch, fakeClickQueries{job: job, campaignJob: 7})
+	status, loc := getClick(t, app, clickToken(), clickUA)
+	if status != 302 || loc == "" {
+		t.Fatalf("got %d %q", status, loc)
+	}
+	if len(ch.calls) != 0 {
+		t.Fatalf("a closed job must not be charged, calls = %v", ch.calls)
 	}
 }

@@ -82,6 +82,10 @@ func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
 		target = s.origin + "/jobs/" + view.PublicSlug
 	}
 
+	// A closed job costs nothing even before the hourly sweep ends its campaign.
+	if row.ClosedAt.Valid {
+		return s.redirect(c, target)
+	}
 	if jobID, err := s.queries.GetSponsoredCampaignJobID(ctx, claims.CampaignID); err != nil || jobID != claims.JobID {
 		return s.redirect(c, target)
 	}
