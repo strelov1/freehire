@@ -126,20 +126,32 @@ func (s cancellingSender) Send(context.Context, emailnotify.Message) error {
 }
 
 // fullStore always has a further batch of due accounts: one run must still take only BatchSize.
+// Every account is claimed, so the number sent is the number selected.
 type fullStore struct {
 	memoryStore
+	t          *testing.T
 	selections int
 }
 
 func (s *fullStore) Candidates(context.Context, time.Time, int32) ([]Candidate, error) {
 	s.selections++
-	return []Candidate{{UserID: 7, Email: "member@example.test"}}, nil
+	if s.selections > 1 {
+		s.t.Fatalf("a second page was requested: the inbox digest takes one batch per run")
+	}
+	out := make([]Candidate, BatchSize)
+	for i := range out {
+		out[i] = Candidate{UserID: int64(i + 1), Email: "member@example.test"}
+	}
+	return out, nil
+}
+func (s *fullStore) Claim(context.Context, Candidate, Snapshot, time.Time) (bool, error) {
+	return true, nil
 }
 
 func TestDailyDigestTakesOneBatchPerRun(t *testing.T) {
-	store := &fullStore{memoryStore: memoryStore{snapshot: Snapshot{Items: []Item{{ID: 11, Subject: "Hello", Signal: "screening"}}}}}
+	store := &fullStore{memoryStore: memoryStore{snapshot: Snapshot{Items: []Item{{ID: 11, Subject: "Hello", Signal: "screening"}}}}, t: t}
 	stats, err := New(store, NewMailer("freehire@example.test", "https://freehire.test", strings.Repeat("x", 32)), &capturingSender{}).Run(context.Background(), time.Now())
-	if err != nil || stats.Sent != 1 || store.selections != 1 {
+	if err != nil || stats.Sent != int(BatchSize) || store.selections != 1 {
 		t.Fatalf("stats=%+v selections=%d err=%v", stats, store.selections, err)
 	}
 }
