@@ -149,6 +149,29 @@ func TestHydrateNewNoneAnsweredVersusOutOfTime(t *testing.T) {
 	}
 }
 
+// The budget stops the BUFFER at MaxNewPerRun when the listing's order stands, and the walk keeps
+// scanning for seen and covered postings past it; an ordered walk buffers every candidate so the
+// sort can pick from all of them.
+func TestHydrateNewBudgetBoundsTheBufferButNotTheScan(t *testing.T) {
+	h := Hydration{Provider: "ex", Noun: "posting", Plural: "postings", Unit: "posting pages", MaxNewPerRun: 1, Workers: 1}
+	var read []string
+	postings := []hydratePosting{{"1", "New"}, {"2", "New"}, {"3", "Seen later"}, {"4", "Covered later"}}
+	gate := DetailGate{Covered: func([]string) map[string]bool { return map[string]bool{"Covered later": true} }}
+	jobs, err := HydrateNew(context.Background(), h, postings, func(id string) bool { return id == "3" }, gate, nil,
+		hydrateBase, func(p hydratePosting) any { return p.id },
+		func(_ context.Context, p hydratePosting) (Job, bool, error) {
+			read = append(read, p.id)
+			return hydrateBase(p), true, nil
+		})
+	if err != nil || strings.Join(read, ",") != "1" {
+		t.Fatalf("read = %v, err = %v; want only the first new posting", read, err)
+	}
+	// Result order is the kept postings in listing order, then the read ones.
+	if len(jobs) != 3 || jobs[0].ExternalID != "3" || !jobs[0].SeenRefresh || jobs[1].ExternalID != "4" || jobs[1].SeenRefresh || jobs[2].ExternalID != "1" {
+		t.Fatalf("jobs = %v; want [seen 3, covered 4, read 1]: the postings past the budget are still yielded", jobs)
+	}
+}
+
 // order is the adapter's say in which unseen pages the budget buys first: the listing's order
 // stands without one, and the budget is taken from the head of the ordered slice.
 func TestHydrateNewOrderSpendsTheBudgetOnTheHead(t *testing.T) {

@@ -129,6 +129,7 @@ func HydrateNew[P any](ctx context.Context, h Hydration, postings []P, seen func
 
 	var kept []Job
 	var unseen []P
+	deferred := 0
 	for _, p := range postings {
 		b := base(p)
 		switch {
@@ -137,20 +138,22 @@ func HydrateNew[P any](ctx context.Context, h Hydration, postings []P, seen func
 			kept = append(kept, b)
 		case covered[b.Company]:
 			kept = append(kept, b)
-		default:
+		case order != nil || len(unseen) < h.MaxNewPerRun:
 			unseen = append(unseen, p)
+		default:
+			deferred++
 		}
 	}
-	// order is the adapter's own idea of which unseen pages the budget buys first; without one
-	// the listing's order stands.
+	// order is the adapter's own idea of which unseen pages the budget buys first, so it must see
+	// every candidate before the budget is taken from the head; without one the listing's order
+	// stands and the loop never holds more than the budget.
 	if order != nil {
 		order(unseen)
+		if n := len(unseen) - h.MaxNewPerRun; n > 0 {
+			deferred = n
+			unseen = unseen[:h.MaxNewPerRun]
+		}
 	}
-	deferred := len(unseen) - h.MaxNewPerRun
-	if deferred < 0 {
-		deferred = 0
-	}
-	unseen = unseen[:len(unseen)-deferred]
 
 	var answered, outOfTime atomic.Int64
 	read := FetchDetails(unseen, h.Workers, func(p P) (Job, bool) {
