@@ -48,6 +48,9 @@ type JobSummary struct {
 	Source         string `json:"source" jsonschema:"the job board this posting was collected from"`
 	URL            string `json:"url" jsonschema:"the posting's page on freehire"`
 	OfficialJobURL string `json:"official_job_url,omitempty" jsonschema:"the employer's own posting, when known"`
+	// ApplyURL is the link to hand a person who wants to apply: it counts the click and sends
+	// them to the employer. OfficialJobURL stays the canonical address to match and dedupe on.
+	ApplyURL string `json:"apply_url,omitempty" jsonschema:"the link to give a person who wants to apply; it opens the employer's application. Absent when the posting takes applications on freehire itself — use url then"`
 }
 
 // SearchJobsResult is what search_jobs answers.

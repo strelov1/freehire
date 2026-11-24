@@ -75,13 +75,15 @@ and the manifest; the two transports that publish it live elsewhere:
   outright. A posting with no stated requirements says nothing for either field.
 
 - **`official_job_url` is the employer's own page, or nothing.** It is only filled for a
-  direct ATS or a company careers page (resolved once through `sources.ProviderKind`), and
-  the `utm_source` jobview stamps on every served URL is stripped with
-  `outboundurl.Untag`. The schema defines this field as a domain-verification anchor that
+  direct ATS or a company careers page (resolved once through `sources.ProviderKind`).
+  The served `url` is the stored URL untagged (the click redirect, `apply_url`, carries
+  the tracking), so it is passed through as is. The schema defines this field as a domain-verification anchor that
   agents deduplicate against, and an aggregator's stored URL is a tracking redirect on its
   own domain — `adzuna.com/land/ad/<id>` is not the employer's page. Such a posting keeps
-  its `url`, the field whose description permits aggregators. **A clicked link keeps the
-  tag**: our own page and `apply_paths[].url` both carry it.
+  its `url`, the field whose description permits aggregators. **A clicked link goes through
+  the redirect**: an `external_redirect` path's `url` is `outboundurl.ApplyURL(slug, SrcOJCP)`,
+  which counts the click and tags the destination. `official_job_url` and an `ats_direct` path
+  (what an agent submits to) stay the canonical employer URL.
 
 - **`supports_agent_submission` is derived from this DEPLOYMENT, and is pessimistic.** It is
   handed in through `Projector.Submittable` (the handler reads
@@ -213,6 +215,6 @@ of the same kind of client wearing different hats.
 ## Testing
 
 Build fixtures with `jobview.FromRow(db.Job{...})`, never as a `jobview.Job` literal. The
-literal skips `outboundurl.Tag` and `normalizeSet`, so it carries values no read path
-produces — which is exactly how a utm-tagged `official_job_url` and a lowercase
+literal skips `normalizeSet`, so it carries values no read path
+produces — which is exactly how a lowercase
 `addressCountry` both passed green until a review caught them.

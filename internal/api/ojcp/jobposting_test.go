@@ -14,9 +14,8 @@ import (
 const testOrigin = "https://freehire.me"
 
 // sourceJobURL is the posting's URL as the SOURCE published it. What reaches a projection
-// is never this string: jobview.FromDomain runs outboundurl.Tag over it, so the served
-// value always carries utm_source. Tests that hand-built a jobview.Job skipped that and
-// asserted against a value production cannot produce — which is why every fixture here now
+// is never a hand-built literal: tests that built a jobview.Job skipped the read path's
+// derivations and asserted against a value production cannot produce — which is why every fixture here now
 // goes through jobview.FromRow, the same path a handler's data takes.
 const sourceJobURL = "https://boards.greenhouse.io/acme/jobs/4012"
 

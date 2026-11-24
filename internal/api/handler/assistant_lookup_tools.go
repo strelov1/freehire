@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -62,6 +63,7 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 				return nil, lookupMiss(err, jobNotFound(in.Slug).Error())
 			}
 			view.Description = formatDescription(view.Description, "markdown")
+			view.ApplyURL = view.ApplyURLFor(outboundurl.SrcAssistant)
 			return view, nil
 		},
 	}
@@ -112,6 +114,7 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 			// The page is for picking a vacancy; ten full bodies are too big for one call.
 			for i := range views {
 				views[i].Description = llm.ClipRunesEllipsis(formatDescription(views[i].Description, "markdown"), mcpSearchExcerptRunes)
+				views[i].ApplyURL = views[i].ApplyURLFor(outboundurl.SrcAssistant)
 			}
 			return map[string]any{"company": companyViewFrom(company), "jobs": views}, nil
 		},
