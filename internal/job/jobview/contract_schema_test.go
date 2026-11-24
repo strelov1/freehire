@@ -53,14 +53,17 @@ func TestJobSchemaCoversWireShape(t *testing.T) {
 		// Keys the struct can write that FromDomain strips before serving, so they are
 		// not on the wire and must stay out of the contract.
 		unpublished []string
+		// A property that must reference this model, as "Schema.prop". A model nobody
+		// references documents nothing: that is how a Card typed as Job slipped through.
+		served string
 	}{
-		{"Job", reflect.TypeOf(Job{}), nil},
+		{"Job", reflect.TypeOf(Job{}), nil, "JobSearchPage.data"},
 		// The listing card /me/tracking serves: its own projection, not a Job subset.
-		{"JobCard", reflect.TypeOf(Card{}), nil},
+		{"JobCard", reflect.TypeOf(Card{}), nil, "TrackedJob.job"},
 		// The nested objects are served inside Job, so they are part of the same promise.
-		{"JobEnrichment", reflect.TypeOf(enrich.Enrichment{}), []string{"work_mode", "regions", "countries", "cities", "skills"}},
-		{"JobReality", reflect.TypeOf(Reality{}), nil},
-		{"JobGhost", reflect.TypeOf(Ghost{}), nil},
+		{"JobEnrichment", reflect.TypeOf(enrich.Enrichment{}), []string{"work_mode", "regions", "countries", "cities", "skills"}, "Job.enrichment"},
+		{"JobReality", reflect.TypeOf(Reality{}), nil, "Job.reality"},
+		{"JobGhost", reflect.TypeOf(Ghost{}), nil, "Job.ghost"},
 	} {
 		schema, ok := spec.Components.Schemas[tc.schema]
 		if !ok {
@@ -76,7 +79,51 @@ func TestJobSchemaCoversWireShape(t *testing.T) {
 					tc.schema, key, tc.typ, fieldName(tc.typ, key), tc.schema)
 			}
 		}
+		if tc.served != "" {
+			owner, prop, _ := strings.Cut(tc.served, ".")
+			holder, ok := spec.Components.Schemas[owner]
+			if !ok {
+				t.Errorf("contract has no %s schema for %s to be served from", owner, tc.schema)
+				continue
+			}
+			raw, ok := holder.Properties[prop]
+			if !ok {
+				t.Errorf("contract's %s has no %q property: %s is no longer served from there", owner, prop, tc.schema)
+				continue
+			}
+			if !slices.Contains(refsIn(raw), "#/components/schemas/"+tc.schema) {
+				t.Errorf("contract's %s.%s no longer references %s: %s", owner, prop, tc.schema, raw)
+			}
+		}
 	}
+}
+
+// refsIn lists every $ref in a JSON-Schema fragment, through anyOf and items: the three
+// shapes a nullable reference and a list of references take in the compiled contract.
+func refsIn(raw json.RawMessage) []string {
+	var node any
+	if err := json.Unmarshal(raw, &node); err != nil {
+		return nil
+	}
+	var refs []string
+	var walk func(any)
+	walk = func(n any) {
+		switch v := n.(type) {
+		case map[string]any:
+			if r, ok := v["$ref"].(string); ok {
+				refs = append(refs, r)
+			}
+			for _, child := range v {
+				walk(child)
+			}
+		case []any:
+			for _, child := range v {
+				walk(child)
+			}
+		}
+	}
+	walk(node)
+	return refs
 }
 
 // wireKeys lists the JSON object keys encoding/json can write for a struct: its own json
