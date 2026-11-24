@@ -372,6 +372,29 @@ export interface Job {
    * keyed by (caller_id, job_id), so the shared job query stays free of it.
    */
   auto_apply_status?: string;
+  /**
+   * EmploymentType and Salary repeat enrichment.employment_type and enrichment.salary_*
+   * at the top level of the detail, where a reader of one posting looks for them first.
+   * Detail handler only (DetailFacts); list rows and search documents keep the nested copy.
+   */
+  employment_type?: string;
+  salary?: Salary;
+  /**
+   * CompanyWebsite is the employer's site as its company record states it, and CompanyLogo
+   * that employer's mark through the logo proxy, resolved by the site's domain. Detail
+   * handler only; both omitted when the company has no site on record.
+   */
+  company_website?: string;
+  company_logo?: string;
+}
+/**
+ * Salary is a posting's pay range: either bound may be absent, never both.
+ */
+export interface Salary {
+  min?: number /* int */;
+  max?: number /* int */;
+  currency?: string;
+  period?: string;
 }
 
 //////////
