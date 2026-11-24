@@ -276,3 +276,36 @@ func TestNotifier_SendSoftSkipsWhenSendingIsPaused(t *testing.T) {
 		t.Errorf("Send = %v, want notify.ErrChannelNotConfigured", err)
 	}
 }
+
+func TestNotifier_RenderSponsoredJob(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
+	d := digest()
+	d.Sponsored = &notify.SponsoredSlot{
+		Job:  notify.DigestJob{Title: "Paid <role>", Company: "Ad Co", Slug: "paid"},
+		Path: "/api/v1/sponsored/go/TOKEN",
+	}
+	got := n.render(msgOf(d), testUnsubscribeURL(t))
+
+	link := "https://freehire.me/api/v1/sponsored/go/TOKEN"
+	for _, want := range []string{"Sponsored", link, "Paid &lt;role&gt;"} {
+		if !strings.Contains(got.html, want) {
+			t.Errorf("html missing %q", want)
+		}
+	}
+	// The label is text, and the ad sits above the organic list.
+	if strings.Index(got.html, "Sponsored") > strings.Index(got.html, "Go Dev") {
+		t.Error("the sponsored job is not above the organic list")
+	}
+	if !strings.Contains(got.text, "Sponsored: Paid <role> — Ad Co\n  "+link) {
+		t.Errorf("text = %q", got.text)
+	}
+	// The organic jobs keep their own links, and the ad never reuses the job page URL.
+	if strings.Contains(got.html, "/jobs/paid") {
+		t.Error("the ad links the job page directly, skipping the click redirect")
+	}
+
+	plain := n.render(msgOf(digest()), testUnsubscribeURL(t))
+	if strings.Contains(plain.html, "Sponsored") || strings.Contains(plain.text, "Sponsored") {
+		t.Error("a digest without an ad renders the label")
+	}
+}

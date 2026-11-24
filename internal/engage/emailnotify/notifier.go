@@ -89,7 +89,9 @@ type htmlData struct {
 // section is one digest's part of the mail. Title is empty when the mail carries a
 // single digest, whose name is already the mail's heading.
 type section struct {
-	Title      string
+	Title string
+	// Sponsored is the paid job shown above the list, labelled; nil when there is none.
+	Sponsored  *mailtpl.Job
 	Jobs       []mailtpl.Job
 	More       int
 	ViewAllURL string
@@ -106,6 +108,11 @@ func (n *Notifier) section(d notify.Digest, titled bool) section {
 	s := section{Jobs: rows, More: max(d.Total-len(listed), 0), ViewAllURL: n.viewAllURL(d)}
 	if titled {
 		s.Title = fmt.Sprintf("%s for “%s”", notify.JobCount(d.Total), d.SavedSearchName)
+	}
+	if ad := d.Sponsored; ad != nil {
+		// Links the click redirect, not the job page: the redirect is what meters the click.
+		job := mailtpl.NewJob(ad.Job.Title, ad.Job.Company, "", n.jobBaseURL+ad.Path)
+		s.Sponsored = &job
 	}
 	return s
 }
@@ -156,6 +163,13 @@ func (n *Notifier) renderText(heading string, sections []section, unsubscribeURL
 			b.WriteString("\n" + s.Title + "\n")
 		}
 		b.WriteString("\n")
+		if ad := s.Sponsored; ad != nil {
+			b.WriteString("Sponsored: " + ad.Title)
+			if ad.Company != "" {
+				b.WriteString(" — " + ad.Company)
+			}
+			b.WriteString("\n  " + ad.URL + "\n\n")
+		}
 		for _, l := range s.Jobs {
 			b.WriteString("- " + l.Title)
 			if l.Company != "" {
@@ -208,6 +222,14 @@ func (n *Notifier) jobURL(j notify.DigestJob) string {
 var htmlTemplate = template.Must(mailtpl.Partials().New("digest").Parse(`
 {{range $n, $s := .Sections}}
 {{if $s.Title}}<h2 class="m-ink" style="margin:{{if $n}}32px{{else}}0{{end}} 0 4px;font-size:16px;line-height:1.4;font-weight:600;color:#070707;">{{$s.Title}}</h2>{{end}}
+{{if $s.Sponsored}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr><td class="m-row" style="padding:14px 0;border-bottom:1px solid #e4e4e4;">
+    <div class="m-muted" style="font-size:12px;line-height:1.4;font-weight:600;color:#6b6b6b;padding-bottom:6px;">Sponsored</div>
+    {{template "job-row" $s.Sponsored}}
+  </td></tr>
+</table>
+{{end}}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
   {{range $i, $job := $s.Jobs}}
   <tr><td class="m-row" style="padding:14px 0;{{if $i}}border-top:1px solid #e4e4e4;{{end}}">{{template "job-row" $job}}</td></tr>

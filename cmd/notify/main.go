@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/inboxdigest"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 	"github.com/strelov1/freehire/internal/engage/webhooknotify"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -101,9 +102,16 @@ func run() int {
 		return worker.ExitCode(inboxFailures, 0)
 	}
 	searcher := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
-	runner := notify.New(queries, searcher, router, notify.DefaultConfig())
+	// Paid jobs in email digests; off unless SPONSORED_CLICK_KEY is set. Impressions are
+	// buffered and written once the pass is over.
+	impressions := sponsored.NewImpressions(queries)
+	runner := notify.New(queries, searcher, router, notify.DefaultConfig()).
+		WithSponsored(queries, sponsored.ClickKeyFromEnv(), impressions)
 
 	stats, err := runner.Run(ctx)
+	if ferr := impressions.Flush(context.WithoutCancel(ctx)); ferr != nil {
+		log.Printf("notify: flush sponsored impressions: %v", ferr)
+	}
 	if err != nil {
 		log.Printf("notify: %v", err)
 		return 1
