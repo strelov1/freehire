@@ -8958,6 +8958,16 @@ export interface components {
              *     database may omit it.
              */
             apply_questions?: number;
+            /**
+             * @description True only on a search hit placed as a paid slot (never on an organic hit). Render a
+             *     visible "Sponsored" label, and link the card to `sponsored_url`.
+             */
+            sponsored?: boolean;
+            /**
+             * @description Click-tracking redirect (`/api/v1/sponsored/go/<token>`) for a sponsored hit; it always
+             *     ends at the job. `url` stays the organic link.
+             */
+            sponsored_url?: string;
             posted_at?: string | null;
             /** @description When freehire first saw the posting. */
             created_at?: string | null;

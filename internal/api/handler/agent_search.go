@@ -26,7 +26,7 @@ type jobDescriptions interface {
 func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSearchJobsParams) (*apigen.AgentJobSearchPageHeaders, error) {
 	vals := contractQuery(ctx)
 	userID, _ := auth.UserIDFromContext(ctx)
-	out, err := h.runJobSearch(ctx, vals, userID, nil, "", nil)
+	out, err := h.runJobSearch(ctx, vals, userID, nil, "", nil, false)
 	if err != nil {
 		return nil, err
 	}

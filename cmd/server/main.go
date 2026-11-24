@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
+	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/identity/apiusage"
 	appleauth "github.com/strelov1/freehire/internal/identity/auth/apple"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth"
@@ -346,7 +347,19 @@ func runServer(cfg config.Settings) error {
 		apiUsage.Run(usageCtx, apiUsageFlushInterval)
 	}()
 
+	// Served paid slots, buffered like the API usage counts above and flushed on the same terms.
+	sponsoredImpressions := sponsored.NewImpressions(db.New(pool))
+	impressionsCtx, stopImpressions := context.WithCancel(context.Background())
+	defer stopImpressions()
+	impressionsDone := make(chan struct{})
+	go func() {
+		defer close(impressionsDone)
+		sponsoredImpressions.Run(impressionsCtx, apiUsageFlushInterval)
+	}()
+
 	handler.Register(app, handler.Config{
+		SponsoredClickKey:              sponsored.ClickKeyFromEnv(),
+		SponsoredImpressions:           sponsoredImpressions,
 		Pool:                           pool,
 		AgentViews:                     agentViews,
 		APIUsage:                       apiUsage,
@@ -453,6 +466,11 @@ func runServer(cfg config.Settings) error {
 	defer cancelFlush()
 	if err := apiUsage.Flush(flushCtx); err != nil {
 		log.Printf("apiusage: final flush: %v", err)
+	}
+	stopImpressions()
+	<-impressionsDone
+	if err := sponsoredImpressions.Flush(flushCtx); err != nil {
+		log.Printf("sponsored: final impressions flush: %v", err)
 	}
 	if shutdownErr != nil {
 		return fmt.Errorf("shutdown: %w", shutdownErr)

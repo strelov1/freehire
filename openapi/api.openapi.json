@@ -32136,6 +32136,14 @@
             "minimum": 0,
             "description": "How many questions the posting's application form REQUIRES beyond the standard fields\nevery form asks for (name, contact details, CV, cover letter), counted from the form\nfreehire captured from the employer's ATS. Optional questions, the equal-opportunity\nsurvey and consent boxes are not counted. `0` means no REQUIRED question beyond the\nbasics. Absent when freehire holds no form for the posting — \"not known\", never\n\"long\". Served by search hits and the job detail; a list read straight from the\ndatabase may omit it."
           },
+          "sponsored": {
+            "type": "boolean",
+            "description": "True only on a search hit placed as a paid slot (never on an organic hit). Render a\nvisible \"Sponsored\" label, and link the card to `sponsored_url`."
+          },
+          "sponsored_url": {
+            "type": "string",
+            "description": "Click-tracking redirect (`/api/v1/sponsored/go/<token>`) for a sponsored hit; it always\nends at the job. `url` stays the organic link."
+          },
           "posted_at": {
             "anyOf": [
               {
