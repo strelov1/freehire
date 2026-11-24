@@ -139,7 +139,7 @@ func (c *Client) meiliFacets(ctx context.Context, query string, filter any, face
 		alts[i].Text = wholeWords(alts[i].Text)
 	}
 	if len(alts) == 1 {
-		resp, err := c.facet.SearchWithContext(ctx, alts[0].Text, &meilisearch.SearchRequest{
+		resp, err := c.facet.Search(ctx, alts[0].Text, &meilisearch.SearchRequest{
 			Filter:               filter,
 			Facets:               facets,
 			Limit:                0,
@@ -150,7 +150,7 @@ func (c *Client) meiliFacets(ctx context.Context, query string, filter any, face
 		}
 		return rawFromResponse(resp)
 	}
-	merged, err := c.manager.MultiSearchWithContext(ctx, buildFederatedFacets(alts, filter, facets))
+	merged, err := c.manager.MultiSearch(ctx, buildFederatedFacets(alts, filter, facets))
 	if err != nil {
 		return rawFacets{}, err
 	}
@@ -194,7 +194,7 @@ func (c *Client) meiliDistinctCount(ctx context.Context, query string, filter an
 		return 0, fmt.Errorf("search: distinct count: %w: not available for an OR query", ErrBadQuery)
 	}
 	none := int64(0)
-	resp, err := c.facet.SearchWithContext(ctx, alts[0].Text, &meilisearch.SearchRequest{
+	resp, err := c.facet.Search(ctx, alts[0].Text, &meilisearch.SearchRequest{
 		Filter:               filter,
 		Distinct:             attr,
 		Page:                 1,

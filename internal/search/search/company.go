@@ -191,7 +191,7 @@ type CompanyResult struct {
 // map as in Search: a cancelled context re-raises the sentinel and a Meili 400 (malformed client
 // filter) becomes ErrBadQuery.
 func (c *Client) SearchCompanies(ctx context.Context, p CompanySearchParams) (CompanyResult, error) {
-	resp, err := c.manager.Index(companyIndexUID).SearchWithContext(ctx, p.Query, &meilisearch.SearchRequest{
+	resp, err := c.manager.Index(companyIndexUID).Search(ctx, p.Query, &meilisearch.SearchRequest{
 		Filter: p.Filter,
 		Limit:  int64(p.Limit),
 		Offset: int64(p.Offset),
@@ -239,7 +239,7 @@ func (r *CompanyRebuild) Push(ctx context.Context, docs []CompanyDocument) error
 		return nil
 	}
 	pk := companyPrimaryKey
-	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := r.rebuild.UpdateDocuments(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: company rebuild push: %w", err)
 	}

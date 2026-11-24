@@ -23,7 +23,7 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 		t.Run(status.marker, func(t *testing.T) {
 			ctx := context.Background()
 			c := startMeili(t)
-			if _, err := c.manager.ExperimentalFeatures().SetEditDocumentsByFunction(true).UpdateWithContext(ctx); err != nil {
+			if _, err := c.manager.ExperimentalFeatures().SetEditDocumentsByFunction(true).Update(ctx); err != nil {
 				t.Fatal(err)
 			}
 			if err := c.EnsureIndex(ctx); err != nil {
@@ -49,7 +49,7 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 				legacyVectors[i] = make([]float32, 768)
 				legacyVectors[i][i] = 1
 			}
-			task, err := c.facet.UpdateDocumentsWithContext(ctx, []map[string]any{{
+			task, err := c.facet.UpdateDocuments(ctx, []map[string]any{{
 				"id": 1,
 				"_vectors": map[string]any{
 					"skills": docs[0].Vectors.Skills,
@@ -63,7 +63,7 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 				t.Fatal(err)
 			}
 			var before map[string]any
-			if err := c.facet.GetDocumentWithContext(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
+			if err := c.facet.GetDocument(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
 				t.Fatal(err)
 			}
 			if before["_vectors"].(map[string]any)["desc"] == nil {
@@ -73,7 +73,7 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 				t.Fatal(err)
 			}
 			var raw map[string]any
-			if err := c.facet.GetDocumentWithContext(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &raw); err != nil {
+			if err := c.facet.GetDocument(ctx, "1", &meilisearch.DocumentQuery{RetrieveVectors: true}, &raw); err != nil {
 				t.Fatal(err)
 			}
 			if raw[status.marker] != true || raw["title"] != "Golang engineer" {
@@ -96,7 +96,7 @@ func TestIntegration_VisibilityUpdatesRetainContentAndHideFromAllReaders(t *test
 			if err := status.mark(c, ctx, []int64{1, 999}); err != nil {
 				t.Fatalf("repeated status update: %v", err)
 			}
-			stats, err := c.facet.GetStatsWithContext(ctx, nil)
+			stats, err := c.facet.GetStats(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

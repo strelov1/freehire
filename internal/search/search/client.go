@@ -102,9 +102,8 @@ func WithEmbedConcurrency(n int) Option {
 // request. Embedding defaults to embedderURL with no auth and concurrency 1; the
 // WithEmbed* options override it, keeping this package env-free.
 func NewClient(url, key string, opts ...Option) *Client {
-	// SDK retries are off: v0.36.3 re-sends a consumed POST body, turning a transient
-	// 502/503/504 into 400 missing_payload. idempotentRetryTransport retries body-less
-	// requests; a failed POST surfaces its real status for workers to retry or requeue.
+	// Keep retries in idempotentRetryTransport, which retries bodyless requests.
+	// A failed POST surfaces its status for the caller to retry or requeue.
 	m := meilisearch.New(url, meilisearch.WithAPIKey(key), meilisearch.WithCustomClient(newEngineHTTPClient()), meilisearch.DisableRetries(),
 		meilisearch.WithCustomJsonMarshaler(json.Marshal), meilisearch.WithCustomJsonUnmarshaler(json.Unmarshal))
 	c := &Client{
@@ -139,21 +138,21 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, 
 	// by key, so an index that once had a model-backed embedder would keep embedding every
 	// document without the reset, while a reset afterwards deletes the embedder the settings
 	// just declared.
-	reset, err := idx.ResetEmbeddersWithContext(ctx)
+	reset, err := idx.ResetEmbedders(ctx)
 	if err != nil {
 		return fmt.Errorf("search: reset embedders on %s: %w", uid, err)
 	}
 	// Queue settings without awaiting the reset: the per-index task queue is serial, so
 	// submission order is execution order, and awaiting would leave the index embedder-less
 	// for a round trip (a match-sort query then 400s). All task ids are awaited below.
-	st, err := idx.UpdateSettingsWithContext(ctx, settings)
+	st, err := idx.UpdateSettings(ctx, settings)
 	if err != nil {
 		return fmt.Errorf("search: update settings: %w", err)
 	}
 	// facetSearch goes on its own: the SDK tags it omitempty, so false never goes out, and a
 	// fresh index defaults to true. Nothing uses /facet-search, and while on, Meili rebuilds
 	// its data on every write.
-	fs, err := idx.UpdateFacetSearchWithContext(ctx, settings.FacetSearch)
+	fs, err := idx.UpdateFacetSearch(ctx, settings.FacetSearch)
 	if err != nil {
 		return fmt.Errorf("search: update facet search on %s: %w", uid, err)
 	}
@@ -167,14 +166,14 @@ func (c *Client) ensure(ctx context.Context, idx meilisearch.IndexManager, uid, 
 // createIndex creates the index (keyed by pk) if absent. An already-existing index is
 // the idempotent happy path, not a failure.
 func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, uid, pk string) error {
-	create, err := c.manager.CreateIndexWithContext(ctx, &meilisearch.IndexConfig{
+	create, err := c.manager.CreateIndex(ctx, &meilisearch.IndexConfig{
 		Uid:        uid,
 		PrimaryKey: pk,
 	})
 	if err != nil {
 		return fmt.Errorf("search: create index: %w", err)
 	}
-	created, err := idx.WaitForTaskWithContext(ctx, create.TaskUID, taskPollInterval)
+	created, err := idx.WaitForTask(ctx, create.TaskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await create index: %w", err)
 	}
@@ -187,11 +186,11 @@ func (c *Client) createIndex(ctx context.Context, idx meilisearch.IndexManager, 
 // dropIndex deletes an index, tolerating one that does not exist (idempotent), so
 // it is safe to clear a leftover rebuild index from an aborted prior run.
 func (c *Client) dropIndex(ctx context.Context, uid string) error {
-	task, err := c.manager.DeleteIndexWithContext(ctx, uid)
+	task, err := c.manager.DeleteIndex(ctx, uid)
 	if err != nil {
 		return fmt.Errorf("search: delete index %s: %w", uid, err)
 	}
-	t, err := c.manager.WaitForTaskWithContext(ctx, task.TaskUID, taskPollInterval)
+	t, err := c.manager.WaitForTask(ctx, task.TaskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await delete index %s: %w", uid, err)
 	}
@@ -220,7 +219,7 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 	var firstErr error
 	uids := make([]int64, 0, len(parts))
 	for _, part := range parts {
-		task, err := idx.AddDocumentsNdjsonWithContext(ctx, part, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+		task, err := idx.AddDocumentsNdjson(ctx, part, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 		if err != nil {
 			firstErr = fmt.Errorf("search: index documents: %w", err)
 			break
@@ -271,7 +270,7 @@ func (c *Client) SubmitJobs(ctx context.Context, docs []JobDocument) error {
 		return nil
 	}
 	pk := primaryKey
-	if _, err := c.facet.AddDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk}); err != nil {
+	if _, err := c.facet.AddDocuments(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk}); err != nil {
 		return fmt.Errorf("search: submit documents: %w", err)
 	}
 	return nil
@@ -303,7 +302,7 @@ func (c *Client) submitDelete(ctx context.Context, idx meilisearch.IndexManager,
 	for i, id := range ids {
 		keys[i] = strconv.FormatInt(id, 10)
 	}
-	task, err := idx.DeleteDocumentsWithContext(ctx, keys, nil)
+	task, err := idx.DeleteDocuments(ctx, keys, nil)
 	if err != nil {
 		return 0, fmt.Errorf("search: delete documents: %w", err)
 	}
@@ -373,11 +372,9 @@ func isBadRequest(err error) bool {
 	return errors.As(err, &me) && me.StatusCode == http.StatusBadRequest
 }
 
-// queryErr reports a query failure under the caller's op prefix. A cancelled or expired
-// context arrives wrapped in a Meilisearch communication error that does not chain to
-// context.Canceled (the SDK's *Error has no Unwrap), so the context error is re-raised
-// directly; otherwise a client disconnect reads as a fault. A 400 is tagged ErrBadQuery,
-// a 503 ErrBusy.
+// queryErr reports a query failure under the caller's op prefix. Cancellation and
+// deadlines take priority over engine errors so a disconnected client does not
+// read as a fault. A 400 is tagged ErrBadQuery and a 503 ErrBusy.
 // A free function because disjunctiveFacetCounts is one and has no client in scope.
 func queryErr(ctx context.Context, op string, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -438,13 +435,13 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 		if alts[0].Fields != nil {
 			p.QFields = alts[0].Fields
 		}
-		resp, err := c.facet.SearchWithContext(ctx, p.Query, buildSearchRequest(p))
+		resp, err := c.facet.Search(ctx, p.Query, buildSearchRequest(p))
 		if err != nil {
 			return SearchResult{}, queryErr(ctx, "search: query", err)
 		}
 		hits, total = resp.Hits, resp.EstimatedTotalHits
 	} else {
-		resp, err := c.manager.MultiSearchWithContext(ctx, buildFederatedSearch(p, alts))
+		resp, err := c.manager.MultiSearch(ctx, buildFederatedSearch(p, alts))
 		if err != nil {
 			return SearchResult{}, queryErr(ctx, "search: federated query", err)
 		}
@@ -465,7 +462,7 @@ func CurrentEmbedderModel() string { return embedderModel }
 // awaitTask blocks until a Meilisearch task settles and reports a failed task as
 // an error.
 func (c *Client) awaitTask(ctx context.Context, idx meilisearch.IndexManager, taskUID int64) error {
-	t, err := idx.WaitForTaskWithContext(ctx, taskUID, taskPollInterval)
+	t, err := idx.WaitForTask(ctx, taskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await task %d: %w", taskUID, err)
 	}
@@ -478,7 +475,7 @@ func (c *Client) awaitTask(ctx context.Context, idx meilisearch.IndexManager, ta
 // awaitManagerTask waits for an engine-level task (one not scoped to a single
 // index, e.g. swap-indexes) by polling the global task endpoint.
 func (c *Client) awaitManagerTask(ctx context.Context, taskUID int64) error {
-	t, err := c.manager.WaitForTaskWithContext(ctx, taskUID, taskPollInterval)
+	t, err := c.manager.WaitForTask(ctx, taskUID, taskPollInterval)
 	if err != nil {
 		return fmt.Errorf("search: await task %d: %w", taskUID, err)
 	}

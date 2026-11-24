@@ -36,7 +36,7 @@ func (c *Client) markJobs(ctx context.Context, ids []int64, marker string) error
 	if len(ids) == 0 {
 		return nil
 	}
-	task, err := c.facet.UpdateDocumentsByFunctionWithContext(ctx, &meilisearch.UpdateDocumentByFunctionRequest{
+	task, err := c.facet.UpdateDocumentsByFunction(ctx, &meilisearch.UpdateDocumentByFunctionRequest{
 		Filter:   "(" + In("id", ids) + ") AND NOT " + marker + " = true",
 		Function: retireDescVectors + "doc." + marker + " = true;",
 	})

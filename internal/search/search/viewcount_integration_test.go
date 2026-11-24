@@ -34,13 +34,13 @@ func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 		desc[i] = make([]float32, 768)
 	}
 	awaitOK(t, ctx, c, func() (*meilisearch.TaskInfo, error) {
-		return c.facet.AddDocumentsWithContext(ctx, []map[string]any{{
+		return c.facet.AddDocuments(ctx, []map[string]any{{
 			"id": 3, "title": "Vector engineer", "view_count": 1,
 			"_vectors": map[string]any{SkillEmbedder: skills, "desc": map[string]any{"embeddings": desc, "regenerate": false}},
 		}}, nil)
 	})
 	var before map[string]any
-	if err := c.facet.GetDocumentWithContext(ctx, "3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
+	if err := c.facet.GetDocument(ctx, "3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &before); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,20 +52,20 @@ func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 	}
 
 	var one, two map[string]any
-	if err := c.facet.GetDocumentWithContext(ctx, "1", nil, &one); err != nil {
+	if err := c.facet.GetDocument(ctx, "1", nil, &one); err != nil {
 		t.Fatal(err)
 	}
 	if one["view_count"] != float64(42) || one["title"] != "Golang engineer" {
 		t.Fatalf("doc 1 = %v, want view_count 42 and its title kept", one)
 	}
-	if err := c.facet.GetDocumentWithContext(ctx, "2", nil, &two); err != nil {
+	if err := c.facet.GetDocument(ctx, "2", nil, &two); err != nil {
 		t.Fatal(err)
 	}
 	if two["view_count"] != float64(5) {
 		t.Fatalf("doc 2 view_count = %v, want 5 untouched", two["view_count"])
 	}
 	var three map[string]any
-	if err := c.facet.GetDocumentWithContext(ctx, "3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &three); err != nil {
+	if err := c.facet.GetDocument(ctx, "3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &three); err != nil {
 		t.Fatal(err)
 	}
 	if three["view_count"] != float64(9) || three["title"] != "Vector engineer" {
@@ -75,7 +75,7 @@ func TestIntegration_SetViewCountsUpdatesOnlyIndexedDocuments(t *testing.T) {
 		t.Fatal("doc 3 lost or changed its vectors")
 	}
 	var ghost map[string]any
-	err := c.facet.GetDocumentWithContext(ctx, "999", nil, &ghost)
+	err := c.facet.GetDocument(ctx, "999", nil, &ghost)
 	if me, ok := err.(*meilisearch.Error); !ok || me.StatusCode != 404 {
 		t.Fatalf("id 999 must not be created, got doc %v err %v", ghost, err)
 	}

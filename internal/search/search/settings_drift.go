@@ -20,13 +20,13 @@ import (
 func (c *Client) SettingsDrift(ctx context.Context) ([]string, error) {
 	var drift []string
 
-	live, err := c.facet.GetSettingsWithContext(ctx)
+	live, err := c.facet.GetSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("search: get live settings for %s: %w", facetIndexUID, err)
 	}
 	drift = append(drift, diffSettings(facetIndexUID, live, facetSettings())...)
 
-	live, err = c.manager.Index(companyIndexUID).GetSettingsWithContext(ctx)
+	live, err = c.manager.Index(companyIndexUID).GetSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("search: get live settings for %s: %w", companyIndexUID, err)
 	}
