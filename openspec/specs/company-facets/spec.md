@@ -27,10 +27,12 @@ except `company_sizes` (an `employee_count`-authoritative hybrid) and
   `companies.employee_count`, the array SHALL be the single authoritative size
   bucket derived from it (bucketed into the `company_size` vocabulary
   `1-10`/`11-50`/`51-200`/`201-500`/`501-1000`/`1000+`); when `employee_count` is
-  absent, it SHALL fall back to the distinct union of `enrichment.company_size`
-  over the company's open jobs. The `employee_count` value is a recorded company
-  fact and is more accurate than the LLM's per-posting guess, so it wins when
-  present.
+  absent, it SHALL fall back to the single `enrichment.company_size` value named
+  by the most of the company's open jobs (a tie goes to the larger bucket), never
+  their union: a company is one size, and the union put a large employer under
+  every band its postings mentioned. The `employee_count` value is a recorded
+  company fact and is more accurate than the LLM's per-posting guess, so it wins
+  when present.
 - `industries_derived` is a **second-order** derivation, computed from the
   company's own `industries` and `domains` (not from `jobs` directly): it SHALL
   be empty whenever the company's curated `industries` is non-empty, or whenever
@@ -68,11 +70,19 @@ they are eventually consistent with `jobs`.
 - **THEN** that company's `company_sizes` is `{201-500}` (the authoritative
   headcount bucket), not the LLM union
 
-#### Scenario: company_sizes falls back to the enrichment union without employee_count
+#### Scenario: company_sizes falls back to the most named bucket without employee_count
 
 - **WHEN** the recompute runs for a company with no `employee_count` whose open,
-  enriched jobs carry `enrichment.company_size` `11-50`
-- **THEN** that company's `company_sizes` is `{11-50}` (the enrichment union)
+  enriched jobs carry `enrichment.company_size` `1000+` three times, `1-10` once
+  and `11-50` once
+- **THEN** that company's `company_sizes` is `{1000+}` (the most named bucket),
+  not the union of all three
+
+#### Scenario: A tied company_sizes vote goes to the larger bucket
+
+- **WHEN** the recompute runs for a company with no `employee_count` whose open,
+  enriched jobs carry `enrichment.company_size` `11-50` once and `201-500` once
+- **THEN** that company's `company_sizes` is `{201-500}`
 
 #### Scenario: Other enrichment facets are derived from the enrichment payload
 

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -32,16 +33,16 @@ func (h *jobsHandlers) JobCopies(ctx context.Context, params apigen.JobCopiesPar
 		return nil, err
 	}
 
-	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
+	anchor, err := h.queries.GetJobBySlug(ctx, params.Slug)
 	if err != nil {
 		return nil, err
 	}
-	if err := jobVisibleToCaller(job, 0, false); err != nil {
+	if err := jobVisibleToCaller(anchor, 0, false); err != nil {
 		return nil, err
 	}
 
 	rows, err := h.queries.ListJobCopies(ctx, db.ListJobCopiesParams{
-		JobID:     job.ID,
+		JobID:     anchor.ID,
 		RowLimit:  int32(limit),
 		RowOffset: int32(offset),
 	})
@@ -51,7 +52,13 @@ func (h *jobsHandlers) JobCopies(ctx context.Context, params apigen.JobCopiesPar
 
 	copies := make([]apigen.JobCopy, len(rows))
 	for i, r := range rows {
-		cp := apigen.JobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: outboundurl.Tag(r.URL), PostedAt: apigen.NilDateTime{Null: true}}
+		// A vacancy taking applications on freehire has no outbound link to count: the redirect
+		// would answer 410, so its own page (the stored url) stays the apply link.
+		applyURL := r.URL
+		if !job.IsDirectApply(r.Source, r.ExternalID) {
+			applyURL = outboundurl.ApplyURL(r.PublicSlug, outboundurl.SrcWeb)
+		}
+		cp := apigen.JobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: applyURL, PostedAt: apigen.NilDateTime{Null: true}}
 		if r.PostedAt.Valid {
 			cp.PostedAt = apigen.NewNilDateTime(r.PostedAt.Time)
 		}
