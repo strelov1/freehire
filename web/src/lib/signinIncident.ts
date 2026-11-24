@@ -2,7 +2,7 @@
 // it through a same-tab OAuth redirect without using an account or analytics identifier.
 const key = 'freehire:signin-incident';
 const ttl = 30 * 60_000;
-const incidentID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const incidentID = /^[0-9a-f]{8}[-][0-9a-f]{4}[-]4[0-9a-f]{3}[-][89ab][0-9a-f]{3}[-][0-9a-f]{12}$/;
 
 function read(storage: Storage, now: number): string | undefined {
   const value = storage.getItem(key);
