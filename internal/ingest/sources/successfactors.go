@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"slices"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"golang.org/x/net/html"
 )

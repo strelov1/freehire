@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

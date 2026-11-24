@@ -8,13 +8,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 const wttjTestBoard = "cybersecurity-2MDhm"

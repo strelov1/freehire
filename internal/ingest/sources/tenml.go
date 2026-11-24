@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // tenml adapts 10ML's own careers page (10ml.com/careers), a single-company source with no

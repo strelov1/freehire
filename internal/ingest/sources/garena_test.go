@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // garenaFake serves the real listing and detail fixtures. A detail id with no fixture answers

@@ -7,11 +7,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

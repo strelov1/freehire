@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )

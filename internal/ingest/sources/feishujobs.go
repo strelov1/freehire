@@ -3,9 +3,10 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )

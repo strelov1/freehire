@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )

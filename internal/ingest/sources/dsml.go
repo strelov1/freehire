@@ -1,8 +1,9 @@
 package sources
 
 import (
-	"regexp"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // dsml adapts the job board of DSML Kazakhstan (dsml.kz), the Kazakh data-science and ML

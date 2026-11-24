@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

@@ -1,8 +1,9 @@
 package sources
 
 import (
-	"regexp"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // getinit adapts Get in IT (www.get-in-it.de), the German entry-level IT job board, mostly

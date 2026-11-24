@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // careersgov adapts Careers@Gov (careers.gov.sg), the Singapore public service's job portal.

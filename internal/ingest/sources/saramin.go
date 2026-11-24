@@ -7,7 +7,6 @@ import (
 	"html"
 	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	xhtml "golang.org/x/net/html"
 	"golang.org/x/time/rate"
 )

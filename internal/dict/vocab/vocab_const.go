@@ -1,8 +1,6 @@
 package vocab
 
-import (
-	"regexp"
-)
+import "github.com/MoeForge/moego/regexp"
 
 // The two EquityValues, named because the derivation writes them.
 const (

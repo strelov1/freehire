@@ -3,9 +3,10 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // ibm adapts IBM's careers catalogue, a single-company source with no board id. The postings live

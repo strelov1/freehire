@@ -8,12 +8,12 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 

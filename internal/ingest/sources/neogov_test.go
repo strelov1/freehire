@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

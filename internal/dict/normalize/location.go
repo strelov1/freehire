@@ -1,8 +1,9 @@
 package normalize
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // Some ATS boards jam raw coordinates into the free-text location field

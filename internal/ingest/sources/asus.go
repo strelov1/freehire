@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/net/html"
 )
 

@@ -2,9 +2,10 @@ package location
 
 import (
 	"bufio"
-	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // French location lines come in a few shapes the parser used to miss, each handled here:

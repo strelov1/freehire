@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // dassaultFake serves canned Exalead answers keyed by the request's start offset.

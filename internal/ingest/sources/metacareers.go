@@ -3,8 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // metacareers adapts Meta's career site (metacareers.com). It is a boardless single-company

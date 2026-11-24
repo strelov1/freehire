@@ -3,8 +3,9 @@ package sources
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // quanta adapts Quanta Computer's own recruitment site (hr.quantatw.com), the Taiwan catalogue.

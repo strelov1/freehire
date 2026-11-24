@@ -3,7 +3,8 @@ package telegram
 import (
 	"context"
 	"log"
-	"regexp"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // vacancyMarkers matches signals that a post plausibly advertises a job: hiring

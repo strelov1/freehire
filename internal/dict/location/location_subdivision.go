@@ -1,8 +1,9 @@
 package location
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // postalPrefixRE matches a continental postal code written BEFORE its town: German and

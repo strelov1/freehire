@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )

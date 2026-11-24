@@ -1,10 +1,11 @@
 package sources
 
 import (
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // listedPosting is a posting a listing names before anything about it is fetched: the id it is

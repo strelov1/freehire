@@ -2,13 +2,13 @@ package location
 
 import (
 	"html"
-	"regexp"
 	"slices"
 	"strings"
 
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/platform/stringset"
 )
 

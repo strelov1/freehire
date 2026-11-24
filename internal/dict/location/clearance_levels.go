@@ -1,9 +1,10 @@
 package location
 
 import (
-	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/platform/htmltext"

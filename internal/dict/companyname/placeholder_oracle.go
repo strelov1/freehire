@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 type oracleResolver struct{ http textGetter }

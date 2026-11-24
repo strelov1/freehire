@@ -1,9 +1,10 @@
 package jobfacts
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // experienceCap bounds a parsed years value; anything larger is hyperbole or a

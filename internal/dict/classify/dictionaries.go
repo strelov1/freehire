@@ -1,8 +1,9 @@
 package classify
 
 import (
-	"regexp"
 	"slices"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // aliasEntry pairs a lowercase title alias with its enrich-vocabulary canonical.

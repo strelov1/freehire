@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"github.com/MoeForge/moego/regexp"
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 

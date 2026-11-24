@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // jobvite adapts Jobvite career sites (jobs.jobvite.com/<company>). The board is the company's

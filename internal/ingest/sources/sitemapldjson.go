@@ -9,8 +9,9 @@ import (
 	"log"
 	"math/rand/v2"
 	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 const (

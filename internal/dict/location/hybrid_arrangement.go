@@ -1,8 +1,9 @@
 package location
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/MoeForge/moego/regexp"
 )
 
 // HybridArrangementStated reads explicit work-model statements

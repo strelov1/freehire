@@ -1,6 +1,6 @@
 package classify
 
-import "regexp"
+import "github.com/MoeForge/moego/regexp"
 
 // Slovenian titles reach the BCS fallback (bcs.go) and are read by its machinery: the same
 // folding (the "(m/ž)" notices cut, the diacritics dropped) and the same inflected stems.

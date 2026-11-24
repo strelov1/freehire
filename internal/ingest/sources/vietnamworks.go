@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/MoeForge/moego/regexp"
 	"golang.org/x/time/rate"
 )
 

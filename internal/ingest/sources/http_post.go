@@ -24,7 +24,7 @@ func (c *Client) PostJSONWithHeaders(ctx context.Context, url string, headers ma
 		accept:  "application/json",
 		headers: headers,
 		decode: func(resp *http.Response) error {
-			return json.NewDecoder(resp.Body).Decode(v)
+			return decodeJSON(resp.Body, v)
 		},
 	})
 }
@@ -85,7 +85,7 @@ func (c *Client) PostFormJSON(ctx context.Context, url string, values url.Values
 		contentType: "application/x-www-form-urlencoded",
 		accept:      "application/json",
 		decode: func(resp *http.Response) error {
-			return json.NewDecoder(resp.Body).Decode(v)
+			return decodeJSON(resp.Body, v)
 		},
 	})
 }
