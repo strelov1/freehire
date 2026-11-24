@@ -12,7 +12,7 @@ import (
 )
 
 const getJobsForDigest = `-- name: GetJobsForDigest :many
-SELECT id, title, company, public_slug, url, source, external_id, posted_at,
+SELECT id, title, company, public_slug, url, source, external_id, is_private, posted_at,
        COALESCE(CASE WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL THEN salary_min_manual
                      WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL THEN salary_min_source
                      ELSE (enrichment->>'salary_min')::int END, 0)::int AS salary_min,
@@ -38,6 +38,7 @@ type GetJobsForDigestRow struct {
 	URL            string             `json:"url"`
 	Source         string             `json:"source"`
 	ExternalID     string             `json:"external_id"`
+	IsPrivate      bool               `json:"is_private"`
 	PostedAt       pgtype.Timestamptz `json:"posted_at"`
 	SalaryMin      int32              `json:"salary_min"`
 	SalaryMax      int32              `json:"salary_max"`
@@ -68,6 +69,7 @@ func (q *Queries) GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJo
 			&i.URL,
 			&i.Source,
 			&i.ExternalID,
+			&i.IsPrivate,
 			&i.PostedAt,
 			&i.SalaryMin,
 			&i.SalaryMax,

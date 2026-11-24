@@ -471,7 +471,7 @@ func buildDigest(name string, jobs []db.GetJobsForDigestRow, covered int) Digest
 			Company:        j.Company,
 			Slug:           j.PublicSlug,
 			URL:            j.URL,
-			DirectApply:    job.IsDirectApply(j.Source, j.ExternalID),
+			StaysOnSite:    j.IsPrivate || job.IsDirectApply(j.Source, j.ExternalID),
 			SalaryMin:      int(j.SalaryMin),
 			SalaryMax:      int(j.SalaryMax),
 			SalaryCurrency: j.SalaryCurrency,

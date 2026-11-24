@@ -164,10 +164,10 @@ func (n *Notifier) jobLine(j notify.DigestJob) string {
 }
 
 // applyURL is the job's click redirect to the employer, counted as a telegram click. A job that
-// takes applications on freehire keeps its page, tagged with a telegram UTM source. Slugs are
+// has no employer destination (direct-apply or private) keeps its page, tagged with a telegram UTM source. Slugs are
 // our own normalized values, so no escaping.
 func (n *Notifier) applyURL(j notify.DigestJob) string {
-	if !j.DirectApply {
+	if !j.StaysOnSite {
 		return outboundurl.ApplyURL(j.Slug, outboundurl.SrcTelegram)
 	}
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=telegram-bot"

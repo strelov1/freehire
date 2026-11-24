@@ -116,10 +116,10 @@ func (n *TelegramNotifier) moreLine(more int) string {
 func (n *TelegramNotifier) savedURL() string { return n.jobBaseURL + "/my/activity" }
 
 // jobURL is the job's click redirect to the employer, counted as a telegram click. A job that
-// takes applications on freehire keeps its page, tagged with a telegram UTM source. Slugs are
+// has no employer destination (direct-apply or private) keeps its page, tagged with a telegram UTM source. Slugs are
 // our own normalized values, so the URL needs no escaping.
 func (n *TelegramNotifier) jobURL(m ReminderMessage) string {
-	if !m.DirectApply {
+	if !m.StaysOnSite {
 		return outboundurl.ApplyURL(m.Slug, outboundurl.SrcTelegram)
 	}
 	return n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=telegram-bot"
@@ -272,9 +272,9 @@ func (n *EmailNotifier) renderBatchText(shown []ReminderMessage, more int, reaso
 }
 
 // jobURL is the job's click redirect to the employer, counted as an email click. A job that
-// takes applications on freehire keeps its page, tagged with an email UTM source.
+// has no employer destination (direct-apply or private) keeps its page, tagged with an email UTM source.
 func (n *EmailNotifier) jobURL(m ReminderMessage) string {
-	if !m.DirectApply {
+	if !m.StaysOnSite {
 		return outboundurl.ApplyURL(m.Slug, outboundurl.SrcEmail)
 	}
 	return n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=email"

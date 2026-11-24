@@ -209,11 +209,11 @@ func (n *Notifier) viewAllURL(d notify.Digest) string {
 	return n.jobBaseURL + "/my/notifications/" + strconv.FormatInt(d.NotificationID, 10) + "/jobs?utm_source=email"
 }
 
-// jobURL is the job's click redirect to the employer, counted as an email click. A job that
-// takes applications on freehire has no employer destination: it keeps its page, tagged with an
+// jobURL is the job's click redirect to the employer, counted as an email click. A job with no
+// employer destination (direct-apply or private) keeps its page, tagged with an
 // email UTM source. Slugs are our own normalized values, so the URL needs no escaping.
 func (n *Notifier) jobURL(j notify.DigestJob) string {
-	if !j.DirectApply {
+	if !j.StaysOnSite {
 		return outboundurl.ApplyURL(j.Slug, outboundurl.SrcEmail)
 	}
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=email"

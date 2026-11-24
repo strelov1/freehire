@@ -190,9 +190,9 @@ type DigestJob struct {
 	Company string
 	Slug    string
 	URL     string
-	// DirectApply marks a job that takes applications on freehire itself: it has no employer
-	// destination, so alerts keep its freehire page instead of the click redirect.
-	DirectApply    bool `json:"-"`
+	// StaysOnSite marks a job with no employer destination to redirect to (it takes applications
+	// on freehire itself, or is a user's private job): its link stays the freehire page.
+	StaysOnSite    bool `json:"-"`
 	SalaryMin      int
 	SalaryMax      int
 	SalaryCurrency string

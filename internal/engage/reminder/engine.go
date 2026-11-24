@@ -25,9 +25,9 @@ type ReminderMessage struct {
 	Company  string
 	Slug     string
 	URL      string
-	// DirectApply: the job takes applications on freehire itself, so its link stays the
-	// freehire page rather than the employer click redirect.
-	DirectApply bool
+	// StaysOnSite: the job has no employer destination (direct-apply or private), so its link
+	// stays the freehire page rather than the click redirect.
+	StaysOnSite bool
 	// UserID is whose reminder this is. It rides on the message because changing the Notifier
 	// interface (shared with nudge's and notify's four channels) for a per-batch value would be
 	// invasive; every message in a call carries the same value and the email transport reads it
@@ -221,7 +221,7 @@ func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batc
 		}
 		b.ids = append(b.ids, id)
 		b.msgs = append(b.msgs, ReminderMessage{
-			JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, URL: info.URL, DirectApply: job.IsDirectApply(info.Source, info.ExternalID),
+			JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, URL: info.URL, StaysOnSite: info.IsPrivate || job.IsDirectApply(info.Source, info.ExternalID),
 			UserID: info.UserID,
 		})
 	}

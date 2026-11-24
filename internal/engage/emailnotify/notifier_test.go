@@ -310,11 +310,11 @@ func TestNotifier_RenderSponsoredJob(t *testing.T) {
 	}
 }
 
-// A job that takes applications on freehire has no employer destination, so its link stays the
+// A job with no employer destination (direct-apply or private) keeps the
 // freehire page.
-func TestNotifier_DirectApplyJobKeepsItsPage(t *testing.T) {
+func TestNotifier_PageOnlyJobKeepsItsPage(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	if got, want := n.jobURL(notify.DigestJob{Slug: "native-acme", DirectApply: true}), "https://freehire.me/jobs/native-acme?utm_source=email"; got != want {
+	if got, want := n.jobURL(notify.DigestJob{Slug: "native-acme", StaysOnSite: true}), "https://freehire.me/jobs/native-acme?utm_source=email"; got != want {
 		t.Errorf("jobURL = %q, want %q", got, want)
 	}
 }

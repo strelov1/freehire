@@ -189,10 +189,10 @@ func TestEmailNotifier_PausedTransportSoftSkips(t *testing.T) {
 	}
 }
 
-// A job that takes applications on freehire has no employer destination, so its link stays the
+// A job with no employer destination (direct-apply or private) keeps the
 // freehire page.
-func TestReminderLinks_DirectApplyJobKeepsItsPage(t *testing.T) {
-	m := ReminderMessage{Slug: "native-acme", DirectApply: true}
+func TestReminderLinks_PageOnlyJobKeepsItsPage(t *testing.T) {
+	m := ReminderMessage{Slug: "native-acme", StaysOnSite: true}
 	if got, want := NewTelegramNotifier(nil, "https://freehire.me").jobURL(m), "https://freehire.me/jobs/native-acme?utm_source=telegram-bot"; got != want {
 		t.Errorf("telegram jobURL = %q, want %q", got, want)
 	}
