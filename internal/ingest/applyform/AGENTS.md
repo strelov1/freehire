@@ -78,7 +78,7 @@ on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue dra
 ## How it works
 `cmd/ingest` enqueues a capture when `applyform.NeedsRequestCapture(source)`
 (`cmd/ingest/store.go:266`). `cmd/capture-apply-form` runs `applyform.Run`, which delegates
-the claim/process loop to `internal/platform/outbox.RunPool` (runner.go:115-133): claim a leased
+the claim/process loop to `internal/platform/outbox.RunPool` (runner.go:121-146): claim a leased
 wave, fetch each posting's form through its provider fetcher, and `Save` — which stores the
 form and retires the queue entry atomically, so a capture cannot be both stored and left
 queued. Tunables: `APPLY_FORM_BATCH_SIZE` (200), `_LEASE_SECONDS` (300, floored to the call

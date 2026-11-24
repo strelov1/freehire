@@ -5067,6 +5067,59 @@ curl "https://freehire.me/api/v1/employer/jobs/<slug>/analytics" -b cookies.txt
 curl -X POST "https://freehire.me/api/v1/employer/jobs/<slug>/close" -b cookies.txt
 ```
 
+### `GET /employer/jobs/{slug}/outbound-clicks`
+
+**Auth:** Session only
+
+Read a vacancy's outbound clicks by day, country and source.
+
+Human clicks that freehire sent to the employer's site for the team's own vacancy; bots are excluded.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The employer-authored vacancy's public slug. |
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `from` | string | no | First UTC day, inclusive. Defaults to 29 days before `to`. (e.g. `2026-11-01`) |
+| `to` | string | no | Last UTC day, inclusive. Defaults to today. At most 366 days after `from`. (e.g. `2026-11-30`) |
+
+```bash
+curl "https://freehire.me/api/v1/employer/jobs/<slug>/outbound-clicks" -b cookies.txt
+```
+
+```json
+{
+  "data": {
+    "days": [
+      {
+        "day": "2026-11-20",
+        "clicks": 12,
+        "visitors": 9
+      }
+    ],
+    "countries": [
+      {
+        "key": "DE",
+        "clicks": 12
+      }
+    ],
+    "sources": [
+      {
+        "key": "web",
+        "clicks": 12
+      }
+    ],
+    "clicks": 12,
+    "visitors": 9
+  }
+}
+```
+
 ### `POST /employer/jobs/{slug}/reopen`
 
 **Auth:** Session only

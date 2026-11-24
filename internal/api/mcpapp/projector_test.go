@@ -88,6 +88,25 @@ func TestEverySearchResultNamesItsSourceAndBothURLs(t *testing.T) {
 	}
 }
 
+func TestApplyURLIsTheRedirectAndOfficialJobURLStaysCanonical(t *testing.T) {
+	got := NewProjector(testOrigin).JobSummary(aJob(t))
+
+	if want := "https://freehire.me/api/v1/go/senior-go-engineer-acme-abc123?src=mcp"; got.ApplyURL != want {
+		t.Errorf("apply_url = %q, want %q", got.ApplyURL, want)
+	}
+	if got.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/1" {
+		t.Errorf("official_job_url = %q, want the canonical employer URL", got.OfficialJobURL)
+	}
+}
+
+func TestAnUnconfiguredOriginResearchLinkIsTheRedirect(t *testing.T) {
+	got := NewProjector("").JobSummary(aJob(t))
+
+	if want := "https://freehire.me/api/v1/go/senior-go-engineer-acme-abc123?src=mcp"; researchURL(got) != want {
+		t.Errorf("research url = %q, want %q", researchURL(got), want)
+	}
+}
+
 func TestAnAggregatorsLinkIsNeverCalledTheEmployersOwn(t *testing.T) {
 	// An aggregator's stored URL points at the aggregator, not at the employer. Publishing
 	// it as official_job_url is a claim we cannot vouch for, and a consumer that
