@@ -208,8 +208,10 @@ function main() {
           'run, and the runner records migrations by filename. Fix the one added here, and\n' +
           'which fix is safe depends on whether it has run anywhere (schema_migrations):\n' +
           '  not run anywhere  -> rename it to the next free number\n' +
-          '  run somewhere      -> leave the filename; raise its count in ALLOWED_DUPLICATE_COUNTS\n' +
-          '                       and say why, or add a corrective migration',
+          '  run somewhere      -> keep its filename and raise its count in\n' +
+          '                       ALLOWED_DUPLICATE_COUNTS, saying why; the check stays red\n' +
+          '                       until that count is raised. If it did something wrong, undo\n' +
+          '                       that in a NEW migration',
       );
     }
     console.error(

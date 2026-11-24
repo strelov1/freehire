@@ -46,8 +46,9 @@ second pull request added, never the one already on main: the latter may have ru
 production, and a red run on main does not hold back a deploy. Check `schema_migrations`
 for the added file before choosing how. Rename it to the next free number while it has run
 nowhere; once it has run somewhere, keep its filename and raise its count in
-`ALLOWED_DUPLICATE_COUNTS` with the reason, or add a corrective migration. On a push to
-main the failure names that file.
+`ALLOWED_DUPLICATE_COUNTS`, saying why. The check stays red until that count is raised,
+because both files remain in the tree. If the migration did something wrong, undo it in a
+new migration. On a push to main the failure names that file.
 
 Closing the window is a repository setting, not code, and is not on yet: make `migrations`
 a required check on main and turn on "Require branches to be up to date before merging",
