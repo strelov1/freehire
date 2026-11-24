@@ -1,12 +1,19 @@
 <script lang="ts">
   import { APP_STORE_URL } from '#lib/appLinks.js';
+  import { PUBLIC_MATCHES } from '$app/env/public';
   import { resolve } from '$app/paths';
   import { Trophy } from '@lucide/svelte';
   import { reopen } from '#lib/consent.svelte.js';
   import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { matchesEnabled } from '#lib/features.js';
   import { POPULAR_COLLECTIONS } from '#lib/popularCollections.js';
   import { SOCIAL_LINKS } from '#lib/socialLinks.js';
+  import { MATCHES_LINK } from '#lib/siteNav.js';
   import { ProviderIcon } from '#lib/ui/index.js';
+
+  const matchesLinks = matchesEnabled({ PUBLIC_MATCHES })
+    ? [{ label: MATCHES_LINK.label, href: resolve(MATCHES_LINK.href) }]
+    : [];
 
   // Grouped navigation over existing routes only — kept deliberately small so the
   // footer stays uncluttered. Internal links go through resolve() (base-path safe),
@@ -16,6 +23,7 @@
       title: 'Product',
       links: [
         { label: 'Jobs', href: resolve('/jobs') },
+        ...matchesLinks,
         { label: 'Companies', href: resolve('/companies') },
         { label: 'Collections', href: resolve('/collections') },
         { label: 'Talent Network', href: resolve('/talent') },
@@ -33,6 +41,7 @@
       title: 'Features',
       links: [
         { label: 'Advanced search', href: resolve('/features/advanced-search') },
+        { label: 'Job matches', href: resolve('/features/matches') },
         { label: 'Browser extension', href: resolve('/features/extension') },
         { label: 'Inbox', href: resolve('/features/inbox') },
         { label: 'CV tailoring', href: resolve('/features/tailor') },
@@ -101,6 +110,7 @@
 
   const compactLinks = [
     { label: 'Jobs', href: resolve('/jobs') },
+    ...matchesLinks,
     { label: 'Pricing', href: resolve('/pricing') },
     { label: 'Jobs API', href: resolve('/jobs-api') },
     { label: 'Support', href: resolve('/support') },
