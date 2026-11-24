@@ -369,6 +369,10 @@ func (h *authHandlers) linkIdentity(c *fiber.Ctx, ex mobileauth.Exchange) error 
 	switch {
 	case errors.Is(err, mobileauth.ErrSession):
 		return authError(428, "recent_auth_required", "recent authentication required")
+	case errors.Is(err, mobileauth.ErrStaleSession):
+		return authError(401, "reauth_session_mismatch", "session changed")
+	case errors.Is(err, mobileauth.ErrEmailUnverified):
+		return authError(409, "email_unverified", "verify your email before connecting a sign-in provider")
 	case errors.Is(err, mobileauth.ErrIdentityInUse):
 		return authError(409, "identity_in_use", "this account is linked to another freehire account")
 	case errors.Is(err, mobileauth.ErrProviderLinked):

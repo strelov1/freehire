@@ -20,6 +20,12 @@ var (
 	ErrIdentityInUse = errors.New("mobile auth: identity linked to another account")
 	// ErrProviderLinked: the account already holds a different identity of this provider.
 	ErrProviderLinked = errors.New("mobile auth: provider already linked")
+	// ErrEmailUnverified: the account's own email is unproven, so a provider may not be
+	// attached to it yet (see LinkIdentity).
+	ErrEmailUnverified = errors.New("mobile auth: account email unverified")
+	// ErrStaleSession: the session generation changed after the exchange checked it
+	// (logout-all, a password change); the link is refused like a changed session.
+	ErrStaleSession = errors.New("mobile auth: session generation changed")
 )
 
 type Identity struct {
@@ -267,6 +273,13 @@ func (s *Store) releaseAppleGrantsForDeletionOnce(ctx context.Context, userID in
 // uses). An identity this account already holds is a success, so a repeated callback is
 // harmless; one held by another account, or a second identity of a provider the account
 // already has, is refused without changing anything.
+//
+// The account's email must be verified. An unverified password account may be a
+// squatter's registration of somebody else's address: the squatter holds the password,
+// so they can mint a recent-auth proof and attach their own provider. When the address's
+// real owner later arrives through a provider vouching for it, LinkOrCreateByEmail seizes
+// the account (password cleared, sessions revoked) but leaves identities alone, and the
+// squatter's provider would keep signing in. Requiring a verified email closes that.
 func (s *Store) LinkIdentity(ctx context.Context, userID int64, tokenVersion int32, sessionHash []byte, provider, providerUserID, recentProof string) error {
 	if provider == "" || providerUserID == "" {
 		return ErrIdentity
@@ -292,9 +305,20 @@ func (s *Store) linkIdentityOnce(ctx context.Context, userID int64, tokenVersion
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var lockedUser int64
-	if err = tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&lockedUser); err != nil {
+	// The generation is re-read under the lock: the exchange checked it before this
+	// transaction, and a logout-all committed in between must not let the revoked session
+	// add a sign-in method that outlives the revocation. Both refusals come before the
+	// proof is spent.
+	var currentVersion int32
+	var emailVerified bool
+	if err = tx.QueryRow(ctx, `SELECT token_version, email_verified FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&currentVersion, &emailVerified); err != nil {
 		return err
+	}
+	if currentVersion != tokenVersion {
+		return ErrStaleSession
+	}
+	if !emailVerified {
+		return ErrEmailUnverified
 	}
 	if err = recentauth.ConsumeTx(ctx, tx, recentProof, userID, tokenVersion, sessionHash); err != nil {
 		if errors.Is(err, recentauth.ErrRequired) {

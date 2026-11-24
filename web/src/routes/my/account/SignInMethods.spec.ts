@@ -40,7 +40,7 @@ vi.mock('#lib/recentAuth.js', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
-  user.current = { id: 1, email: 'a@b.test', has_password: true } as User;
+  user.current = { id: 1, email: 'a@b.test', has_password: true, email_verified: true } as User;
   pageState.url = new URL('http://localhost/my/account');
   connectedIdentities.mockReset().mockResolvedValue({
     has_password: true,
@@ -64,6 +64,8 @@ describe('SignInMethods', () => {
   it('confirms with the password, then leaves for the provider', async () => {
     render(SignInMethods);
     await fireEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+    // Both {provider} slots in the note name the provider.
+    expect(screen.getByText(/You will sign in to GitHub and come back here\. Any GitHub account works/)).toBeTruthy();
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'hunter2' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Continue to GitHub' }));
     await vi.waitFor(() => expect(beginProviderLink).toHaveBeenCalledWith('github'));
@@ -89,5 +91,12 @@ describe('SignInMethods', () => {
     pageState.url = new URL('http://localhost/my/account?link_error=identity_in_use');
     render(SignInMethods);
     expect(await screen.findByText(/already signs in to a different freehire account/)).toBeTruthy();
+  });
+
+  it('offers no Connect button until the account email is confirmed', async () => {
+    user.current = { id: 1, email: 'a@b.test', has_password: true, email_verified: false } as User;
+    render(SignInMethods);
+    expect(await screen.findByText('Confirm your email to connect')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
   });
 });

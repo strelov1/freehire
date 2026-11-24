@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
+  import { currentUser } from '#lib/auth.svelte.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import ConfirmIdentity from '#lib/components/ConfirmIdentity.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -24,6 +25,9 @@
   // `?link_error=`.
 
   const s = $derived(t(messages, locale()));
+  // The server refuses to attach a provider to an account whose own email is unproven
+  // (mobileauth.Store.LinkIdentity); say so before the trip instead of after it.
+  const emailVerified = $derived(currentUser()?.email_verified ?? false);
 
   type Row = { provider: string; linkedAt: string | null };
   const rows = new AsyncData<Row[]>([]);
@@ -49,6 +53,7 @@
     | 'providerAlreadyLinked'
     | 'confirmExpired'
     | 'sessionChanged'
+    | 'emailUnverified'
     | 'cancelled'
     | 'failed';
   const errorNotice: Record<string, NoticeKey> = {
@@ -56,6 +61,7 @@
     provider_already_linked: 'providerAlreadyLinked',
     recent_auth_required: 'confirmExpired',
     reauth_session_mismatch: 'sessionChanged',
+    email_unverified: 'emailUnverified',
     cancelled: 'cancelled',
   };
   // The KEY and the provider, so a language switch re-renders the sentence.
@@ -80,7 +86,7 @@
   });
 
   const label = (provider: string): string => PROVIDER_LABELS[provider] ?? provider;
-  const fill = (text: string, provider: string): string => text.replace('{provider}', label(provider));
+  const fill = (text: string, provider: string): string => text.replaceAll('{provider}', label(provider));
   const since = (iso: string): string =>
     new Date(iso).toLocaleDateString(locale(), { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -150,8 +156,10 @@
         </div>
         {#if row.linkedAt}
           <Badge variant="secondary">{s.signIn.connected}</Badge>
-        {:else}
+        {:else if emailVerified}
           <Button variant="outline" size="sm" onclick={() => connect(row.provider)}>{s.signIn.connect}</Button>
+        {:else}
+          <span class="text-sm text-muted-foreground">{s.signIn.verifyFirst}</span>
         {/if}
       </div>
     {/each}

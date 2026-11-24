@@ -427,19 +427,35 @@ func TestMintLinkCodeRefusesUnboundAttempt(t *testing.T) {
 }
 
 func TestLinkIdentity(t *testing.T) {
-	ctx, userID, store := seedAuthUser(t, true)
-	recent := recentauth.NewStore(store.pool, 0)
 	sessionHash := bytes.Repeat([]byte{6}, 32)
-	proof := func(uid int64) string {
+	// setup gives each subtest its own database, a verified account, and a proof minter,
+	// so no case depends on another having run.
+	setup := func(t *testing.T) (context.Context, int64, *Store, *recentauth.Store, func(int64) string) {
 		t.Helper()
-		raw, _, err := recent.Issue(ctx, uid, 1, sessionHash)
-		if err != nil {
+		ctx, userID, store := seedAuthUser(t, true)
+		if _, err := store.pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, userID); err != nil {
 			t.Fatal(err)
 		}
-		return raw
+		recent := recentauth.NewStore(store.pool, 0)
+		proof := func(uid int64) string {
+			t.Helper()
+			raw, _, err := recent.Issue(ctx, uid, 1, sessionHash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return raw
+		}
+		return ctx, userID, store, recent, proof
+	}
+	seedIdentity := func(t *testing.T, ctx context.Context, store *Store, uid int64, subject string) {
+		t.Helper()
+		if _, err := store.pool.Exec(ctx, `INSERT INTO user_identities(provider,provider_user_id,user_id) VALUES('github',$1,$2)`, subject, uid); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	t.Run("requires a recent-auth proof for this session", func(t *testing.T) {
+		ctx, userID, store, _, proof := setup(t)
 		if err := store.LinkIdentity(ctx, userID, 1, sessionHash, "github", "gh-1", ""); !errors.Is(err, ErrSession) {
 			t.Fatalf("no proof: %v", err)
 		}
@@ -453,6 +469,7 @@ func TestLinkIdentity(t *testing.T) {
 	})
 
 	t.Run("attaches and spends the proof", func(t *testing.T) {
+		ctx, userID, store, recent, proof := setup(t)
 		raw := proof(userID)
 		if err := store.LinkIdentity(ctx, userID, 1, sessionHash, "github", "gh-1", raw); err != nil {
 			t.Fatal(err)
@@ -466,12 +483,16 @@ func TestLinkIdentity(t *testing.T) {
 	})
 
 	t.Run("repeating it is a success", func(t *testing.T) {
+		ctx, userID, store, _, proof := setup(t)
+		seedIdentity(t, ctx, store, userID, "gh-1")
 		if err := store.LinkIdentity(ctx, userID, 1, sessionHash, "github", "gh-1", proof(userID)); err != nil {
 			t.Fatalf("relink: %v", err)
 		}
 	})
 
 	t.Run("second identity of the same provider is refused", func(t *testing.T) {
+		ctx, userID, store, recent, proof := setup(t)
+		seedIdentity(t, ctx, store, userID, "gh-1")
 		raw := proof(userID)
 		if err := store.LinkIdentity(ctx, userID, 1, sessionHash, "github", "gh-2", raw); !errors.Is(err, ErrProviderLinked) {
 			t.Fatalf("second github: %v", err)
@@ -482,12 +503,49 @@ func TestLinkIdentity(t *testing.T) {
 	})
 
 	t.Run("identity of another account is refused, not moved", func(t *testing.T) {
+		ctx, userID, store, _, proof := setup(t)
 		bob := seedOtherUser(t, ctx, store, "link-bob@example.test")
+		if _, err := store.pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, bob); err != nil {
+			t.Fatal(err)
+		}
+		seedIdentity(t, ctx, store, userID, "gh-1")
 		if err := store.LinkIdentity(ctx, bob, 1, sessionHash, "github", "gh-1", proof(bob)); !errors.Is(err, ErrIdentityInUse) {
 			t.Fatalf("taken identity: %v", err)
 		}
 		if owner := identityOwner(t, ctx, store, "github", "gh-1"); owner != userID {
 			t.Fatalf("identity moved to %d", owner)
+		}
+	})
+
+	t.Run("an unverified account email is refused before the proof is spent", func(t *testing.T) {
+		ctx, userID, store, recent, proof := setup(t)
+		if _, err := store.pool.Exec(ctx, `UPDATE users SET email_verified=false WHERE id=$1`, userID); err != nil {
+			t.Fatal(err)
+		}
+		raw := proof(userID)
+		if err := store.LinkIdentity(ctx, userID, 1, sessionHash, "github", "gh-1", raw); !errors.Is(err, ErrEmailUnverified) {
+			t.Fatalf("unverified account: %v", err)
+		}
+		if identityOwner(t, ctx, store, "github", "gh-1") != 0 {
+			t.Fatal("identity attached to an unverified account")
+		}
+		if err := recent.Validate(ctx, raw, userID, 1, sessionHash); err != nil {
+			t.Fatalf("refusal spent the proof: %v", err)
+		}
+	})
+
+	t.Run("a session generation bumped after the exchange check is refused", func(t *testing.T) {
+		ctx, userID, store, _, proof := setup(t)
+		raw := proof(userID)
+		// logout-all commits between the exchange's VerifyBinding and the link.
+		if _, err := store.pool.Exec(ctx, `UPDATE users SET token_version=token_version+1 WHERE id=$1`, userID); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.LinkIdentity(ctx, userID, 1, sessionHash, "github", "gh-1", raw); !errors.Is(err, ErrStaleSession) {
+			t.Fatalf("stale generation: %v", err)
+		}
+		if identityOwner(t, ctx, store, "github", "gh-1") != 0 {
+			t.Fatal("revoked session attached an identity")
 		}
 	})
 }
