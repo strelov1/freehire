@@ -42,6 +42,12 @@ func (paylocity) Provider() string { return "paylocity" }
 func (paylocity) FullBoardListing() {}
 
 func (s paylocity) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return s.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew reads the same complete listing as Fetch. Known postings need only a liveness
+// refresh; their stored descriptions are kept and missing ones can be retried by the caller.
+func (s paylocity) FetchNew(ctx context.Context, e CompanyEntry, seen func(string) bool) ([]Job, error) {
 	listURL := fmt.Sprintf("%s/Recruiting/Jobs/All/%s", paylocityBase, e.Board)
 	body, err := s.http.GetText(ctx, listURL)
 	if err != nil {
@@ -59,24 +65,26 @@ func (s paylocity) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("paylocity: board %q: decode Jobs: %w", e.Board, err)
 	}
 
-	// Each posting's description comes from its own detail fetch, fanned out under a
+	// A posting that needs its description gets its own detail fetch, fanned out under a
 	// bounded pool like the other JSON-LD detail adapters.
 	return fetchDetails(briefs, defaultDetailWorkers, func(b paylocityBrief) (Job, bool) {
-		return s.detail(ctx, e, b)
+		if b.JobID == 0 {
+			return Job{}, false
+		}
+		id := strconv.Itoa(b.JobID)
+		detailURL := paylocityBase + "/Recruiting/Jobs/Details/" + id
+		if seen(id) {
+			return Job{ExternalID: id, URL: detailURL, Title: b.JobTitle, Company: e.Company, SeenRefresh: true}, true
+		}
+		return s.detail(ctx, e, b, id, detailURL), true
 	}), nil
 }
 
 // detail builds a Job from a listing brief, enriching it with the description from the
 // posting's detail page. The listing brief is authoritative for the posting's existence and
 // structured fields (id/title/location/date), so a failed detail fetch only costs the
-// description, not the whole posting. ok=false only for a brief with no id (which would
-// collide on the dedup key).
-func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief) (Job, bool) {
-	if b.JobID == 0 {
-		return Job{}, false
-	}
-	detailURL := fmt.Sprintf("%s/Recruiting/Jobs/Details/%d", paylocityBase, b.JobID)
-
+// description, not the whole posting.
+func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief, id, detailURL string) Job {
 	description, company := "", e.Company
 	if root, err := s.http.GetHTML(ctx, detailURL); err == nil {
 		description = paylocityDescription(root)
@@ -93,7 +101,7 @@ func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief)
 
 	mode := b.workMode()
 	return Job{
-		ExternalID:  strconv.Itoa(b.JobID),
+		ExternalID:  id,
 		URL:         detailURL,
 		Title:       b.JobTitle,
 		Company:     company,
@@ -105,7 +113,7 @@ func (s paylocity) detail(ctx context.Context, e CompanyEntry, b paylocityBrief)
 		WorkMode:  mode,
 		Countries: b.countries(),
 		PostedAt:  parseRFC3339(b.PublishedDate),
-	}, true
+	}
 }
 
 // paylocityDescription extracts the posting body from a detail page. Paylocity's current
