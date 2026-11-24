@@ -230,7 +230,7 @@ func (s jobkorea) sitemap(ctx context.Context, loc string) (sitemapDoc, error) {
 		if len(body) > jobkoreaMaxSitemapBytes {
 			return fmt.Errorf("sitemap exceeds %d bytes", jobkoreaMaxSitemapBytes)
 		}
-		doc, err = decodeSitemapBody(body)
+		doc, err = decodeSitemapBody(body, sitemapMaxUncompressed)
 		return err
 	})
 	return doc, err
