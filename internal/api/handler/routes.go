@@ -204,4 +204,8 @@ func (a *API) mountAppRoutes(app *fiber.App, cfg Config, queries *db.Queries) {
 	// excluded, and a leaked API key must not be able to attribute or hide one.
 	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
 	app.Get("/cv/:token", auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
+
+	// The outbound click redirect (/go/<slug>?src=<surface>): public, no session, no key. The
+	// destination is the stored job's, so there is nothing for a caller to steer.
+	app.Get("/go/:slug", newGoHandlers(queries, cfg.TracerLinkSalt).Redirect)
 }

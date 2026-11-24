@@ -15,7 +15,7 @@ func TestApplicationDestinationPreservesSourcePosting(t *testing.T) {
 	for _, destination := range []string{"", target} {
 		t.Run(destination, func(t *testing.T) {
 			// Read the persisted shape independently of the Go field mapping.
-			payload, _ := json.Marshal(map[string]string{"source": "linkedin", "url": source, "application_url": destination, "title": "Senior Java Software Engineer"})
+			payload, _ := json.Marshal(map[string]string{"source": "linkedin", "url": source, "application_url": destination, "title": "Senior Java Software Engineer", "public_slug": "senior-java-1"})
 			var row db.Job
 			if err := json.Unmarshal(payload, &row); err != nil {
 				t.Fatal(err)
@@ -28,16 +28,34 @@ func TestApplicationDestinationPreservesSourcePosting(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := source + "?utm_source=freehire.me"
+			want := source
 			if destination != "" {
-				want = target + "&utm_source=freehire.me"
+				want = target
 			}
 			if got.URL != want || got.Source != "linkedin" || domain.Fields().URL != source {
 				t.Fatalf("wire URL=%q source=%q stored URL=%q; want %q, linkedin, %q", got.URL, got.Source, domain.Fields().URL, want, source)
+			}
+			if got.ApplyURL != "https://freehire.me/go/senior-java-1?src=web" || jobview.RowDestination(row) != want {
+				t.Fatalf("apply_url=%q destination=%q; want the redirect and %q", got.ApplyURL, jobview.RowDestination(row), want)
 			}
 			if destination != "" && got.SourceURL != source+"?utm_source=freehire.me" {
 				t.Fatalf("original posting = %q", got.SourceURL)
 			}
 		})
+	}
+}
+
+func TestDirectApplyHasNoApplyURL(t *testing.T) {
+	row := db.Job{Source: job.EmployerSource, ExternalID: job.DirectApplyPrefix + "1", URL: "https://freehire.me/jobs/x", PublicSlug: "x"}
+	domain, extras, err := job.FromRow(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := jobview.FromDomain(domain, extras)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.URL != "" || got.ApplyURL != "" || jobview.RowDestination(row) != "" {
+		t.Fatalf("url=%q apply_url=%q: a freehire-only vacancy has nowhere to redirect", got.URL, got.ApplyURL)
 	}
 }

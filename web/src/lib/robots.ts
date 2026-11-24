@@ -59,6 +59,9 @@ export const DISALLOWED = [
   // A redirect to LinkedIn linked from every job page: nothing to index, and each
   // fetch costs two API reads (the job and its company).
   '/jobs/*/people',
+  // The outbound click redirect: it answers 302 to an employer, and a crawler that follows it
+  // would record itself as a click on every job.
+  '/go/',
 ];
 
 // Search crawlers additionally lose /api/, and only they. The invitation in the

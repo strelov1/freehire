@@ -51,7 +51,7 @@ func (h *jobsHandlers) JobCopies(ctx context.Context, params apigen.JobCopiesPar
 
 	copies := make([]apigen.JobCopy, len(rows))
 	for i, r := range rows {
-		cp := apigen.JobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: outboundurl.Tag(r.URL), PostedAt: apigen.NilDateTime{Null: true}}
+		cp := apigen.JobCopy{PublicSlug: r.PublicSlug, Location: r.Location, ApplyURL: outboundurl.ApplyURL(r.PublicSlug, outboundurl.SrcWeb), PostedAt: apigen.NilDateTime{Null: true}}
 		if r.PostedAt.Valid {
 			cp.PostedAt = apigen.NewNilDateTime(r.PostedAt.Time)
 		}

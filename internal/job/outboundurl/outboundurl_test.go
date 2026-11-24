@@ -73,23 +73,21 @@ func TestTag(t *testing.T) {
 	}
 }
 
-func TestUntag(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{"round-trips the ESS query verbatim", Tag("https://www.ess.gov.si/iskanje-dela/?idp=3419120/#/pdm/3419120"), "https://www.ess.gov.si/iskanje-dela/?idp=3419120/#/pdm/3419120"},
-		{"drops the query when ours was the only parameter", "https://ats.example.com/job?utm_source=freehire.me", "https://ats.example.com/job"},
-		{"leaves a source's own utm_source alone", "https://ats.example.com/job?utm_source=indeed", "https://ats.example.com/job?utm_source=indeed"},
-		{"keeps other parameters in order", "https://ats.example.com/job?z=1&utm_source=freehire.me&a=2", "https://ats.example.com/job?z=1&a=2"},
-		{"empty url is returned unchanged", "", ""},
+func TestParseSrc(t *testing.T) {
+	for _, s := range []Src{SrcWeb, SrcMCP, SrcOJCP, SrcAssistant, SrcEmail, SrcTelegram, SrcAPI} {
+		if got := ParseSrc(string(s)); got != s {
+			t.Errorf("ParseSrc(%q) = %q", s, got)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Untag(tt.in); got != tt.want {
-				t.Errorf("Untag(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
+	for _, in := range []string{"", "WEB", "other", "x&y=1", "https://evil.example"} {
+		if got := ParseSrc(in); got != SrcOther {
+			t.Errorf("ParseSrc(%q) = %q, want other", in, got)
+		}
+	}
+}
+
+func TestApplyURL(t *testing.T) {
+	if got, want := ApplyURL("acme-go-engineer-1a2b3c4d", SrcMCP), "https://freehire.me/go/acme-go-engineer-1a2b3c4d?src=mcp"; got != want {
+		t.Errorf("ApplyURL = %q, want %q", got, want)
 	}
 }
