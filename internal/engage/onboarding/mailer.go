@@ -17,6 +17,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/foundermail"
 	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
@@ -47,12 +48,9 @@ const (
 
 // Mailer renders and sends the sequence.
 type Mailer struct {
-	sender  emailnotify.Sender
-	from    string
-	replyTo string
+	*foundermail.Mailer
 	baseURL string
 	layout  *mailtpl.Layout
-	links   *emailprefs.Links
 }
 
 // NewMailer builds a Mailer. from is the verified sending address; replyTo is the human
@@ -60,22 +58,15 @@ type Mailer struct {
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
-		sender:  sender,
-		from:    emailnotify.From(senderName, from),
-		replyTo: replyTo,
+		Mailer:  foundermail.New(sender, from, replyTo, links),
 		baseURL: base,
 		layout:  mailtpl.New(base),
-		links:   links,
 	}
 }
 
-// senderName is what the recipient's message list shows: a person, since the letters are
-// first-person.
-const senderName = "Ilya from freehire"
-
 // Send delivers one step to one recipient.
 func (m *Mailer) Send(ctx context.Context, step Step, userID int64, to string) error {
-	unsubscribe, err := m.links.For(userID, emailprefs.GroupNews)
+	unsubscribe, err := m.Unsubscribe(userID)
 	if err != nil {
 		return fmt.Errorf("onboarding: unsubscribe link for user %d: %w", userID, err)
 	}
@@ -83,10 +74,8 @@ func (m *Mailer) Send(ctx context.Context, step Step, userID int64, to string) e
 	if err != nil {
 		return err
 	}
-	return m.sender.Send(ctx, emailnotify.Message{
-		From: m.from, To: to, ReplyTo: m.replyTo, Subject: mail.subject,
-		HTML: mail.html, Text: mail.text,
-		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+	return m.Mailer.Send(ctx, to, unsubscribe, emailnotify.Message{
+		Subject: mail.subject, HTML: mail.html, Text: mail.text,
 	})
 }
 
