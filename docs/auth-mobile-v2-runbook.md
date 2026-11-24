@@ -27,7 +27,7 @@ state, PKCE verifier, or session cookie in Git, CI output, logs, or PR text.
 | Variable | Meaning |
 |---|---|
 | `AUTH_V2_ENABLED` | Registers `/api/v2/auth/*`; default `false`. |
-| `MOBILE_AUTH_CALLBACKS` | Comma-separated `platform=https://verified/path` allowlist. Include `web=https://<host>/my/reauth`; add `ios=https://<host>/auth/mobile-callback` and `android=` likewise once the verified-link target is live. Browser providers stay hidden from `/api/v2/auth/providers` until one of them is set, so the mobile app shows only Apple. |
+| `MOBILE_AUTH_CALLBACKS` | Comma-separated `platform=https://verified/path` allowlist. Include `web=https://<host>/my/reauth` (web re-authentication and connecting a provider from `/my/account` both return there); add `ios=https://<host>/auth/mobile-callback` and `android=` likewise once the verified-link target is live. Browser providers stay hidden from `/api/v2/auth/providers` until one of them is set, so the mobile app shows only Apple. |
 | `RECENT_AUTH_TTL` | Recent-auth proof lifetime; default `10m`, allowed `1m` to `1h`. |
 | `APPLE_NATIVE_CLIENT_ID` | Native iOS bundle/client ID, separate from the web Services ID. |
 | `OAUTH_APPLE_TEAM_ID` | Existing Apple developer Team ID. |
@@ -40,10 +40,12 @@ state, PKCE verifier, or session cookie in Git, CI output, logs, or PR text.
 native audience. Partial native Apple configuration fails startup without
 printing secret values. Production callback entries must use HTTPS.
 
-Each enabled browser provider must also allow its server-owned v2 redirect URI:
-`https://<served-host>/api/v2/auth/oauth/<provider>/callback`. For Apple web
-reauthentication, add `/api/v2/auth/oauth/apple/callback` to the Services ID's
-return URLs alongside the existing v1 callback. These provider-console redirect
+Each enabled browser provider allows ONE redirect URI, the shared server-owned
+callback `https://<served-host>/api/v1/auth/oauth/<provider>/callback`: v2
+attempts (re-authentication, connecting a provider, native browser sign-in) return
+there too and are told apart by their state cookie (see
+internal/identity/auth/oauth/AGENTS.md). Apple web re-authentication uses the same
+callback, so the Services ID needs no second return URL. These provider-console redirect
 URIs are separate from `MOBILE_AUTH_CALLBACKS`, which contains only FreeHire's
 final completion targets.
 

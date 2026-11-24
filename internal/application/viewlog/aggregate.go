@@ -3,6 +3,8 @@ package viewlog
 import (
 	"bufio"
 	"io"
+
+	"github.com/strelov1/freehire/internal/platform/tracerlink"
 )
 
 // dayLayout is the UTC calendar-day key ("2006-01-02") used for bucketing and as
@@ -55,7 +57,7 @@ func Aggregate(r io.Reader) (map[string]map[string]Counts, error) {
 		if !ok {
 			continue
 		}
-		if sig.Kind == KindPage && isBot(rec.UserAgent) {
+		if sig.Kind == KindPage && tracerlink.IsBotUserAgent(rec.UserAgent) {
 			continue
 		}
 		day := rec.Time.UTC().Format(dayLayout)

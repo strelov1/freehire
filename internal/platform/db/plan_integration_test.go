@@ -282,9 +282,10 @@ func TestUsageDayIsKeyedByDay(t *testing.T) {
 	}
 }
 
-// TestDeletingAUserErasesTheirUsage covers what account deletion promises. The foreign
-// keys cascade, but deletion states what it erases rather than trusting a constraint to
-// mean it — and a new account on the same address must not inherit a spent allowance.
+// TestDeletingAUserErasesTheirUsage covers what account deletion promises: the usage rows
+// go with the account, so a new account on the same address never inherits a spent
+// allowance. It drives the two explicit delete queries; the cascade account deletion
+// actually relies on is asserted end to end in handler's me_delete integration test.
 func TestDeletingAUserErasesTheirUsage(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

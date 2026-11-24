@@ -40,8 +40,9 @@ LIMIT sqlc.arg(batch_size);
 -- Targeted description rewrite shared by the per-source description-repair workers (e.g.
 -- cmd/backfill-echojobs, cmd/backfill-descriptions): sets the description and the refreshed
 -- content_hash (recomputed in Go from the row's indexed fields with the new description) so the
--- row re-indexes. Stamps updated_at so `reindex --since` also captures it. Only the description
--- and hash move; the deterministic facets are re-derived separately by cmd/backfill-derive.
+-- row re-indexes. Stamps updated_at, which keeps the row in ListJobsUpdatedAfter's window.
+-- Only the description and hash move; the deterministic facets are re-derived separately by
+-- cmd/backfill-derive.
 UPDATE jobs
 SET description  = sqlc.arg(description),
     content_hash = sqlc.arg(content_hash),
@@ -49,13 +50,13 @@ SET description  = sqlc.arg(description),
 WHERE id = sqlc.arg(id);
 
 -- name: ListJobsUpdatedAfter :many
--- Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
--- rows changed at or after the cutoff. Every write path (UpsertJob, the close
--- sweeps, SetJobEnrichment, UpdateJobDerived on a fingerprint move) stamps
--- updated_at = now(), so this
--- captures new, re-crawled, closed, and re-enriched jobs — enough to bring an
--- index current without re-pushing the whole table. Returns closed rows too, so
--- the caller deletes a freshly-closed job from the index.
+-- Incremental keyset scan: like ListJobsByIDAfter but only rows changed at or after
+-- the cutoff. Currently dormant: cmd/reindex has no --since flag, so nothing outside
+-- tests calls it. Every write path (UpsertJob, the close sweeps, SetJobEnrichment,
+-- UpdateJobDerived on a fingerprint move) stamps updated_at = now(), so this captures
+-- new, re-crawled, closed, and re-enriched jobs — enough to bring an index current
+-- without re-pushing the whole table. Returns closed rows too, so the caller deletes
+-- a freshly-closed job from the index.
 SELECT *
 FROM jobs_read
 WHERE id > sqlc.arg(after_id) AND updated_at >= sqlc.arg(since)

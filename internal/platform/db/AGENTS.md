@@ -23,9 +23,9 @@ The `internal/platform/db` package — generated sqlc code, hand-written SQL que
   `UpsertJob` uses PostgreSQL 18 `RETURNING old.closed_at` to preserve strike reset
   semantics for an expired posting that stays closed.
 - Writers that need both a posting/activity lock and a search queue entry take the
-  activity lock before the queue lock. A legacy `AFTER` bridge runs at statement end,
-  after data-modifying outbox CTEs; it cannot establish this order for them. Lock both
-  rows explicitly before queueing while legacy and activity-only writers overlap.
+  jobs tuple before the activity row, and the activity lock before the queue lock.
+  Nothing establishes this order for a writer (the legacy `AFTER` bridge that once
+  did was dropped in 0266), so lock both rows explicitly before queueing.
 - Size backfill batches by actual rows, using a stable keyset, and inspect a representative
   plan on production-sized data before shipping. Numeric ID spans are not row counts:
   `jobs.id` is sparse because conflict updates consume sequence values. Small ID spans

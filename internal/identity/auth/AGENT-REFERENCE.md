@@ -31,6 +31,8 @@ Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/
 
 OAuth sign-in (`internal/identity/auth/oauth/`) adds a provider registry (Google/GitHub/LinkedIn/Apple), each implementing the `Provider` interface. The authorization-code flow redirects to `/start` (sets CSRF state cookie), then `/callback` (verifies state, exchanges code, fetches verified email, resolves account, sets JWT cookie, 302s back to SPA). Resolution is identity-first (keyed `user_identities (provider, provider_user_id)`), then verified-email link to existing account, then new passwordless user — all in one transaction. **Never link or create by an unverified email.**
 
+A signed-in member can also **connect** a provider to the account they are in (auth v2 purpose `link`, web only, not Apple): the attempt carries the session binding like `reauth`, the callback mints a code for the BOUND user carrying the provider identity (`mobileauth.Store.MintLinkCode`), and the exchange — after the same session checks as `reauth` — inserts the identity in a serializable transaction that spends a recent-auth proof (`Store.LinkIdentity`). No email is consulted, no account is created, joined or seized, no session is issued. An identity owned by another account is refused (`409 identity_in_use`, never moved), as is a second identity of a provider the account already holds (`409 provider_already_linked`); no proof is `428`. The account's own email must be verified (`409 email_unverified`): an unverified password account may be a squatter's registration, and seizing it (`SeizeUnverifiedAccount`) does not remove identities, so a provider the squatter attached would keep signing in. The session generation is re-read under the account lock, so a logout-all that commits after the exchange check refuses the link (`401`). Before this existed, a member whose provider email differed from their account email who signed in with that provider got a second account.
+
 `internal/api/handler/oauth.go` owns the OAuth HTTP handlers.
 
 ### Browser-extension connect flow
@@ -81,5 +83,5 @@ token bridge, at the cost of per-token revocation.
 - No refresh tokens (a session is re-minted on sign-in). Revocation exists: `POST /auth/logout-all` bumps `users.token_version`. The cost is one primary-key lookup per authenticated request; `auth.TokenVersionLoader` is the seam a cache would drop into.
 - No CSRF token — only `SameSite=Lax` + same-origin defense; a CSRF token is needed only if a future need forces `SameSite=None`.
 - `SameSite=Lax` does not stop a sibling subdomain of the cookie domain (it is same-site). The API refuses every cookie-carrying POST/PUT/PATCH/DELETE whose Origin (or Referer) is not in `BrowserOrigins` (`refuseCrossOriginCookieWrites`, internal/api/handler/request_origin.go). A subdomain whose pages call the API with the cookie (employer.freehire.me) must be listed in `SERVED_HOSTS`.
-- Identity unlinking/management UI.
+- Unlinking UI: `DELETE /api/v2/auth/identities/:provider` exists, but `/my/account` only lists and connects providers.
 - Magic-link sign-in.
