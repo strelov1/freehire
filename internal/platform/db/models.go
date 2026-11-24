@@ -1690,6 +1690,8 @@ type OauthExchangeCode struct {
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
 	ConsumedAt           pgtype.Timestamptz `json:"consumed_at"`
+	LinkProvider         pgtype.Text        `json:"link_provider"`
+	LinkProviderUserID   pgtype.Text        `json:"link_provider_user_id"`
 }
 
 type OauthGrant struct {
