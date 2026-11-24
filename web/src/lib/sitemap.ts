@@ -121,6 +121,7 @@ export const STATIC_PATHS = [
   '/recruiters',
   '/features/extension',
   '/features/inbox',
+  '/features/interview-scheduling',
   '/features/referrals',
   '/features/interview-buddies',
   '/features/tailor',
