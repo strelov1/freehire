@@ -50,7 +50,7 @@ func (r DeletionRunner) Run(ctx context.Context, opt RunOptions) (DeletionStats,
 func (r DeletionRunner) run(ctx context.Context, opt RunOptions, oneWave bool) (DeletionStats, error) {
 	rn := &deletionRun{store: r.Store, deleter: r.Deleter, opt: opt}
 
-	_, err := outbox.RunBatch(ctx, claimFunc(func(ctx context.Context, batch, lease int) ([]Claimed, error) {
+	_, err := outbox.RunBatch(ctx, outbox.ClaimFunc[Claimed](func(ctx context.Context, batch, lease int) ([]Claimed, error) {
 		if oneWave && rn.stats.Claimed > 0 {
 			return nil, nil
 		}
@@ -72,13 +72,6 @@ func (r DeletionRunner) run(ctx context.Context, opt RunOptions, oneWave bool) (
 		return rn.stats, fmt.Errorf("claim deletions: %w", err)
 	}
 	return rn.stats, nil
-}
-
-// claimFunc adapts a bare Claim method to outbox.Claimer.
-type claimFunc func(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error)
-
-func (f claimFunc) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
-	return f(ctx, batch, leaseSeconds)
 }
 
 type deletionRun struct {
