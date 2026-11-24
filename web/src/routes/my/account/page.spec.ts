@@ -38,6 +38,10 @@ vi.mock('#lib/auth.svelte.js', () => ({ currentUser: () => user.current }));
 vi.mock('#lib/components/DeleteAccountButton.svelte', async () => ({
   default: (await import('./DeleteAccountButtonStub.svelte')).default,
 }));
+// Sign-in methods fetch the providers on mount and have their own spec.
+vi.mock('./SignInMethods.svelte', async () => ({
+  default: (await import('./SignInMethodsStub.svelte')).default,
+}));
 
 beforeEach(() => {
   user.current = { id: 1, email: 'a@b.test', has_password: true } as User;

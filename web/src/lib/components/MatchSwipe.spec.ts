@@ -273,6 +273,7 @@ describe('MatchSwipe', () => {
       title,
       company: 'Acme',
       url: `https://acme.test/${slug}`,
+      apply_url: `https://freehire.me/api/v1/go/${slug}?src=web`,
       skills: [] as string[],
       match: { why: ['Go'], may_not_fit: [], unknown: [] },
       ...extra,
@@ -299,10 +300,10 @@ describe('MatchSwipe', () => {
       dismissJob.mockReset();
     });
 
-    it('external Apply opens the employer, marks applied, advances and offers Undo in the toast', async () => {
+    it('external Apply goes through the click redirect, marks applied, advances and offers Undo in the toast', async () => {
       await open();
       const link = applyLink() as HTMLAnchorElement;
-      expect(link.getAttribute('href')).toBe('https://acme.test/a-job');
+      expect(link.getAttribute('href')).toBe('https://freehire.me/api/v1/go/a-job?src=web');
       expect(link.getAttribute('target')).toBe('_blank');
       await fireEvent.click(link);
       expect(markJobApplied).toHaveBeenCalledWith('a-job');

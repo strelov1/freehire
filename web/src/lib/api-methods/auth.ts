@@ -114,6 +114,16 @@ export function authApi({ call, requestData }: Http) {
     return result.recent_auth_expires_at;
   }
 
+  /** Redeem the code of a provider-link trip: the server attaches the provider identity to the
+   *  signed-in account, spending the recent-auth proof. 409 `identity_in_use` /
+   *  `provider_already_linked`, 428 without a proof. */
+  function exchangeOAuthLink(code: string, codeVerifier: string): Promise<{ provider: string }> {
+    return requestData<{ provider: string }>(
+      '/api/v2/auth/oauth/exchange',
+      jsonBody('POST', { code, code_verifier: codeVerifier }),
+    );
+  }
+
   /** The caller's connected sign-in providers. `identities` is normalized to an array
    *  here because Go marshals an empty slice as `null`, not `[]` — the declared type
    *  says array, so the one place that knows the wire makes that true rather than
@@ -143,6 +153,7 @@ export function authApi({ call, requestData }: Http) {
     confirmEmailChange,
     reauthenticatePassword,
     exchangeOAuthReauthentication,
+    exchangeOAuthLink,
     connectedIdentities,
     logoutEverywhere,
   };

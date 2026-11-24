@@ -11,9 +11,10 @@
   import { Button } from '#lib/ui/index.js';
   import ChangeEmailDialog from './ChangeEmailDialog.svelte';
   import ChangePasswordDialog from './ChangePasswordDialog.svelte';
+  import SignInMethods from './SignInMethods.svelte';
   import { messages } from './messages';
 
-  // Email, password, language and sessions. Every action is cookie-only server-side: an API
+  // Email, password, sign-in methods, language and sessions. Every action is cookie-only server-side: an API
   // key can neither change the email or password nor end a human's sessions. Language lives
   // here rather than in the profile because it is the account's, not the candidate's: it
   // switches the whole /my interface and the language the assistant answers in.
@@ -79,6 +80,8 @@
     <p role="status" class="border-t border-border p-4 text-sm text-muted-foreground">{s[notice]}</p>
   {/if}
 </section>
+
+<SignInMethods />
 
 <section class="mb-8 rounded-lg border border-border p-4">
   <AccountLanguage />
