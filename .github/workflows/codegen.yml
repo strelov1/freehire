@@ -235,10 +235,10 @@ jobs:
       # checks, and tick "Require branches to be up to date before merging".
       #
       # Until then the push to main is where a collision surfaces, and this step names the
-      # file the push added. That file is the one to fix, not the one already on main. A
-      # red run here does not hold back a deploy, so it may already have run: rename it
-      # only while it has run nowhere, otherwise allowlist the count or add a corrective
-      # migration. The script runs BEFORE the test file on purpose. GitHub runs a `run:`
+      # file the push added on the colliding number. That file is the one to fix, not the one
+      # already on main. A red run here does not hold back a deploy, so it may already have
+      # run: rename it only while it has run nowhere, otherwise raise its allowlist count.
+      # The script runs BEFORE the test file on purpose. GitHub runs a `run:`
       # block with `bash -e`, and the test file's first case asserts the live tree, so on a
       # collision it exits nonzero and everything after it is skipped: the diagnostic has
       # to come first to be printed.

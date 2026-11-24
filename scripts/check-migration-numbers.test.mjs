@@ -57,35 +57,53 @@ test('a filename without a numeric prefix fails', () => {
   assert.match(result.errors.join('\n'), /notes\.sql has no numeric prefix/);
 });
 
-// On a push to main the base is the previous tip, so the result is the file the merge
-// added and the one to rename. `git ls-tree` without -r names the `migrations` DIRECTORY,
-// which makes every file look new; this pins the recursive form. An unusable base must
-// yield an empty list rather than throw: the verdict does not depend on it.
-test('addedMigrations lists the files a base does not hold, and nothing for a bad base', (t) => {
+// On a push to main the base is the previous tip, so the result is what the merge added,
+// restricted to the numbers that failed. `git ls-tree` without -r names the `migrations`
+// DIRECTORY, which would make every file look new. An unusable base yields an empty list
+// rather than throwing: the verdict does not depend on it.
+test('addedMigrations names what a change added on the failing numbers, nothing else', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'migration-numbers-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const git = (...args) =>
-    execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    execFileSync('git', args, {
+      cwd: dir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' },
+    });
   mkdirSync(join(dir, 'migrations'));
   git('init', '-q');
   git('config', 'user.email', 't@t');
   git('config', 'user.name', 't');
+  git('config', 'core.hooksPath', '/dev/null');
+  const commit = (msg) => {
+    git('add', '-A');
+    git('commit', '-qm', msg);
+    return git('rev-parse', 'HEAD').trim();
+  };
 
-  writeFileSync(join(dir, 'migrations', '0001_init.sql'), 'select 1;');
-  git('add', '.');
-  git('commit', '-qm', 'init');
-  const base = git('rev-parse', 'HEAD').trim();
-
-  writeFileSync(join(dir, 'migrations', '0002_a.sql'), 'select 1;');
-  writeFileSync(join(dir, 'migrations', '0002_notes.txt'), 'not a migration');
+  writeFileSync(join(dir, 'migrations', '0009_a.sql'), 'select 1;');
+  writeFileSync(join(dir, 'migrations', '0009_notes.txt'), 'not a migration');
+  const base = commit('two files share 0009 at the base');
 
   const cwd = process.cwd();
   process.chdir(dir);
   try {
-    assert.deepEqual(addedMigrations(base), ['0002_a.sql']);
-    assert.deepEqual(addedMigrations(''), []);
-    assert.deepEqual(addedMigrations('0'.repeat(40)), []);
-    assert.deepEqual(addedMigrations('not-a-ref'), []);
+    // Nothing added: no file to name, whatever the failing numbers are.
+    assert.deepEqual(addedMigrations(base, new Set(['0009'])), []);
+
+    // A later change adds a colliding file AND an unrelated one. Only the colliding file
+    // is named: while a duplicate sits on main every later push fails for it, and one that
+    // merely adds an unrelated migration must not be told to rename that.
+    writeFileSync(join(dir, 'migrations', '0009_c.sql'), 'select 1;');
+    writeFileSync(join(dir, 'migrations', '0316_unrelated.sql'), 'select 1;');
+    const failing = new Set(['0009']);
+    assert.deepEqual(addedMigrations(base, failing), ['0009_c.sql']);
+
+    // An unusable base yields nothing rather than throwing.
+    assert.deepEqual(addedMigrations('', failing), []);
+    assert.deepEqual(addedMigrations('0'.repeat(40), failing), []);
+    assert.deepEqual(addedMigrations('not-a-ref', failing), []);
   } finally {
     process.chdir(cwd);
   }

@@ -160,14 +160,16 @@ export function checkMigrationNumbers(filenames, allowlist) {
 }
 
 /**
- * The migrations that exist in the working tree but not at `base` — the files this change
- * added. They are the candidates to rename; whether that is safe is not this script's to
- * say. The runner records migrations by filename, so renaming one that has already run
- * anywhere (production, a replica, a colleague's database) makes it look unapplied and it
- * runs again. The reader checks `schema_migrations` first. An unreachable base (a shallow
- * clone, a detached checkout) yields nothing; the verdict stands without it.
+ * The migrations this change ADDED on the prefixes that failed — the files the reader may
+ * have to fix. Only those, and not everything added since `base`: while a duplicate sits
+ * unresolved on main, every later push fails for it, and a push that merely adds an
+ * unrelated migration must not be told to rename that one. Whether a rename is safe is not
+ * this script's to say. The runner records migrations by filename, so renaming one that has
+ * already run anywhere (production, a replica, a colleague's database) makes it look
+ * unapplied and it runs again. The reader checks `schema_migrations` first. An unreachable
+ * base (a shallow clone, a detached checkout) yields nothing; the verdict stands without it.
  */
-export function addedMigrations(base) {
+export function addedMigrations(base, failingPrefixes) {
   if (!base) return [];
   let onBase;
   try {
@@ -179,9 +181,9 @@ export function addedMigrations(base) {
     return [];
   }
   const known = new Set(onBase.split('\n').filter(Boolean).map((f) => path.basename(f)));
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.sql') && !known.has(f))
-    .sort();
+  return readdirSync(MIGRATIONS_DIR).filter(
+    (f) => f.endsWith('.sql') && !known.has(f) && failingPrefixes.has(f.match(/^(\d+)_/)?.[1]),
+  );
 }
 
 function main() {
@@ -200,13 +202,14 @@ function main() {
   if (!ok) {
     console.error(`check-migration-numbers: ${errors.length} problem(s):`);
     for (const error of errors) console.error(`  ${error}`);
-    const added = base && addedMigrations(base);
-    if (added && added.length > 0) {
+    const failing = new Set([...errors].map((e) => /^(\d+) is used/.exec(e)?.[1]));
+    const added = addedMigrations(base, failing);
+    if (added.length > 0) {
       console.error(
-        `\nThis change added: ${added.join(', ')}.\n` +
-          'The file with that number which was already on main keeps its name: it may have\n' +
-          'run, and the runner records migrations by filename. Fix the one added here, and\n' +
-          'which fix is safe depends on whether it has run anywhere (schema_migrations):\n' +
+        `\nThis change added ${added.join(', ')}, which takes a number another file uses.\n` +
+          'The other file keeps its name: it may have run, and the runner records migrations\n' +
+          'by filename. Fix the one added here; which fix is safe depends on whether it has run\n' +
+          'anywhere (schema_migrations):\n' +
           '  not run anywhere  -> rename it to the next free number\n' +
           '  run somewhere      -> keep its filename and raise its count in\n' +
           '                       ALLOWED_DUPLICATE_COUNTS, saying why; the check stays red\n' +

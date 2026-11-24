@@ -48,7 +48,9 @@ for the added file before choosing how. Rename it to the next free number while 
 nowhere; once it has run somewhere, keep its filename and raise its count in
 `ALLOWED_DUPLICATE_COUNTS`, saying why. The check stays red until that count is raised,
 because both files remain in the tree. If the migration did something wrong, undo it in a
-new migration. On a push to main the failure names that file.
+new migration. On a push to main the failure names that file, and only it: an unrelated
+migration the same push added is not named. A pull request run passes no base and so names
+none; the verdict is the same either way.
 
 Closing the window is a repository setting, not code, and is not on yet: make `migrations`
 a required check on main and turn on "Require branches to be up to date before merging",
