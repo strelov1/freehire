@@ -383,11 +383,11 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		return jobSearchOutcome{}, fmt.Errorf("search fields cannot be enforced")
 	}
 	dropped := qFieldsIgnored
-	// The paid twin of this search runs alongside it under the same deadline. Never for a
-	// personal ranking (a match sort or a minimum skill match): that answer is one person's.
+	// The paid twin runs alongside under its own short deadline. Never for a personal ranking
+	// (match sort or minimum skill match) nor for a page too small for the slots (company OG image).
 	var adCh <-chan []sponsored.Pick
 	adPlacement := ""
-	if in.sponsored && in.match == nil && vector == nil && h.sponsoredEnabled() {
+	if in.sponsored && in.match == nil && vector == nil && limit >= sponsoredSlots && h.sponsoredEnabled() {
 		if adPlacement = sponsoredPlacement(vals, offset); adPlacement != "" {
 			adCh = h.startSponsored(ctx, params)
 		}

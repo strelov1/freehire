@@ -7,11 +7,14 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 type fakeRefunder struct {
@@ -195,11 +198,14 @@ func TestRefundPendingLeavesLegitTopupsOfAnEndedCampaign(t *testing.T) {
 	if err := svc.Approve(context.Background(), id, ownerOf(t, pool, id)); err != nil {
 		t.Fatal(err)
 	}
+	if d, err := svc.Charge(context.Background(), id, Click{Placement: PlacementSearch, VisitorHash: "v"}, time.Now()); err != nil || !d.Valid {
+		t.Fatalf("charge: %+v %v", d, err)
+	}
 	if err := svc.Transition(context.Background(), id, StatusEnded); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := svc.RefundPending(context.Background(), 10); err != nil || n != 0 || len(rf.pis) != 0 {
-		t.Fatalf("unused budget of an ended campaign stays recorded: n=%d err=%v calls=%v", n, err, rf.pis)
+		t.Fatalf("a campaign that charged a click keeps its budget recorded: n=%d err=%v calls=%v", n, err, rf.pis)
 	}
 }
 
@@ -285,8 +291,8 @@ func TestRejectOnlyFromPendingReview(t *testing.T) {
 	}
 }
 
-// A campaign that ends before any moderator approved it (its job closed, or the buyer stopped
-// it while in review) never served a click: everything paid into it goes back.
+// A campaign that ends without a single charged click (its job closed, or the buyer stopped it
+// while in review) is refunded in full.
 func TestRefundPendingReturnsTopupsOfANeverApprovedEndedCampaign(t *testing.T) {
 	pool := testdb.Pool(t)
 	id, jobID := seedCampaign(t, pool, 50, 0, StatusDraft)
@@ -303,5 +309,69 @@ func TestRefundPendingReturnsTopupsOfANeverApprovedEndedCampaign(t *testing.T) {
 	}
 	if refundedCount(t, pool, id) != 1 {
 		t.Fatal("refund not stamped")
+	}
+}
+
+// Approved after its job closed, then ended by the sweep with zero clicks: refunded too.
+func TestRefundPendingReturnsTopupsOfAnApprovedEndedCampaignWithoutClicks(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	id, jobID := seedCampaign(t, pool, 50, 0, StatusDraft)
+	rf := &fakeRefunder{}
+	svc := New(pool).WithRefunder(rf)
+	if err := svc.CreditTopup(ctx, topup(t, pool, id, "cs_h", 4000)); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Approve(ctx, id, moderator(t, pool)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.EndClosedJobs(ctx); err != nil || n != 1 {
+		t.Fatalf("EndClosedJobs = %d, %v", n, err)
+	}
+	if n, err := svc.RefundPending(ctx, 10); err != nil || n != 1 || len(rf.pis) != 1 {
+		t.Fatalf("an ended campaign with no charged click must be refunded: n=%d err=%v calls=%v", n, err, rf.pis)
+	}
+}
+
+// Deleting the owner's account must not delete what was paid: the campaign stops serving, the
+// sweep ends it, and the unspent top-up is refunded by payment intent alone.
+func TestDeletedOwnerCampaignStopsAndIsRefunded(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	id, jobID := seedCampaign(t, pool, 50, 0, StatusDraft)
+	rf := &fakeRefunder{}
+	svc := New(pool).WithRefunder(rf)
+	tu := topup(t, pool, id, "cs_o", 4000)
+	if err := svc.CreditTopup(ctx, tu); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Approve(ctx, id, moderator(t, pool)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, tu.UserID); err != nil {
+		t.Fatal(err)
+	}
+
+	var topups int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM sponsored_topups WHERE campaign_id = $1`, id).Scan(&topups); err != nil || topups != 1 {
+		t.Fatalf("top-ups after account deletion = %d, %v", topups, err)
+	}
+	if got, err := search.ServingCampaigns(ctx, db.New(pool), []int64{jobID}, time.Now()); err != nil || len(got) != 0 {
+		t.Fatalf("an owner-less campaign serves: %v %v", got, err)
+	}
+	if err := svc.CreditTopup(ctx, tu); !errors.Is(err, billing.ErrTopupInvalid) {
+		t.Fatalf("top-up for a deleted owner: %v", err)
+	}
+	if n, err := svc.EndClosedJobs(ctx); err != nil || n != 1 {
+		t.Fatalf("sweep ended %d, %v; want 1", n, err)
+	}
+	if !outboxHas(t, pool, jobID) {
+		t.Error("the job was not requeued to leave the sponsored index")
+	}
+	if n, err := svc.RefundPending(ctx, 10); err != nil || n != 1 || rf.pis[0] != "pi_cs_o" {
+		t.Fatalf("refund n=%d err=%v calls=%v", n, err, rf.pis)
 	}
 }

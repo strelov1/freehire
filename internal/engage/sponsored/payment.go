@@ -41,7 +41,7 @@ func (s *Service) CreditTopup(ctx context.Context, t billing.Topup) error {
 	var dead bool
 	err := s.inTx(ctx, func(q *db.Queries) error {
 		c, err := q.GetSponsoredCampaignForUpdate(ctx, t.CampaignID)
-		if errors.Is(err, pgx.ErrNoRows) || (err == nil && c.OwnerUserID != t.UserID) {
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && c.OwnerUserID != pgconv.Int8(&t.UserID)) {
 			return fmt.Errorf("%w: campaign %d, user %d", billing.ErrTopupInvalid, t.CampaignID, t.UserID)
 		}
 		if err != nil {

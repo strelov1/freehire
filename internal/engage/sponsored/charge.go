@@ -21,8 +21,11 @@ const DuplicateWindow = 24 * time.Hour
 type Click struct {
 	Placement   string
 	VisitorHash string
-	Bot         bool
-	RateLimited bool
+	// PrevVisitorHash is the same visitor's hash under the previous day's salt: the salt rotates
+	// at UTC midnight, and without it the 24h duplicate window would reset then.
+	PrevVisitorHash string
+	Bot             bool
+	RateLimited     bool
 }
 
 // State is the part of a locked campaign row that decides a click.

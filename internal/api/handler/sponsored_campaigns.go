@@ -170,7 +170,7 @@ func (h *sponsoredHandlers) move(ctx context.Context, idParam string, to sponsor
 	if err != nil {
 		return apigen.SponsoredCampaign{}, err
 	}
-	if err := h.svc.Transition(ctx, row.SponsoredCampaign.ID, to); err != nil {
+	if err := h.svc.OwnerTransition(ctx, row.SponsoredCampaign.ID, to); err != nil {
 		return apigen.SponsoredCampaign{}, sponsoredError(err)
 	}
 	row, err = h.queries.GetSponsoredCampaignForOwner(ctx, db.GetSponsoredCampaignForOwnerParams{ID: row.SponsoredCampaign.ID, OwnerUserID: userID})
@@ -235,7 +235,7 @@ func (h *sponsoredHandlers) ListSponsoredReview(ctx context.Context) (*apigen.Li
 		c := r.SponsoredCampaign
 		item := apigen.SponsoredReviewItem{
 			ID: c.ID, JobSlug: r.JobSlug, JobTitle: r.JobTitle, JobCompany: r.JobCompany, JobURL: r.JobUrl,
-			CpcCents: c.CpcCents, BudgetCents: c.BudgetCents, OwnerUserID: c.OwnerUserID, CreatedAt: c.CreatedAt.Time,
+			CpcCents: c.CpcCents, BudgetCents: c.BudgetCents, OwnerUserID: c.OwnerUserID.Int64, CreatedAt: c.CreatedAt.Time,
 		}
 		if n := pgconv.Int8Ptr(c.DailyCapCents); n != nil {
 			item.DailyCapCents = apigen.NewOptInt64(*n)

@@ -52,7 +52,7 @@ func (s *Service) Charge(ctx context.Context, campaignID int64, click Click, now
 			return err
 		}
 		dup, err := q.HasRecentValidSponsoredClick(ctx, db.HasRecentValidSponsoredClickParams{
-			CampaignID: campaignID, VisitorHash: click.VisitorHash,
+			CampaignID: campaignID, VisitorHashes: []string{click.VisitorHash, click.PrevVisitorHash},
 			Since: pgconv.Instant(now.Add(-DuplicateWindow)),
 		})
 		if err != nil {
@@ -99,14 +99,23 @@ func (s *Service) Charge(ctx context.Context, campaignID int64, click Click, now
 }
 
 // Transition moves a campaign to a new status if the lifecycle allows it, and queues its
-// job for re-indexing.
+// job for re-indexing. Internal use: an owner goes through OwnerTransition.
 func (s *Service) Transition(ctx context.Context, campaignID int64, to Status) error {
+	return s.move(ctx, campaignID, to, CanTransition)
+}
+
+// OwnerTransition is Transition under the owner's narrower rules (pause, resume, end).
+func (s *Service) OwnerTransition(ctx context.Context, campaignID int64, to Status) error {
+	return s.move(ctx, campaignID, to, CanOwnerTransition)
+}
+
+func (s *Service) move(ctx context.Context, campaignID int64, to Status, allowed func(from, to Status) bool) error {
 	return s.inTx(ctx, func(q *db.Queries) error {
 		c, err := q.GetSponsoredCampaignForUpdate(ctx, campaignID)
 		if err != nil {
 			return err
 		}
-		if !CanTransition(Status(c.Status), to) {
+		if !allowed(Status(c.Status), to) {
 			return fmt.Errorf("%w: %s -> %s", ErrBadTransition, c.Status, to)
 		}
 		if err := q.SetSponsoredCampaignStatus(ctx, db.SetSponsoredCampaignStatusParams{ID: campaignID, Status: string(to)}); err != nil {

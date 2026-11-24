@@ -89,12 +89,17 @@ func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
 	if jobID, err := s.queries.GetSponsoredCampaignJobID(ctx, claims.CampaignID); err != nil || jobID != claims.JobID {
 		return s.redirect(c, target)
 	}
+	// Fiber also routes HEAD here; mail scanners and link previews probe with it. Not a click.
+	if c.Method() != fiber.MethodGet {
+		return s.redirect(c, target)
+	}
 	ip, ua := c.IP(), c.Get(fiber.HeaderUserAgent)
 	click := sponsored.Click{
-		Placement:   claims.Placement,
-		VisitorHash: sponsored.VisitorHash(s.key, ip, ua, now),
-		Bot:         ua == "" || viewlog.IsBot(ua),
-		RateLimited: !s.limiter.Allow(ip, now),
+		Placement:       claims.Placement,
+		VisitorHash:     sponsored.VisitorHash(s.key, ip, ua, now),
+		PrevVisitorHash: sponsored.VisitorHash(s.key, ip, ua, now.Add(-sponsored.DuplicateWindow)),
+		Bot:             ua == "" || viewlog.IsBot(ua),
+		RateLimited:     !s.limiter.Allow(ip, now),
 	}
 	if _, err := s.charger.Charge(ctx, claims.CampaignID, click, now); err != nil && !errors.Is(err, context.Canceled) {
 		// The seeker still gets to the job.

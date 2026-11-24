@@ -5,6 +5,7 @@ package sponsored
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -116,6 +117,22 @@ func TestChargeDuplicateVisitorWithin24h(t *testing.T) {
 	}
 }
 
+// The visitor salt rotates at UTC midnight, so a click just after it carries a new hash; the
+// previous day's hash still counts for the 24h window.
+func TestChargeDuplicateAcrossUTCMidnight(t *testing.T) {
+	pool := testdb.Pool(t)
+	id, _ := seedCampaign(t, pool, 50, 1000, StatusActive)
+	svc := New(pool)
+	late := time.Date(2026, 3, 1, 23, 59, 0, 0, time.UTC)
+	if d, err := svc.Charge(context.Background(), id, Click{Placement: "search", VisitorHash: "day1"}, late); err != nil || !d.Valid {
+		t.Fatalf("first: %+v %v", d, err)
+	}
+	d, err := svc.Charge(context.Background(), id, Click{Placement: "search", VisitorHash: "day2", PrevVisitorHash: "day1"}, late.Add(2*time.Minute))
+	if err != nil || d.Valid || d.Reason != ReasonDuplicate {
+		t.Fatalf("second: %+v %v", d, err)
+	}
+}
+
 func TestTransitionAndEndForJob(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
@@ -145,6 +162,40 @@ func TestTransitionAndEndForJob(t *testing.T) {
 	}
 	if n, _ := svc.EndForJob(ctx, jobID); n != 0 {
 		t.Errorf("second EndForJob ended %d, want 0", n)
+	}
+}
+
+func statusOf(t *testing.T, pool *pgxpool.Pool, id int64) Status {
+	t.Helper()
+	var s string
+	if err := pool.QueryRow(context.Background(), `SELECT status FROM sponsored_campaigns WHERE id = $1`, id).Scan(&s); err != nil {
+		t.Fatal(err)
+	}
+	return Status(s)
+}
+
+// An owner cannot activate a campaign no moderator approved, nor one whose budget ran out.
+func TestOwnerTransitionCannotSelfApprove(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	svc := New(pool)
+	for _, from := range []Status{StatusPendingReview, StatusExhausted, StatusRejected, StatusEnded} {
+		id, _ := seedCampaign(t, pool, 50, 1000, from)
+		if err := svc.OwnerTransition(ctx, id, StatusActive); !errors.Is(err, ErrBadTransition) {
+			t.Errorf("%s -> active: err = %v, want ErrBadTransition", from, err)
+		}
+		if got := statusOf(t, pool, id); got != from {
+			t.Errorf("%s: status changed to %s", from, got)
+		}
+	}
+	id, _ := seedCampaign(t, pool, 50, 1000, StatusActive)
+	for _, to := range []Status{StatusPaused, StatusActive, StatusEnded} {
+		if err := svc.OwnerTransition(ctx, id, to); err != nil {
+			t.Fatalf("-> %s: %v", to, err)
+		}
+		if got := statusOf(t, pool, id); got != to {
+			t.Fatalf("status = %s, want %s", got, to)
+		}
 	}
 }
 

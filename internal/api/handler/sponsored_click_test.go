@@ -86,6 +86,41 @@ func TestSponsoredClickChargesAndRedirectsToTheJob(t *testing.T) {
 	}
 }
 
+// The visitor salt rotates at UTC midnight: the click also carries yesterday's hash so the 24h
+// duplicate window holds across it.
+func TestSponsoredClickCarriesThePreviousDaysHash(t *testing.T) {
+	ch := &fakeCharger{}
+	app := clickApp(ch, fakeClickQueries{job: clickJob(), campaignJob: 7})
+	getClick(t, app, clickToken(), clickUA)
+	if len(ch.calls) != 1 {
+		t.Fatalf("calls = %v", ch.calls)
+	}
+	c := ch.calls[0]
+	want := sponsored.VisitorHash(testClickKey, "0.0.0.0", clickUA, time.Now().Add(-24*time.Hour))
+	if c.PrevVisitorHash != want || c.PrevVisitorHash == c.VisitorHash {
+		t.Errorf("click = %+v, want prev %s", c, want)
+	}
+}
+
+// Only a GET is a click: link scanners and previews probe with HEAD.
+func TestSponsoredClickHeadIsNotCharged(t *testing.T) {
+	ch := &fakeCharger{}
+	app := clickApp(ch, fakeClickQueries{job: clickJob(), campaignJob: 7})
+	req := httptest.NewRequestWithContext(t.Context(), "HEAD", "/api/v1/sponsored/go/"+clickToken(), nil)
+	req.Header.Set("User-Agent", clickUA)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != fiber.StatusFound || resp.Header.Get("Location") != "https://ats.example/jobs/7?utm_source=freehire.me" {
+		t.Fatalf("got %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	if len(ch.calls) != 0 {
+		t.Fatalf("HEAD charged: %v", ch.calls)
+	}
+}
+
 func TestSponsoredClickBadTokenGoesToJobsPage(t *testing.T) {
 	ch := &fakeCharger{}
 	app := clickApp(ch, fakeClickQueries{job: clickJob(), campaignJob: 7})

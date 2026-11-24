@@ -53,7 +53,7 @@ func TestCreate(t *testing.T) {
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
-			if tc.want == nil && (c.Status != string(StatusDraft) || c.OwnerUserID != owner || c.JobID != jobID || c.CpcCents != tc.cpc) {
+			if tc.want == nil && (c.Status != string(StatusDraft) || c.OwnerUserID.Int64 != owner || c.JobID != jobID || c.CpcCents != tc.cpc) {
 				t.Fatalf("campaign = %+v", c)
 			}
 		})

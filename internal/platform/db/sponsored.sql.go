@@ -51,22 +51,22 @@ func (q *Queries) ChargeSponsoredCampaign(ctx context.Context, arg ChargeSponsor
 
 const createSponsoredCampaign = `-- name: CreateSponsoredCampaign :one
 INSERT INTO sponsored_campaigns (job_id, owner_user_id, cpc_cents, daily_cap_cents)
-VALUES ($1, $2, $3, $4)
+VALUES ($1, $3::bigint, $2, $4)
 RETURNING id, job_id, owner_user_id, status, cpc_cents, daily_cap_cents, budget_cents, spent_cents, reviewed_by, reviewed_at, reject_reason, created_at, updated_at
 `
 
 type CreateSponsoredCampaignParams struct {
 	JobID         int64       `json:"job_id"`
-	OwnerUserID   int64       `json:"owner_user_id"`
 	CpcCents      int64       `json:"cpc_cents"`
+	OwnerUserID   int64       `json:"owner_user_id"`
 	DailyCapCents pgtype.Int8 `json:"daily_cap_cents"`
 }
 
 func (q *Queries) CreateSponsoredCampaign(ctx context.Context, arg CreateSponsoredCampaignParams) (SponsoredCampaign, error) {
 	row := q.db.QueryRow(ctx, createSponsoredCampaign,
 		arg.JobID,
-		arg.OwnerUserID,
 		arg.CpcCents,
+		arg.OwnerUserID,
 		arg.DailyCapCents,
 	)
 	var i SponsoredCampaign
@@ -152,10 +152,39 @@ func (q *Queries) EndSponsoredCampaignsOfClosedJobs(ctx context.Context) (int64,
 	return result.RowsAffected(), nil
 }
 
+const endSponsoredCampaignsOfDeletedOwners = `-- name: EndSponsoredCampaignsOfDeletedOwners :many
+UPDATE sponsored_campaigns
+SET status = 'ended', updated_at = now()
+WHERE owner_user_id IS NULL AND status NOT IN ('rejected', 'ended')
+RETURNING job_id
+`
+
+// A deleted account leaves its campaigns behind (owner_user_id SET NULL) so top-ups can still be
+// refunded; they never serve, and this ends them. Returns the jobs, which leave the sponsored index.
+func (q *Queries) EndSponsoredCampaignsOfDeletedOwners(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, endSponsoredCampaignsOfDeletedOwners)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var job_id int64
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSponsoredCampaignForOwner = `-- name: GetSponsoredCampaignForOwner :one
 SELECT c.id, c.job_id, c.owner_user_id, c.status, c.cpc_cents, c.daily_cap_cents, c.budget_cents, c.spent_cents, c.reviewed_by, c.reviewed_at, c.reject_reason, c.created_at, c.updated_at, j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
 FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
-WHERE c.id = $1 AND c.owner_user_id = $2
+WHERE c.id = $1 AND c.owner_user_id = $2::bigint
 `
 
 type GetSponsoredCampaignForOwnerParams struct {
@@ -251,18 +280,18 @@ func (q *Queries) GetSponsoredDailySpent(ctx context.Context, arg GetSponsoredDa
 const hasRecentValidSponsoredClick = `-- name: HasRecentValidSponsoredClick :one
 SELECT EXISTS (
     SELECT 1 FROM sponsored_clicks
-    WHERE campaign_id = $1 AND visitor_hash = $2 AND valid AND ts > $3::timestamptz
+    WHERE campaign_id = $1 AND visitor_hash = ANY($2::text[]) AND valid AND ts > $3::timestamptz
 )
 `
 
 type HasRecentValidSponsoredClickParams struct {
-	CampaignID  int64              `json:"campaign_id"`
-	VisitorHash string             `json:"visitor_hash"`
-	Since       pgtype.Timestamptz `json:"since"`
+	CampaignID    int64              `json:"campaign_id"`
+	VisitorHashes []string           `json:"visitor_hashes"`
+	Since         pgtype.Timestamptz `json:"since"`
 }
 
 func (q *Queries) HasRecentValidSponsoredClick(ctx context.Context, arg HasRecentValidSponsoredClickParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasRecentValidSponsoredClick, arg.CampaignID, arg.VisitorHash, arg.Since)
+	row := q.db.QueryRow(ctx, hasRecentValidSponsoredClick, arg.CampaignID, arg.VisitorHashes, arg.Since)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -332,7 +361,7 @@ FROM sponsored_campaigns c
 JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL AND NOT j.is_private
 LEFT JOIN sponsored_daily d ON d.campaign_id = c.id AND d.day = $1::date
 WHERE c.job_id = ANY($2::bigint[])
-  AND c.status = 'active'
+  AND c.status = 'active' AND c.owner_user_id IS NOT NULL
   AND c.spent_cents < c.budget_cents
   AND (c.daily_cap_cents IS NULL OR COALESCE(d.spent_cents, 0) < c.daily_cap_cents)
 ORDER BY c.job_id, c.cpc_cents DESC, c.id
@@ -376,7 +405,7 @@ func (q *Queries) ListServingSponsoredCampaigns(ctx context.Context, arg ListSer
 const listSponsoredCampaignsByOwner = `-- name: ListSponsoredCampaignsByOwner :many
 SELECT c.id, c.job_id, c.owner_user_id, c.status, c.cpc_cents, c.daily_cap_cents, c.budget_cents, c.spent_cents, c.reviewed_by, c.reviewed_at, c.reject_reason, c.created_at, c.updated_at, j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
 FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
-WHERE c.owner_user_id = $1 ORDER BY c.id DESC
+WHERE c.owner_user_id = $1::bigint ORDER BY c.id DESC
 `
 
 type ListSponsoredCampaignsByOwnerRow struct {
@@ -507,7 +536,7 @@ func (q *Queries) ListSponsoredInvalidReasonsSince(ctx context.Context, arg List
 const listSponsoredReviewQueue = `-- name: ListSponsoredReviewQueue :many
 SELECT c.id, c.job_id, c.owner_user_id, c.status, c.cpc_cents, c.daily_cap_cents, c.budget_cents, c.spent_cents, c.reviewed_by, c.reviewed_at, c.reject_reason, c.created_at, c.updated_at, j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug, j.url AS job_url
 FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
-WHERE c.status = 'pending_review' ORDER BY c.updated_at, c.id
+WHERE c.status = 'pending_review' AND c.owner_user_id IS NOT NULL ORDER BY c.updated_at, c.id
 `
 
 type ListSponsoredReviewQueueRow struct {
@@ -562,7 +591,7 @@ FROM sponsored_topups t
 JOIN sponsored_campaigns c ON c.id = t.campaign_id
 WHERE t.refunded_at IS NULL
   AND t.payment_intent_id IS NOT NULL
-  AND (c.status = 'rejected' OR (c.status = 'ended' AND c.reviewed_at IS NULL) OR NOT t.credited)
+  AND (c.status = 'rejected' OR (c.status = 'ended' AND c.spent_cents = 0) OR NOT t.credited)
   AND ($1::bigint IS NULL OR t.campaign_id = $1::bigint)
 ORDER BY t.id
 LIMIT $2
@@ -580,8 +609,8 @@ type ListSponsoredTopupsToRefundRow struct {
 }
 
 // Money that must go back: every top-up of a rejected campaign, of a campaign that ended
-// before any moderator approved it (it never served a click), and any top-up that arrived for
-// a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
+// without a single charged click (spent_cents = 0, approved or not), and any top-up that arrived
+// for a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
 func (q *Queries) ListSponsoredTopupsToRefund(ctx context.Context, arg ListSponsoredTopupsToRefundParams) ([]ListSponsoredTopupsToRefundRow, error) {
 	rows, err := q.db.Query(ctx, listSponsoredTopupsToRefund, arg.CampaignID, arg.MaxRows)
 	if err != nil {

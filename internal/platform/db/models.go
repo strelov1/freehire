@@ -1981,7 +1981,7 @@ type SourceStat struct {
 type SponsoredCampaign struct {
 	ID            int64              `json:"id"`
 	JobID         int64              `json:"job_id"`
-	OwnerUserID   int64              `json:"owner_user_id"`
+	OwnerUserID   pgtype.Int8        `json:"owner_user_id"`
 	Status        string             `json:"status"`
 	CpcCents      int64              `json:"cpc_cents"`
 	DailyCapCents pgtype.Int8        `json:"daily_cap_cents"`

@@ -31,3 +31,16 @@ var transitions = map[Status][]Status{
 func CanTransition(from, to Status) bool {
 	return slices.Contains(transitions[from], to)
 }
+
+// ownerFrom lists, per target status, the statuses a campaign's owner may move it from. Narrower
+// than transitions: only a moderator approves (pending_review -> active) and only a top-up
+// reactivates an exhausted campaign, so an owner can do neither.
+var ownerFrom = map[Status][]Status{
+	StatusPaused: {StatusActive},
+	StatusActive: {StatusPaused},
+	StatusEnded:  {StatusDraft, StatusPendingPayment, StatusPendingReview, StatusActive, StatusPaused, StatusExhausted},
+}
+
+func CanOwnerTransition(from, to Status) bool {
+	return slices.Contains(ownerFrom[to], from)
+}

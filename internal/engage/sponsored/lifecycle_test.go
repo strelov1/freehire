@@ -29,6 +29,26 @@ func TestCanTransition(t *testing.T) {
 	}
 }
 
+// An owner may only pause a live campaign, resume a paused one and end one that has not ended:
+// activating anything else (pending_review, exhausted) is the moderator's or a top-up's job.
+func TestCanOwnerTransition(t *testing.T) {
+	ok := map[[2]Status]bool{
+		{StatusActive, StatusPaused}: true,
+		{StatusPaused, StatusActive}: true,
+	}
+	for _, from := range []Status{StatusDraft, StatusPendingPayment, StatusPendingReview, StatusActive, StatusPaused, StatusExhausted} {
+		ok[[2]Status{from, StatusEnded}] = true
+	}
+	all := []Status{StatusDraft, StatusPendingPayment, StatusPendingReview, StatusActive, StatusPaused, StatusExhausted, StatusRejected, StatusEnded}
+	for _, from := range all {
+		for _, to := range all {
+			if got := CanOwnerTransition(from, to); got != ok[[2]Status{from, to}] {
+				t.Errorf("CanOwnerTransition(%s -> %s) = %v, want %v", from, to, got, !got)
+			}
+		}
+	}
+}
+
 func i64(v int64) *int64 { return &v }
 
 func TestDecide(t *testing.T) {

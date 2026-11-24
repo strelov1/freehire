@@ -127,6 +127,13 @@ func TestSponsoredCampaignsAuthorizationAndFlow(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE sponsored_campaigns SET status = 'pending_review', budget_cents = 5000`); err != nil {
 		t.Fatal(err)
 	}
+	// The owner cannot approve their own campaign by resuming it.
+	st, body = do(owner, "POST", path+"/resume", "")
+	want(st, body, 409)
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT status FROM sponsored_campaigns`).Scan(&status); err != nil || status != "pending_review" {
+		t.Fatalf("status after refused resume = %q, %v", status, err)
+	}
 	st, body = do(mod, "GET", "/api/v1/sponsored/review", "")
 	want(st, body, 200)
 	if !strings.Contains(body, `"owner_user_id"`) || strings.Contains(body, "owner@example.test") {

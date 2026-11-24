@@ -18,6 +18,10 @@ import (
 // sponsoredSlots is how many paid hits one page carries at most.
 const sponsoredSlots = 2
 
+// sponsoredLookupTimeout bounds the sponsored lookup: the organic answer waits for it, so a slow
+// Meilisearch or database costs a page at most this long and it goes out without ads.
+const sponsoredLookupTimeout = 400 * time.Millisecond
+
 // sponsoredSearchSlots are the final indexes the paid hits take in the page: the first and the
 // sixth card in the feed, or both pinned at the top of a company page.
 var (
@@ -55,6 +59,8 @@ func sponsoredPlacement(vals url.Values, offset int) string {
 func (h *searchHandlers) startSponsored(ctx context.Context, params search.SearchParams) <-chan []sponsored.Pick {
 	out := make(chan []sponsored.Pick, 1)
 	go func() {
+		ctx, cancel := context.WithTimeout(ctx, sponsoredLookupTimeout)
+		defer cancel()
 		picks, err := sponsored.Find(ctx, h.search, h.serving, params, sponsoredSlots, time.Now())
 		if err != nil {
 			// The organic answer is never failed for an ad.

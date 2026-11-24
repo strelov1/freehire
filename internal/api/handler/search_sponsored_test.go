@@ -21,12 +21,18 @@ import (
 type adSearcher struct {
 	organic, paid []search.JobDocument
 	paidErr       error
+	paidDelay     time.Duration // the paid lookup waits this long, or until its ctx ends
 	paidCalls     int
 	paidParams    search.SearchParams
 }
 
-func (f *adSearcher) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
+func (f *adSearcher) Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error) {
 	if strings.Contains(fmt.Sprint(p.Filter), "sponsored = true") {
+		select {
+		case <-time.After(f.paidDelay):
+		case <-ctx.Done():
+			return search.SearchResult{}, ctx.Err()
+		}
 		f.paidCalls++
 		f.paidParams = p
 		return search.SearchResult{Hits: f.paid}, f.paidErr
@@ -133,6 +139,8 @@ func TestSearchJobsNoSponsored(t *testing.T) {
 		{"unfiltered feed", "/api/v1/jobs/search", testClickKey},
 		{"later page", "/api/v1/jobs/search?q=go&offset=20", testClickKey},
 		{"no click key", "/api/v1/jobs/search?q=go", nil},
+		// The company OG image asks for one hit; a page that small has no room for paid slots.
+		{"page smaller than the slots", "/api/v1/jobs/search?company_slug=co&limit=1", testClickKey},
 	}
 	for _, c := range cases {
 		s := &adSearcher{organic: adDocs(1, 2), paid: adDocs(50)}
@@ -148,6 +156,20 @@ func TestSearchJobsDegradesWhenSponsoredFails(t *testing.T) {
 	s := &adSearcher{organic: adDocs(1, 2), paid: adDocs(50), paidErr: errors.New("meili timeout")}
 	app := adApp(s, adServing{50: 500}, testClickKey, nil)
 	status, body := doGet(t, app, "/api/v1/jobs/search?q=go")
+	if status != 200 || fmt.Sprint(adSlugs(body)) != "[job-1 job-2]" {
+		t.Fatalf("status=%d slugs=%v", status, adSlugs(body))
+	}
+}
+
+// A slow sponsored lookup costs the organic answer at most sponsoredLookupTimeout.
+func TestSearchJobsDoesNotWaitLongForSlowSponsored(t *testing.T) {
+	s := &adSearcher{organic: adDocs(1, 2), paid: adDocs(50), paidDelay: 10 * time.Second}
+	app := adApp(s, adServing{50: 500}, testClickKey, nil)
+	start := time.Now()
+	status, body := doGet(t, app, "/api/v1/jobs/search?q=go")
+	if took := time.Since(start); took > sponsoredLookupTimeout+time.Second {
+		t.Fatalf("search took %v, want about %v", took, sponsoredLookupTimeout)
+	}
 	if status != 200 || fmt.Sprint(adSlugs(body)) != "[job-1 job-2]" {
 		t.Fatalf("status=%d slugs=%v", status, adSlugs(body))
 	}

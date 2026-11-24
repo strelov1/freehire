@@ -1,6 +1,6 @@
 -- name: CreateSponsoredCampaign :one
 INSERT INTO sponsored_campaigns (job_id, owner_user_id, cpc_cents, daily_cap_cents)
-VALUES ($1, $2, $3, sqlc.narg(daily_cap_cents))
+VALUES ($1, sqlc.arg(owner_user_id)::bigint, $2, sqlc.narg(daily_cap_cents))
 RETURNING *;
 
 -- name: GetSponsoredCampaignForUpdate :one
@@ -31,7 +31,7 @@ RETURNING id;
 -- name: HasRecentValidSponsoredClick :one
 SELECT EXISTS (
     SELECT 1 FROM sponsored_clicks
-    WHERE campaign_id = $1 AND visitor_hash = $2 AND valid AND ts > sqlc.arg(since)::timestamptz
+    WHERE campaign_id = $1 AND visitor_hash = ANY(sqlc.arg(visitor_hashes)::text[]) AND valid AND ts > sqlc.arg(since)::timestamptz
 );
 
 -- name: InsertSponsoredClick :exec
@@ -53,18 +53,18 @@ SET impressions    = sponsored_daily.impressions    + EXCLUDED.impressions,
 -- name: ListSponsoredCampaignsByOwner :many
 SELECT sqlc.embed(c), j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
 FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
-WHERE c.owner_user_id = $1 ORDER BY c.id DESC;
+WHERE c.owner_user_id = sqlc.arg(owner_user_id)::bigint ORDER BY c.id DESC;
 
 -- name: GetSponsoredCampaignForOwner :one
 -- Owner-scoped: another user's id finds nothing, so it cannot be told from a missing one.
 SELECT sqlc.embed(c), j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug
 FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
-WHERE c.id = $1 AND c.owner_user_id = $2;
+WHERE c.id = sqlc.arg(id) AND c.owner_user_id = sqlc.arg(owner_user_id)::bigint;
 
 -- name: ListSponsoredReviewQueue :many
 SELECT sqlc.embed(c), j.title AS job_title, j.company AS job_company, j.public_slug AS job_slug, j.url AS job_url
 FROM sponsored_campaigns c JOIN jobs j ON j.id = c.job_id
-WHERE c.status = 'pending_review' ORDER BY c.updated_at, c.id;
+WHERE c.status = 'pending_review' AND c.owner_user_id IS NOT NULL ORDER BY c.updated_at, c.id;
 
 -- name: ListSponsoredDailySince :many
 SELECT day, impressions, valid_clicks, invalid_clicks, spent_cents
@@ -97,14 +97,14 @@ WHERE id = $1;
 
 -- name: ListSponsoredTopupsToRefund :many
 -- Money that must go back: every top-up of a rejected campaign, of a campaign that ended
--- before any moderator approved it (it never served a click), and any top-up that arrived for
--- a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
+-- without a single charged click (spent_cents = 0, approved or not), and any top-up that arrived
+-- for a campaign that could no longer serve (credited = false). A NULL campaign_id scans all.
 SELECT t.id, t.campaign_id, t.payment_intent_id
 FROM sponsored_topups t
 JOIN sponsored_campaigns c ON c.id = t.campaign_id
 WHERE t.refunded_at IS NULL
   AND t.payment_intent_id IS NOT NULL
-  AND (c.status = 'rejected' OR (c.status = 'ended' AND c.reviewed_at IS NULL) OR NOT t.credited)
+  AND (c.status = 'rejected' OR (c.status = 'ended' AND c.spent_cents = 0) OR NOT t.credited)
   AND (sqlc.narg(campaign_id)::bigint IS NULL OR t.campaign_id = sqlc.narg(campaign_id)::bigint)
 ORDER BY t.id
 LIMIT sqlc.arg(max_rows);
@@ -122,7 +122,7 @@ FROM sponsored_campaigns c
 JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL AND NOT j.is_private
 LEFT JOIN sponsored_daily d ON d.campaign_id = c.id AND d.day = sqlc.arg(today)::date
 WHERE c.job_id = ANY(sqlc.arg(job_ids)::bigint[])
-  AND c.status = 'active'
+  AND c.status = 'active' AND c.owner_user_id IS NOT NULL
   AND c.spent_cents < c.budget_cents
   AND (c.daily_cap_cents IS NULL OR COALESCE(d.spent_cents, 0) < c.daily_cap_cents)
 ORDER BY c.job_id, c.cpc_cents DESC, c.id;
@@ -136,6 +136,14 @@ SET status = 'ended', updated_at = now()
 FROM jobs j
 WHERE j.id = c.job_id AND j.closed_at IS NOT NULL
   AND c.status NOT IN ('rejected', 'ended');
+
+-- name: EndSponsoredCampaignsOfDeletedOwners :many
+-- A deleted account leaves its campaigns behind (owner_user_id SET NULL) so top-ups can still be
+-- refunded; they never serve, and this ends them. Returns the jobs, which leave the sponsored index.
+UPDATE sponsored_campaigns
+SET status = 'ended', updated_at = now()
+WHERE owner_user_id IS NULL AND status NOT IN ('rejected', 'ended')
+RETURNING job_id;
 
 -- name: RequeueSponsoredDailyCapJobs :execrows
 -- A daily cap resets at UTC midnight, but nothing writes the job then, so a job whose document
