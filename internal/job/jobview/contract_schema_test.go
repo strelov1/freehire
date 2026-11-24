@@ -62,6 +62,7 @@ func TestJobSchemaCoversWireShape(t *testing.T) {
 		{"JobCard", reflect.TypeOf(Card{}), nil, "TrackedJob.job"},
 		// The nested objects are served inside Job, so they are part of the same promise.
 		{"JobEnrichment", reflect.TypeOf(enrich.Enrichment{}), []string{"work_mode", "regions", "countries", "cities", "skills"}, "Job.enrichment"},
+		{"JobRequirement", reflect.TypeOf(enrich.Requirement{}), nil, "JobEnrichment.requirements"},
 		{"JobReality", reflect.TypeOf(Reality{}), nil, "Job.reality"},
 		{"JobGhost", reflect.TypeOf(Ghost{}), nil, "Job.ghost"},
 	} {
