@@ -254,3 +254,44 @@ func TestRecruiteeFetchOneSidedSalaryStillCounts(t *testing.T) {
 		t.Errorf("SalaryMax = %v, want 70000", j.SalaryMax)
 	}
 }
+
+// The offer states its department and employment terms; the schedule prefix of the code
+// decides the type, and a code that says only how long the role lasts states none.
+func TestRecruiteeFetchReadsDepartmentAndEmploymentType(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"offers": [
+			{"id": 1, "title": "Product Owner", "careers_url": "https://acme.recruitee.com/o/po",
+			 "description": "<p>Own it.</p>", "department": " Product ", "employment_type_code": "fulltime_fixed_term"},
+			{"id": 2, "title": "Cashier", "careers_url": "https://acme.recruitee.com/o/cashier",
+			 "description": "<p>Serve.</p>", "employment_type_code": "parttime_minijob"},
+			{"id": 3, "title": "Seasonal Help", "careers_url": "https://acme.recruitee.com/o/help",
+			 "description": "<p>Help.</p>", "employment_type_code": "temporary"},
+			{"id": 4, "title": "Apprentice", "careers_url": "https://acme.recruitee.com/o/apprentice",
+			 "description": "<p>Learn.</p>", "employment_type_code": "apprenticeship"},
+			{"id": 5, "title": "Freelance Editor", "careers_url": "https://acme.recruitee.com/o/editor",
+			 "description": "<p>Edit.</p>", "employment_type_code": "freelance"}
+		]
+	}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), kit.CompanyEntry{
+		Company: "Acme", Provider: "recruitee", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	want := map[string][2]string{
+		"1": {"full_time", "Product"},
+		"2": {"part_time", ""},
+		"3": {"", ""},
+		"4": {"internship", ""},
+		"5": {"contract", ""},
+	}
+	if len(jobs) != len(want) {
+		t.Fatalf("len(jobs) = %d, want %d", len(jobs), len(want))
+	}
+	for _, j := range jobs {
+		if got := [2]string{j.EmploymentType, j.Team}; got != want[j.ExternalID] {
+			t.Errorf("offer %s: employment/team = %q, want %q", j.ExternalID, got, want[j.ExternalID])
+		}
+	}
+}
