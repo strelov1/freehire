@@ -291,6 +291,14 @@ export interface Job {
    * jobs row: the search-index writers and the detail endpoint attach it from apply_forms.
    */
   apply_questions?: number /* int */;
+  /**
+   * Sponsored marks a search hit placed as a paid slot (never an organic one), and
+   * SponsoredURL is the click-tracking redirect the "Sponsored" card must link to
+   * (/api/v1/sponsored/go/<token>); URL stays the organic link for crawlers. Both are set
+   * by the search handler only, never by FromRow or the index.
+   */
+  sponsored?: boolean;
+  sponsored_url?: string;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;

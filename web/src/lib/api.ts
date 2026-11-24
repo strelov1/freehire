@@ -33,6 +33,7 @@ import { feedbackApi } from './api-methods/feedback';
 import { emailPrefsApi } from './api-methods/email-prefs';
 import { onboardingApi } from './api-methods/onboarding';
 import { bookingApi } from './api-methods/booking';
+import { sponsoredApi } from './api-methods/sponsored';
 
 export type {
   Slice,
@@ -169,6 +170,7 @@ export function createApi(
     ...emailPrefsApi(http),
     ...onboardingApi(http),
     ...bookingApi(http),
+    ...sponsoredApi(http),
     openCoverLetterStream,
   };
 }

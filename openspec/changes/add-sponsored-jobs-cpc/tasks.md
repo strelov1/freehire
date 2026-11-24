@@ -50,7 +50,7 @@
 - [x] 4.3 Impression counting (batched upsert into `sponsored_daily`)
 - [x] 4.4 Alert email: one sponsored job per subscription query, with label and redirect link;
       template test
-- [ ] 4.5 Company page: pinned sponsored jobs
+- [x] 4.5 Company page: pinned sponsored jobs
       - backend done: the company page's own `searchJobs` call (`company_slug=<slug>`, offset 0)
         gets its eligible sponsored jobs pinned first (`placement=company`); each carries
         `sponsored: true` and `sponsored_url`
@@ -75,12 +75,12 @@
 
 ## 7. Web
 
-- [ ] 7.1 "Promote this job" on the job page: form for CPC, budget and daily cap, then
+- [x] 7.1 "Promote this job" on the job page: form for CPC, budget and daily cap, then
       redirect to checkout
-- [ ] 7.2 `/my/sponsored`: campaigns, status, per-day impressions, clicks, invalid clicks by
+- [x] 7.2 `/my/sponsored`: campaigns, status, per-day impressions, clicks, invalid clicks by
       reason, spend, top-up
-- [ ] 7.3 Moderator queue page
-- [ ] 7.4 "Sponsored" label in search results and on the company page (accessible text, not
+- [x] 7.3 Moderator queue page
+- [x] 7.4 "Sponsored" label in search results and on the company page (accessible text, not
       colour alone)
 
 ## 8. Verification

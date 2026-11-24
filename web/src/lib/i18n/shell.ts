@@ -32,6 +32,7 @@ export const messages = defineMessages(
       '/my/contributions': 'Contributions',
       '/my/employer': 'Company profile',
       '/my/employer/vacancies': 'Vacancies',
+      '/my/sponsored': 'Sponsored jobs',
       '/my/plan': 'Plan',
       '/my/account': 'Account',
     },
@@ -90,6 +91,7 @@ export const messages = defineMessages(
         '/my/contributions': 'Вклад',
         '/my/employer': 'Профиль компании',
         '/my/employer/vacancies': 'Вакансии',
+        '/my/sponsored': 'Продвижение вакансий',
         '/my/plan': 'Тариф',
         // "Пригласить друга" and not "Рефералы": that word is taken by the
         // employee-referral marketplace above, and two sections sharing a name

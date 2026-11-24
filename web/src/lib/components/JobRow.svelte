@@ -109,6 +109,9 @@
   // `jobview.Job` carries that flag, like `url`.
   // A closed posting takes no applications, so it offers no Apply at all.
   const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);
+  // A paid slot (search hits only): its links go through the click-tracking redirect so the click is
+  // counted and charged, and carry `rel="sponsored"`. Without a redirect URL it is just an organic card.
+  const sponsoredUrl = $derived('sponsored_url' in job && job.sponsored ? (job.sponsored_url ?? null) : null);
   const directApply = $derived('direct_apply' in job && job.direct_apply === true && !job.closed_at);
   // The freshness badge, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
@@ -319,10 +322,12 @@
         hideCompany && touchActions && 'pointer-coarse:pr-30',
       ]}
     >
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- a sponsored card links to the API's click redirect, not a route -->
       <a
-        href={resolve('/jobs/[slug]', { slug: job.public_slug })}
+        href={sponsoredUrl ?? resolve('/jobs/[slug]', { slug: job.public_slug })}
         target={newTab ? '_blank' : undefined}
-        rel={newTab ? 'noopener' : undefined}
+        rel={sponsoredUrl ? 'sponsored nofollow' + (newTab ? ' noopener' : '') : newTab ? 'noopener' : undefined}
+        data-sveltekit-reload={sponsoredUrl ? '' : undefined}
         aria-label={linkName}
         aria-describedby={summary ? summaryId : undefined}
         title={linkTooltip}
@@ -335,6 +340,7 @@
              clips its rows to a rounded container. -->
         <span class={compact ? 'line-clamp-1' : 'line-clamp-2'}>{job.title}</span>
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     </h3>
 
     <!-- Signal row: reality chip + the region/employment facets, grouped under the
@@ -342,9 +348,9 @@
     <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-    {#if reality || freshness.length > 0 || metaFacts.length > 0 || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
+    {#if sponsoredUrl || reality || freshness.length > 0 || metaFacts.length > 0 || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions || salary || (hideCompany && (posted || views > 0 || isViewed || job.application_deadline)) || touchPosted}
       <div class="mt-2 flex flex-wrap items-center gap-1.5">
-        <JobRowBadges {job} {directApply} {appliedToCompany} {ghost} {reality} {freshness} />
+        <JobRowBadges {job} sponsored={!!sponsoredUrl} {directApply} {appliedToCompany} {ghost} {reality} {freshness} />
         <!-- The role's facets, then the pay and the cost of applying, as one line of quiet
            text joined by dots rather than a row of outlined chips: the skills below are
            chips already, and two rows of identical outlines made every card noisy.
@@ -441,7 +447,8 @@
       slug={job.public_slug}
       title={job.title}
       {directApply}
-      applyUrl={applyJob?.url ?? null}
+      applyUrl={sponsoredUrl ?? applyJob?.url ?? null}
+      sponsored={!!sponsoredUrl}
       {onApplyClick}
       onHide={onHide ? actions.hide : undefined}
       hiding={actions.hiding}
@@ -465,7 +472,7 @@
   <JobRowApplyGate
     show={showApplyGate && !!applyJob}
     title={job.title}
-    url={applyJob?.url ?? ''}
+    url={sponsoredUrl ?? applyJob?.url ?? ''}
     onclose={() => (showApplyGate = false)}
   />
 </div>
