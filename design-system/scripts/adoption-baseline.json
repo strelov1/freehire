@@ -1,7 +1,7 @@
 {
   "Alert": 3,
   "Avatar": 5,
-  "Badge": 37,
+  "Badge": 38,
   "BrandMark": 2,
   "Breadcrumbs": 6,
   "Button": 179,
@@ -9,7 +9,7 @@
   "Chip": 21,
   "ConfirmDialog": 28,
   "CountryFlag": 17,
-  "Dialog": 17,
+  "Dialog": 18,
   "EmptyState": 9,
   "EntityLogo": 35,
   "FormField": 11,
