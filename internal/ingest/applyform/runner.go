@@ -121,7 +121,10 @@ func (s RunStats) Degraded() bool {
 // nothing else.
 func Run(ctx context.Context, s Store, fetchers map[string]Fetcher, opts RunOptions) (RunStats, error) {
 	rn := &run{store: s, fetchers: fetchers, opts: opts, throttled: &throttle{}}
-	result, err := outbox.RunPool(ctx, &cancelAwareClaimer{store: s, throttled: rn.throttled}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Claimer: outbox.ClaimFunc[Claimed](
+		func(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
+			return s.Claim(ctx, batch, leaseSeconds, rn.throttled.list())
+		})}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,
@@ -138,39 +141,6 @@ func Run(ctx context.Context, s Store, fetchers map[string]Fetcher, opts RunOpti
 		return stats, fmt.Errorf("claim apply-form captures: %w", err)
 	}
 	return stats, nil
-}
-
-// cancelAwareClaimer adapts Store to outbox.Claimer, checking ctx.Err() before every
-// claim AFTER the first. A context cancellation shows up as every capture in a wave
-// failing, so stopping here — rather than letting the next claim attempt or per-item
-// fetch surface the cancellation as an ordinary error — keeps a cancelled run from
-// burning the remaining attempts of a large backlog on a shutdown, matching the
-// original behavior's post-wave ctx.Err() check (an empty claim is outbox.RunPool's
-// ordinary clean-stop path, so this reproduces it without RunPool needing to know
-// about cancellation).
-//
-// The first call is deliberately NOT guarded: the original loop called Claim
-// unconditionally before ever checking ctx, so an already-cancelled ctx at the very
-// start of Run() still made one real claim attempt (surfacing as a claim error if the
-// store's own call respects the cancellation) rather than a silent zero-stats no-op.
-// Guarding every call uniformly — including the first — would swap that visible
-// failure signal for a clean-looking empty-queue run, indistinguishable from a
-// healthy drain; found by code review, not by design.
-//
-// It also passes the providers throttled so far, so a wave never claims what this run has
-// already been told to leave alone.
-type cancelAwareClaimer struct {
-	store     Store
-	throttled *throttle
-	calls     int
-}
-
-func (c *cancelAwareClaimer) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
-	if c.calls > 0 && ctx.Err() != nil {
-		return nil, nil
-	}
-	c.calls++
-	return c.store.Claim(ctx, batch, leaseSeconds, c.throttled.list())
 }
 
 // run carries one Run's dependencies and options so process uses the receiver instead

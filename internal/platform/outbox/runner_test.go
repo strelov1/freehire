@@ -163,11 +163,117 @@ func TestRunPool_ConcurrencyOneProcessesInStrictSubmissionOrder(t *testing.T) {
 	}
 }
 
-// Runner has no built-in context-cancellation handling (see the Claimer doc comment
-// for why); a Claimer that wants a clean stop on cancellation returns an empty batch,
-// which this test's claim-until-empty contract already covers generically —
-// TestRunPool_ProcessesAllItemsUntilClaimEmpty exercises the exact same path a
-// cancellation-aware Claimer would take.
+// StopOnCancel is the one cancel-aware Claimer every wave-loop worker that wants a clean stop
+// on SIGTERM wraps its store in. The loops themselves stay cancellation-agnostic (see the
+// Claimer doc comment), so the contract lives here and is tested here.
+
+// A cancelled run stops at the next wave boundary instead of working through the backlog
+// and spending every entry's attempt budget on a shutdown.
+func TestStopOnCancel_StopsAtTheNextWaveBoundaryOnceCancelled(t *testing.T) {
+	inner := &fakeClaimer{waves: [][]int{{1}, {2}, {3}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	process := func(_ context.Context, _ int) Outcome {
+		cancel() // SIGTERM lands mid-wave
+		return Succeeded
+	}
+
+	stats, err := RunPool(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, process)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Succeeded != 1 {
+		t.Errorf("Succeeded = %d, want 1 (the claimed wave finishes, then the run stops)", stats.Succeeded)
+	}
+	if inner.calls != 1 {
+		t.Errorf("inner Claim calls = %d, want 1 (no claim is made after cancellation)", inner.calls)
+	}
+}
+
+// The first claim is never guarded: a run that starts already cancelled still makes one
+// real attempt, so a shutdown-at-startup shows up as the store's own claim error rather
+// than a silent empty run that reads as a drained queue.
+func TestStopOnCancel_TheFirstClaimIsNeverGuarded(t *testing.T) {
+	inner := &fakeClaimer{waves: [][]int{{1, 2}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	stats, err := RunPool(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 2, LeaseSeconds: 60}, func(context.Context, int) Outcome {
+		return Succeeded
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if inner.calls != 1 {
+		t.Errorf("inner Claim calls = %d, want 1 (the unguarded first claim)", inner.calls)
+	}
+	if stats.Succeeded != 2 {
+		t.Errorf("Succeeded = %d, want 2 (the first wave is fully processed)", stats.Succeeded)
+	}
+}
+
+// RunBatch takes the same wrapper; a cancelled removal or index wave must not be claimed.
+func TestStopOnCancel_RunBatchStopsToo(t *testing.T) {
+	inner := &fakeClaimer{waves: [][]int{{1}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls := 0
+	processBatch := func(_ context.Context, items []int) (Stats, error) {
+		calls++
+		return Stats{Succeeded: len(items)}, nil
+	}
+
+	stats, err := RunBatch(ctx, &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, processBatch, nil)
+	if err != nil || calls != 1 || stats.Succeeded != 1 || inner.calls != 1 {
+		t.Fatalf("RunBatch = (%+v, %v) with %d batch calls and %d claims, want one unguarded wave then a stop", stats, err, calls, inner.calls)
+	}
+}
+
+// An uncancelled run is untouched: every wave is claimed and passed through verbatim.
+func TestStopOnCancel_IsTransparentWhileCtxIsLive(t *testing.T) {
+	inner := &fakeClaimer{waves: [][]int{{1, 2}, {3}}}
+	claimer := &StopOnCancel[int]{Claimer: inner}
+
+	stats, err := RunPool(context.Background(), claimer, RunOptions{BatchSize: 2, LeaseSeconds: 60}, func(context.Context, int) Outcome {
+		return Succeeded
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Succeeded != 3 || inner.calls != 3 {
+		t.Errorf("Succeeded = %d, inner Claim calls = %d, want 3 and 3 (two waves plus the empty one)", stats.Succeeded, inner.calls)
+	}
+	if len(inner.requestedBatch) != 3 || inner.requestedBatch[0] != 2 {
+		t.Errorf("requestedBatch = %v, want the batch size passed through unchanged", inner.requestedBatch)
+	}
+}
+
+// A claim error is the queue being unusable and must still abort the run, not read as a stop.
+func TestStopOnCancel_PassesAClaimErrorThrough(t *testing.T) {
+	wantErr := errors.New("pool unreachable")
+	inner := &fakeClaimer{errOnCall: 1, errAfter: wantErr}
+
+	_, err := RunPool(context.Background(), &StopOnCancel[int]{Claimer: inner}, RunOptions{BatchSize: 1, LeaseSeconds: 60}, func(context.Context, int) Outcome {
+		return Succeeded
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+}
+
+func TestClaimFunc_AdaptsABareClaimFunction(t *testing.T) {
+	var gotBatch, gotLease int
+	var f ClaimFunc[int] = func(_ context.Context, batch, leaseSeconds int) ([]int, error) {
+		gotBatch, gotLease = batch, leaseSeconds
+		return nil, nil
+	}
+
+	if _, err := f.Claim(context.Background(), 7, 42); err != nil {
+		t.Fatalf("Claim: %v", err)
+	}
+	if gotBatch != 7 || gotLease != 42 {
+		t.Errorf("Claim passed (batch, lease) = (%d, %d), want (7, 42)", gotBatch, gotLease)
+	}
+}
 
 func TestRunPool_AbortsRunOnClaimError(t *testing.T) {
 	wantErr := errors.New("pool unreachable")

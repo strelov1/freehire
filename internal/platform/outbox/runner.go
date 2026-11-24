@@ -38,10 +38,40 @@ type Stats struct {
 //
 // Deliberately absent: Runner has no built-in context-cancellation early-exit, since callers
 // differ in what a cancelled ctx should return on SIGTERM. A caller that wants early-exit
-// checks ctx.Err() in its own Claim wrapper and returns (nil, nil); Runner's normal
-// empty-batch stop then does the rest.
+// wraps its claimer in StopOnCancel, which returns the empty batch that is the ordinary stop.
 type Claimer[C any] interface {
 	Claim(ctx context.Context, batch, leaseSeconds int) ([]C, error)
+}
+
+// ClaimFunc adapts a bare Claim function to Claimer.
+type ClaimFunc[C any] func(ctx context.Context, batch, leaseSeconds int) ([]C, error)
+
+// Claim calls f.
+func (f ClaimFunc[C]) Claim(ctx context.Context, batch, leaseSeconds int) ([]C, error) {
+	return f(ctx, batch, leaseSeconds)
+}
+
+// StopOnCancel wraps a Claimer so a cancelled ctx ends the run at the next wave boundary
+// instead of burning the backlog's attempts on a shutdown: an empty batch is RunPool's and
+// RunBatch's ordinary clean stop, so neither loop needs to know about cancellation.
+//
+// The first claim is deliberately NOT guarded. The loops these callers replaced never
+// checked ctx before their first claim, only between waves, so a run that starts already
+// cancelled still makes one real claim attempt. That surfaces as a claim error when the
+// store respects the cancellation; guarding it would turn a visible failure into a
+// clean-looking empty run, indistinguishable from a drained queue.
+type StopOnCancel[C any] struct {
+	Claimer[C]
+	calls int
+}
+
+// Claim returns (nil, nil) once ctx is cancelled, from the second call on.
+func (s *StopOnCancel[C]) Claim(ctx context.Context, batch, leaseSeconds int) ([]C, error) {
+	if s.calls > 0 && ctx.Err() != nil {
+		return nil, nil //nolint:nilerr // cancellation is the clean stop, not a failed claim
+	}
+	s.calls++
+	return s.Claimer.Claim(ctx, batch, leaseSeconds)
 }
 
 // RunOptions are the per-run knobs. MaxAttempts and per-call timeouts stay inside each
