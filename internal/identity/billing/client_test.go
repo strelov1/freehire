@@ -409,3 +409,25 @@ func TestClientRefundPaymentIntent(t *testing.T) {
 		t.Errorf("%s %s key=%q form=%v", method, path, idem, form)
 	}
 }
+
+// A payment already refunded by hand in the dashboard is the outcome we wanted, not a failure:
+// treating it as one would retry it every reconciler pass forever.
+func TestClientRefundPaymentIntentAlreadyRefunded(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"charge_already_refunded","message":"Charge ch_1 has already been refunded.","type":"invalid_request_error"}}`))
+	})
+	if err := c.refundPaymentIntent(context.Background(), "pi_9", "sponsored-refund-3"); err != nil {
+		t.Fatalf("already refunded must succeed, got %v", err)
+	}
+}
+
+func TestClientRefundPaymentIntentOtherErrorFails(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"resource_missing","type":"invalid_request_error"}}`))
+	})
+	if err := c.refundPaymentIntent(context.Background(), "pi_9", "k"); err == nil {
+		t.Fatal("a refund the provider refused must be an error")
+	}
+}

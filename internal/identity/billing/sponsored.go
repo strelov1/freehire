@@ -168,7 +168,8 @@ func (c *client) checkoutSession(ctx context.Context, id string) (checkoutSessio
 	return out, err
 }
 
-// refundPaymentIntent refunds a payment in full. A refund the provider reports failed is an error.
+// refundPaymentIntent refunds a payment in full. A refund the provider reports failed is an error;
+// one it reports already done is not.
 func (c *client) refundPaymentIntent(ctx context.Context, paymentIntentID, idempotencyKey string) error {
 	form := url.Values{}
 	form.Set("payment_intent", paymentIntentID)
@@ -176,6 +177,12 @@ func (c *client) refundPaymentIntent(ctx context.Context, paymentIntentID, idemp
 		Status string `json:"status"`
 	}
 	if err := c.do(ctx, http.MethodPost, "/refunds", form, idempotencyKey, &out); err != nil {
+		// Already refunded (by hand in the dashboard, or under another key) is the outcome wanted;
+		// as an error it would be retried by every reconciler pass forever.
+		var pe *providerError
+		if errors.As(err, &pe) && pe.Code() == "charge_already_refunded" {
+			return nil
+		}
 		return err
 	}
 	if out.Status == "failed" || out.Status == "canceled" {
