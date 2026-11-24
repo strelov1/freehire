@@ -44,32 +44,7 @@ func (l lever) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error)
 	}
 	url := fmt.Sprintf("%s/%s?mode=json", base, e.Board)
 
-	var postings []struct {
-		ID            string `json:"id"`
-		Text          string `json:"text"`
-		HostedURL     string `json:"hostedUrl"`
-		CreatedAt     int64  `json:"createdAt"`
-		Description   string `json:"description"`
-		Additional    string `json:"additional"`
-		WorkplaceType string `json:"workplaceType"`
-		Country       string `json:"country"`
-		Lists         []struct {
-			Text    string `json:"text"`
-			Content string `json:"content"`
-		} `json:"lists"`
-		Categories struct {
-			Location   string `json:"location"`
-			Commitment string `json:"commitment"`
-			Team       string `json:"team"`
-			Department string `json:"department"`
-		} `json:"categories"`
-		SalaryRange *struct {
-			Min      float64 `json:"min"`
-			Max      float64 `json:"max"`
-			Currency string  `json:"currency"`
-			Interval string  `json:"interval"`
-		} `json:"salaryRange"`
-	}
+	var postings []LeverPosting
 	if err := l.http.GetJSON(ctx, url, &postings); err != nil {
 		return nil, fmt.Errorf("lever: fetch board %s: %w", e.Board, err)
 	}
@@ -79,49 +54,94 @@ func (l lever) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error)
 
 	jobs := make([]kit.Job, 0, len(postings))
 	for _, p := range postings {
-		// Lever splits the body across description + lists (each a heading and its
-		// HTML items) + additional; the plain mirror is unreliable, so assemble the
-		// HTML fields into one document.
-		var body strings.Builder
-		body.WriteString(p.Description)
-		for _, list := range p.Lists {
-			if list.Text != "" {
-				body.WriteString("<h3>")
-				body.WriteString(list.Text)
-				body.WriteString("</h3>")
-			}
-			body.WriteString(list.Content)
-		}
-		body.WriteString(p.Additional)
-
-		job := kit.Job{
-			ExternalID:     p.ID,
-			URL:            p.HostedURL,
-			Title:          p.Text,
-			Company:        e.Company,
-			Location:       p.Categories.Location,
-			Description:    kit.SanitizeHTML(body.String()),
-			Remote:         kit.IsRemote(p.Categories.Location),
-			WorkMode:       kit.WorkplaceTypeMode(p.WorkplaceType),
-			Countries:      kit.CountryFromCode(p.Country),
-			PostedAt:       kit.ParseEpochMillis(p.CreatedAt),
-			EmploymentType: leverEmploymentType(p.Categories.Commitment),
-			// team is the narrower label, nested under department on Lever.
-			Team: kit.FirstNonEmpty(strings.TrimSpace(p.Categories.Team), strings.TrimSpace(p.Categories.Department)),
-		}
-		if p.SalaryRange != nil {
-			if period := leverSalaryPeriod(p.SalaryRange.Interval); period != "" {
-				min, max := kit.RoundSalaryPart(p.SalaryRange.Min), kit.RoundSalaryPart(p.SalaryRange.Max)
-				if min != nil || max != nil {
-					job.SalaryMin, job.SalaryMax = min, max
-					job.SalaryCurrency = p.SalaryRange.Currency
-					job.SalaryPeriod = period
-				}
-			}
-		}
+		job := MapLeverPosting(p)
+		job.ExternalID = p.ID
+		job.Company = e.Company
 		jobs = append(jobs, job)
 	}
 	return jobs, nil
+}
+
+// LeverPosting is one job from the Lever postings API, exported so the
+// link-following adapter (internal/ingest/linksource) decodes the same payload.
+type LeverPosting struct {
+	ID            string      `json:"id"`
+	Text          string      `json:"text"`
+	HostedURL     string      `json:"hostedUrl"`
+	CreatedAt     int64       `json:"createdAt"`
+	Description   string      `json:"description"`
+	Additional    string      `json:"additional"`
+	WorkplaceType string      `json:"workplaceType"`
+	Country       string      `json:"country"`
+	Lists         []LeverList `json:"lists"`
+	Categories    struct {
+		Location   string `json:"location"`
+		Commitment string `json:"commitment"`
+		Team       string `json:"team"`
+		Department string `json:"department"`
+	} `json:"categories"`
+	SalaryRange *struct {
+		Min      float64 `json:"min"`
+		Max      float64 `json:"max"`
+		Currency string  `json:"currency"`
+		Interval string  `json:"interval"`
+	} `json:"salaryRange"`
+}
+
+// LeverList is one of a Lever posting's body sections: a heading and its HTML items.
+type LeverList struct {
+	Text    string `json:"text"`
+	Content string `json:"content"`
+}
+
+// MapLeverPosting maps a Lever postings-API posting into a Job, so the board adapter and
+// the link-following adapter produce identical facets for the same posting. ExternalID and
+// Company are left to the caller: the board adapter sets the raw id (the pipeline namespaces
+// it by board) and the configured company; the link resolver namespaces the id itself and
+// humanizes the company from the board slug (the per-posting API carries no company name).
+func MapLeverPosting(p LeverPosting) kit.Job {
+	job := kit.Job{
+		URL:            p.HostedURL,
+		Title:          p.Text,
+		Location:       p.Categories.Location,
+		Description:    kit.SanitizeHTML(LeverBody(p.Description, p.Lists, p.Additional)),
+		Remote:         kit.IsRemote(p.Categories.Location),
+		WorkMode:       kit.WorkplaceTypeMode(p.WorkplaceType),
+		Countries:      kit.CountryFromCode(p.Country),
+		PostedAt:       kit.ParseEpochMillis(p.CreatedAt),
+		EmploymentType: leverEmploymentType(p.Categories.Commitment),
+		// team is the narrower label, nested under department on Lever.
+		Team: kit.FirstNonEmpty(strings.TrimSpace(p.Categories.Team), strings.TrimSpace(p.Categories.Department)),
+	}
+	if p.SalaryRange != nil {
+		if period := leverSalaryPeriod(p.SalaryRange.Interval); period != "" {
+			min, max := kit.RoundSalaryPart(p.SalaryRange.Min), kit.RoundSalaryPart(p.SalaryRange.Max)
+			if min != nil || max != nil {
+				job.SalaryMin, job.SalaryMax = min, max
+				job.SalaryCurrency = p.SalaryRange.Currency
+				job.SalaryPeriod = period
+			}
+		}
+	}
+	return job
+}
+
+// LeverBody assembles the posting's description, lists and additional fields into one HTML
+// document. Lever splits the body across description + lists (each a heading and its HTML
+// items) + additional; the plain mirror is unreliable, so the HTML fields are assembled.
+func LeverBody(description string, lists []LeverList, additional string) string {
+	var body strings.Builder
+	body.WriteString(description)
+	for _, list := range lists {
+		if list.Text != "" {
+			body.WriteString("<h3>")
+			body.WriteString(list.Text)
+			body.WriteString("</h3>")
+		}
+		body.WriteString(list.Content)
+	}
+	body.WriteString(additional)
+	return body.String()
 }
 
 // leverSalaryPeriod maps Lever's salaryRange.interval (per-year-salary, per-month-salary,
