@@ -20,6 +20,15 @@ func applyURL(f job.Fields) string {
 	return outboundurl.ApplyURL(f.PublicSlug, outboundurl.SrcWeb)
 }
 
+// ApplyURLFor is the click redirect for a surface other than the web, which ApplyURL already
+// serves: "" for a job with no employer destination, exactly as ApplyURL is.
+func (j Job) ApplyURLFor(src outboundurl.Src) string {
+	if j.ApplyURL == "" {
+		return ""
+	}
+	return outboundurl.ApplyURL(j.PublicSlug, src)
+}
+
 func applicationDestination(f job.Fields) string {
 	if job.IsDirectApply(f.Source, f.ExternalID) {
 		return ""

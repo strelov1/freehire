@@ -6,6 +6,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 )
 
 // Projector holds the facts about THIS DEPLOYMENT that a projection needs: the site's own
@@ -85,7 +86,7 @@ func (p Projector) applyPaths(j jobview.Job, form *applyform.Form, pageURL strin
 	if form == nil {
 		return []ApplyPath{{
 			Type: pathExternalRedirect,
-			URL:  j.URL,
+			URL:  j.ApplyURLFor(outboundurl.SrcOJCP),
 			// Never true here: with no captured form there is nothing for an agent to fill,
 			// whatever this deployment can otherwise drive.
 			SupportsAgentSubmission: false,

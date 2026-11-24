@@ -37,7 +37,9 @@ type Job struct {
 	URL string `json:"url"`
 	// ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts
 	// the click. Every link a person is sent out by uses it; URL is for matching, not clicking.
-	// Another surface rewrites src with outboundurl.ApplyURL(PublicSlug, src). Empty with URL.
+	// Another surface rewrites src with ApplyURLFor. The public REST API keeps src=web: its
+	// anonymous callers are indistinguishable from the SPA's, so the serializer cannot know.
+	// Empty with URL.
 	ApplyURL string `json:"apply_url,omitempty"`
 	// SourceURL is the original posting when URL points to a separately verified
 	// application destination. Omitted when both links are the same.

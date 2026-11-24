@@ -6,6 +6,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -42,6 +43,16 @@ func TestApplicationDestinationPreservesSourcePosting(t *testing.T) {
 				t.Fatalf("original posting = %q", got.SourceURL)
 			}
 		})
+	}
+}
+
+func TestApplyURLForRetagsTheSurfaceAndStaysEmptyForDirectApply(t *testing.T) {
+	web := jobview.Job{PublicSlug: "x", ApplyURL: "https://freehire.me/api/v1/go/x?src=web"}
+	if got, want := web.ApplyURLFor(outboundurl.SrcAssistant), "https://freehire.me/api/v1/go/x?src=assistant"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got := (jobview.Job{PublicSlug: "x"}).ApplyURLFor(outboundurl.SrcMCP); got != "" {
+		t.Fatalf("got %q: a freehire-only vacancy has no redirect", got)
 	}
 }
 

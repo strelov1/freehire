@@ -6,6 +6,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -65,6 +66,7 @@ func (h *searchHandlers) markdownJobs(ctx context.Context, hits []search.JobDocu
 	jobs := make([]jobview.Job, len(hits))
 	for i, hit := range hits {
 		hit.Description = formatDescription(hit.Description, "markdown")
+		hit.Job.ApplyURL = hit.Job.ApplyURLFor(outboundurl.SrcAssistant)
 		jobs[i] = hit.Job
 	}
 	return jobs, nil
