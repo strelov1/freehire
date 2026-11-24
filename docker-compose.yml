@@ -41,7 +41,7 @@ services:
     volumes:
       - meilisearch_data:/meili_data
 
-  # Backs the shared rate limiter (internal/ratelimit). A required dependency, not
+  # Backs the shared rate limiter (internal/platform/cache). A required dependency, not
   # an optional one like Meili — no volume, since rate-limit counters are
   # ephemeral/TTL'd and losing them on restart is a fail-open no-op, not data loss.
   redis:
@@ -52,7 +52,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Local S3-compatible storage for résumé upload (internal/blobstore). Without it
+  # Local S3-compatible storage for résumé upload (internal/platform/blobstore). Without it
   # `PUT/POST /me/resume` runs with storage disabled (S3_* unset) and callers degrade to
   # the previous per-request extraction — real locally, but no upload persists, so the
   # fit analysis never sees a structured résumé. s3-init creates the bucket once and
@@ -79,7 +79,7 @@ services:
   s3:
     image: adobe/s3mock:5.2.3
     environment:
-      # Path-style addressing, which is what internal/blobstore uses against a custom
+      # Path-style addressing, which is what internal/platform/blobstore uses against a custom
       # S3_ENDPOINT. No credentials: s3mock accepts any signature.
       AWS_REGION: "${AWS_REGION:-us-east-1}"
     ports:
