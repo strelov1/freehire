@@ -123,8 +123,7 @@ transaction. `store.go` is the transaction around it and nothing else.
   ORDER BY h.feature, h.created_at DESC;
   ```
 
-  The same list is the sqlc query `ListPaywallHitsByFeature`. For the counts per feature, group
-  it: `SELECT feature, count(*) AS hits, count(DISTINCT user_id) AS users FROM paywall_hits
+  For the counts per feature, group it: `SELECT feature, count(*) AS hits, count(DISTINCT user_id) AS users FROM paywall_hits
   WHERE created_at >= now() - interval '7 days' GROUP BY feature ORDER BY hits DESC`.
 
 - **Every metered feature enforces on arrival.** auto-apply was the first to ship this
