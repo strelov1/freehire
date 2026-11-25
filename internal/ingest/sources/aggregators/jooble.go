@@ -40,12 +40,13 @@ const (
 	// joobleMaxPages bounds one board's crawl. It is one leg of a REQUEST BUDGET set by
 	// Jooble's free plan (100 requests/day per key, reset at midnight UTC):
 	//
-	//	boards (4) x joobleMaxPages (5) x runs/day (4, see the systemd timer) = 80/day
+	//	boards (4) x joobleMaxPages (4) x runs/day (4, see the systemd timer) = 64/day
 	//
-	// Raising one leg without lowering another breaks the limit; a 429 answers the rest of the
-	// day. TestJooblePageBudgetStaysWithinTheDailyCeiling holds the arithmetic; the timer
+	// The 36 spare are for the shared client, which retries a network error, a 5xx or a 429 up to
+	// twice and may be counted per request received. Raising one leg without lowering another
+	// breaks the limit; a 429 answers the rest of the day. TestJooblePageBudgetStaysWithinTheDailyCeiling holds the arithmetic; the timer
 	// cadence lives outside this repo, in freehire-ops' provision/host2/systemd.
-	joobleMaxPages = 5
+	joobleMaxPages = 4
 	// joobleSweepGrace widens the unseen sweep for the reason adzunaSweepGrace does: `link`
 	// routes through Jooble's own domain, so a posting's liveness cannot be probed directly, and
 	// the crawl reaches only a bounded slice of a much deeper feed.

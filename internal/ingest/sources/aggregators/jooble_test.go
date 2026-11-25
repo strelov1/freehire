@@ -152,12 +152,13 @@ func TestJoobleFetchStopsAtThePageBudget(t *testing.T) {
 }
 
 // The page budget is one leg of the free plan's 100 requests/day per key; a silent bump here is
-// spent against a ceiling nothing else in the process checks.
+// spent against a ceiling nothing else in the process checks. The ceiling asserted is 70, not
+// 100: the shared client retries failures, so the rest is headroom for them.
 func TestJooblePageBudgetStaysWithinTheDailyCeiling(t *testing.T) {
 	const (
 		boards       = 4   // keyword boards on the one US key
 		runsPerDay   = 4   // freehire-ops' provision/host2/systemd/freehire-ingest@jooble.timer
-		dailyCeiling = 100 // Jooble's free plan, per key, reset at midnight UTC
+		dailyCeiling = 70 // 100/day per key (free plan, reset at midnight UTC) less retry headroom
 	)
 	if perDay := boards * joobleMaxPages * runsPerDay; perDay > dailyCeiling {
 		t.Fatalf("crawl budget is %d requests/day, over Jooble's ceiling of %d", perDay, dailyCeiling)
