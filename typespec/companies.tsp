@@ -16,6 +16,12 @@ model CompanyListItem {
   industries: string[];
   hq_country: string | null;
 
+  /** The company's own site as recorded (its website, else its homepage); null when unknown. */
+  website: string | null;
+
+  /** The company's LinkedIn page; null when unknown. */
+  linkedin: string | null;
+
   /** Curated company tags; the catalogue card renders the backer marks from these. */
   collections: string[];
 
@@ -36,13 +42,13 @@ model CompanySubindustry {
 
 // Ranked companies. `q` and the facet params (collections, regions, countries, domains,
 // industries, company_type, company_size, remote_regions, yc_batch, yc_status,
-// yc_stage, yc_flags, maturity, subindustries) are read from the raw query,
+// yc_stage, yc_flags, maturity, subindustries, hq_country) are read from the raw query,
 // comma-joined or repeated; a param the listing does not read is reported in
 // `meta.ignored_params`.
 /**
- * Most active first. Facet params are repeatable and filter by array overlap (OR within a
- * facet, AND across facets), composably with `q`. `meta.total` reports the count matching
- * the full filter.
+ * Most active first. Facet params repeat and filter by array overlap (OR within a facet,
+ * AND across), composable with `q`; `meta.total` counts the full filter. `countries` is
+ * where open jobs are, `hq_country` the headquarters (ISO alpha-2).
  */
 @summary("List companies with job counts and denormalized facets; optional filters.")
 @useAuth(NoAuth)
@@ -59,6 +65,8 @@ model CompanySubindustry {
             "payments",
           ],
           hq_country: "DE",
+          website: "https://acme.example",
+          linkedin: "https://www.linkedin.com/company/acme",
           collections: #[
             "yc",
           ],

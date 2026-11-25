@@ -258,6 +258,13 @@ export const COMPANY_FILTERS: FilterRow[] = [
     values: values.length > 30 ? `e.g. ${values.slice(0, 5).join(', ')}` : valuesOf(f.options),
   };
 });
+// API-only: the SPA's catalogue does not render it.
+COMPANY_FILTERS.push({
+  param: 'hq_country',
+  label: 'Headquarters country',
+  values:
+    'ISO 3166-1 alpha-2 codes, any case — where the company is headquartered, as opposed to `countries` (where its open jobs are)',
+});
 
 /** Worked filter recipes shown as ready-to-run examples. */
 export interface Recipe {
