@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -83,9 +84,9 @@ type careerjetResponse struct {
 	Jobs    []careerjetPosting `json:"jobs"`
 }
 
-// Fetch reads one locale+keywords slice. A failure on the first page, or an answer that is not a
-// job list, is a board-level error; a failure on a later page ends the walk with what was
-// gathered. Pagination stops at the API's reported page count, on an empty page, or at
+// Fetch reads one locale+keywords slice. A failure on the first page, a 401/403, or an answer
+// that is not a job list is a board-level error on any page; any other failure on a later page
+// ends the walk with what was gathered. Pagination stops at the API's reported page count, on an empty page, or at
 // careerjetMaxPages.
 func (c careerjet) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
 	locale, keywords := strings.TrimSpace(e.Region), strings.TrimSpace(e.Board)
@@ -102,11 +103,16 @@ func (c careerjet) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, er
 		err := c.http.GetJSONWithHeaders(ctx, careerjetPageURL(locale, keywords, page, c.userIP), c.authHeaders(), &resp)
 		// The API answers 200 with type LOCATIONS when it read the query as a place name and ran
 		// no search. That is a config error, not an empty feed.
+		fatal := false
 		if err == nil && resp.Type != "JOBS" {
-			err = fmt.Errorf("answer type %q, not JOBS: %s", resp.Type, resp.Message)
+			err, fatal = fmt.Errorf("answer type %q, not JOBS: %s", resp.Type, resp.Message), true
+		}
+		var se *kit.StatusError
+		if errors.As(err, &se) && (se.Code == 401 || se.Code == 403) {
+			fatal = true
 		}
 		if err != nil {
-			if page == 1 {
+			if page == 1 || fatal {
 				return nil, fmt.Errorf("careerjet: locale %q keywords %q page %d: %w", locale, keywords, page, err)
 			}
 			log.Printf("careerjet: locale %q keywords %q page %d failed, stopping with %d jobs gathered: %v",

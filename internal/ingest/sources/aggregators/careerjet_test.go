@@ -169,3 +169,17 @@ func TestCareerjetExternalIDSeparatesSameTitleVacancies(t *testing.T) {
 		t.Fatal("a re-dated repost must keep its id")
 	}
 }
+
+func TestCareerjetFetchLaterPageFatalAnswersFailTheBoard(t *testing.T) {
+	cases := map[string]*careerjetHTTP{
+		"401":       {t: t, pages: []string{"jobs_page1.json"}, errs: map[int]error{2: &kit.StatusError{Method: "GET", Code: 401}}},
+		"403":       {t: t, pages: []string{"jobs_page1.json"}, errs: map[int]error{2: &kit.StatusError{Method: "GET", Code: 403}}},
+		"LOCATIONS": {t: t, pages: []string{"jobs_page1.json", "locations.json"}},
+	}
+	for name, f := range cases {
+		jobs, err := NewCareerjet(f, "k", "1.2.3.4").Fetch(context.Background(), careerjetBoard)
+		if err == nil || jobs != nil {
+			t.Errorf("%s on page 2: want a board error, got jobs=%v err=%v", name, jobs, err)
+		}
+	}
+}
