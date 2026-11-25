@@ -7878,6 +7878,8 @@ export interface components {
             website: string | null;
             /** @description The company's LinkedIn page; null when unknown. */
             linkedin: string | null;
+            /** @description Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`. */
+            employee_count: number | null;
             /** @description Curated company tags; the catalogue card renders the backer marks from these. */
             collections: string[];
             /** Format: int64 */
@@ -12804,6 +12806,7 @@ export interface operations {
                      *           "hq_country": "DE",
                      *           "website": "https://acme.example",
                      *           "linkedin": "https://www.linkedin.com/company/acme",
+                     *           "employee_count": 40,
                      *           "collections": [
                      *             "yc"
                      *           ],

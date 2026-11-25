@@ -1867,6 +1867,7 @@
                       "hq_country": "DE",
                       "website": "https://acme.example",
                       "linkedin": "https://www.linkedin.com/company/acme",
+                      "employee_count": 40,
                       "collections": [
                         "yc"
                       ],
@@ -29063,6 +29064,7 @@
           "hq_country",
           "website",
           "linkedin",
+          "employee_count",
           "collections",
           "feedback_count",
           "feedback_rating_avg"
@@ -29125,6 +29127,18 @@
               }
             ],
             "description": "The company's LinkedIn page; null when unknown."
+          },
+          "employee_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`."
           },
           "collections": {
             "type": "array",
