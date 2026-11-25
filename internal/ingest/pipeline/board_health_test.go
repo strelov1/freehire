@@ -20,6 +20,9 @@ import (
 // repeats across regions (Adzuna's "it-jobs" once per country) gets independent state,
 // mirroring the real board_health table's (provider, board, region) primary key.
 type fakeHealth struct {
+	// mu guards the recorders: the Runner crawls boards on concurrent goroutines, each
+	// recording its own outcome, exactly as they share the real DB-backed port.
+	mu        sync.Mutex
 	cooldowns map[string]time.Time // "provider/board/region" → cooldown_until
 	successes []string
 	failures  []string
@@ -43,11 +46,15 @@ func (f *fakeHealth) Pauses(_ context.Context, provider, board, region string) (
 		return BoardPauses{}, f.pausesErr
 	}
 	key := healthKey(provider, board, region)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return BoardPauses{Cooldown: f.cooldowns[key], Quiet: f.quiet[key]}, nil
 }
 
 func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board, region string, _ int, reached bool, fingerprint string) error {
 	key := healthKey(provider, board, region)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.successes = append(f.successes, key)
 	if f.fingerprints == nil {
 		f.fingerprints = make(map[string][]string)
@@ -62,6 +69,8 @@ func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board, region st
 
 func (f *fakeHealth) RecordFailure(_ context.Context, provider, board, region string, cause error) error {
 	key := healthKey(provider, board, region)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.failures = append(f.failures, key)
 	if errors.Is(cause, sources.ErrBoardGone) {
 		f.boardGone = append(f.boardGone, key)
@@ -77,6 +86,8 @@ func (f *fakeHealth) CooledBoards(_ context.Context, provider string, limit int)
 		until         time.Time
 	}
 	var cands []cand
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for k, until := range f.cooldowns {
 		parts := strings.SplitN(k, "/", 3)
 		if len(parts) != 3 || parts[0] != provider || !until.After(time.Now()) {
@@ -107,6 +118,8 @@ func (f *fakeHealth) CooledBoards(_ context.Context, provider string, limit int)
 // boards as eligible) and records the call.
 func (f *fakeHealth) ClearCooldowns(_ context.Context, provider string) (int, error) {
 	f.cleared = append(f.cleared, provider)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	n := 0
 	for k := range f.cooldowns {
 		if p, _, ok := strings.Cut(k, "/"); ok && p == provider {

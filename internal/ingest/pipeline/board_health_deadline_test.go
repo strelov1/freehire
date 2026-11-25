@@ -23,7 +23,9 @@ func (h *ctxHealth) RecordSuccess(ctx context.Context, provider, board, region s
 }
 
 func (h *ctxHealth) RecordFailure(ctx context.Context, provider, board, region string, cause error) error {
+	h.mu.Lock()
 	h.failureAttempts++
+	h.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
