@@ -2,9 +2,7 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -259,8 +257,7 @@ func mojedeloWorkMode(modes []mojedeloNamed) string {
 func (s mojedelo) detail(ctx context.Context, it mojedeloItem) (Job, bool, error) {
 	var res mojedeloJob
 	if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(mojedeloJobURL, strings.TrimSpace(it.ID)), mojedeloHeaders, &res); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

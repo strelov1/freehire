@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -346,8 +345,7 @@ const servicepublicUnpublished = "Offre dépubliée"
 func (s servicepublic) detail(ctx context.Context, c servicepublicCard) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

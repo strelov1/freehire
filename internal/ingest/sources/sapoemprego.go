@@ -2,10 +2,8 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -154,7 +152,7 @@ func (s sapoemprego) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ext
 	picked := hydrationLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(picked, sapoempregoDetailWorkers, func(p sapoempregoPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -178,13 +176,6 @@ func (s sapoemprego) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ext
 		log.Printf("sapoemprego: %d new postings past this run's bound of %d, deferred to later runs", deferred, len(picked))
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s sapoemprego) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list reads the offers sitemap and returns its postings, most recently touched first. The
@@ -250,8 +241,7 @@ func (s sapoemprego) detail(ctx context.Context, p sapoempregoPosting) (Job, boo
 	}
 	root, err := s.http.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

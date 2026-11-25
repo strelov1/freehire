@@ -287,8 +287,7 @@ func (s foundit) detail(ctx context.Context, p founditPosting) (Job, bool, error
 		return err
 	})
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

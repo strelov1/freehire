@@ -232,7 +232,7 @@ func (s digitalrecruiters) FetchNew(ctx context.Context, e CompanyEntry, seen fu
 	outOfTime, outOfBudget := 0, 0
 	for _, p := range fresh {
 		switch {
-		case s.nearDeadline(ctx):
+		case nearDeadline(ctx, s.deadlineMargin):
 			outOfTime++
 			continue
 		case !s.spend():
@@ -260,13 +260,6 @@ func drRunBudget() *atomic.Int64 {
 // spend takes one posting read from the run-wide budget, reporting false once it is gone.
 func (s digitalrecruiters) spend() bool {
 	return s.runBudget == nil || s.runBudget.Add(-1) >= 0
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s digitalrecruiters) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // wait spaces every request of the run. When the limiter can already tell that no slot opens

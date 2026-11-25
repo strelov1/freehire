@@ -229,7 +229,7 @@ func (s jobsACUK) detail(ctx context.Context, p listedPosting) (Job, bool, error
 	}
 	var ld jobsACUKPosting
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errors.New("page carries no JobPosting")
+		return Job{}, false, errNoPosting
 	}
 	title, company := strings.TrimSpace(ld.Title), strings.TrimSpace(ld.HiringOrganization.Name)
 	if title == "" || company == "" {

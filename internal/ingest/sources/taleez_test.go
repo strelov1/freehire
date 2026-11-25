@@ -156,8 +156,8 @@ func TestTaleezParsePostingPinsHost(t *testing.T) {
 func TestTaleezNoPostingIsNoAnswer(t *testing.T) {
 	_, _, err := (taleez{pages: emptyPageGetter{}, limiter: noWait{}}).detail(context.Background(),
 		taleezPosting{token: "x", url: "https://taleez.com/apply/x"})
-	if !errors.Is(err, errTaleezNoPosting) {
-		t.Errorf("err = %v, want errTaleezNoPosting", err)
+	if !errors.Is(err, errNoPosting) {
+		t.Errorf("err = %v, want errNoPosting", err)
 	}
 }
 

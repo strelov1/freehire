@@ -3,11 +3,9 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -226,8 +224,7 @@ func (s wttj) withDetail(ctx context.Context, h wttjHit, base Job) (Job, bool) {
 	var d wttjDetail
 	err := s.http.GetJSON(ctx, fmt.Sprintf(wttjDetailURL, h.Organization.Slug, h.Slug), &d)
 	if err != nil {
-		var se *StatusError
-		if !errors.As(err, &se) || (se.Code != http.StatusNotFound && se.Code != http.StatusGone) {
+		if !isGone(err) {
 			log.Printf("wttj: detail %s failed; deferring: %v", h.ObjectID, err)
 		}
 		return Job{}, false

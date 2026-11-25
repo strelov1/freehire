@@ -327,7 +327,7 @@ func (s hellowork) detail(ctx context.Context, id int64) (Job, bool, error) {
 	}
 	var ld helloworkLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errors.New("page carries no JobPosting")
+		return Job{}, false, errNoPosting
 	}
 	job, ok := helloworkJob(ld, id)
 	if !ok {

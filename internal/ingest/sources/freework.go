@@ -2,9 +2,7 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -214,8 +212,7 @@ func freeworkBaseJob(c freeworkCard) Job {
 func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error) {
 	var d freeworkDetail
 	if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkDetailURL, c.Slug), &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

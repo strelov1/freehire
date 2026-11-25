@@ -244,7 +244,7 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 			afterLimit.Add(1)
 			return Job{}, false
 		}
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -280,13 +280,6 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		log.Printf("pracuj: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s pracuj) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list walks every slice to its end and returns the postings with a named employer, newest first.
@@ -588,8 +581,7 @@ func (s pracuj) detail(ctx context.Context, p pracujPosting) (Job, bool, error) 
 		return json.Unmarshal(raw, &o)
 	})
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
