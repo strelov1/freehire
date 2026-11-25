@@ -109,6 +109,28 @@ func loadEUSState(r io.Reader) (eusState, error) {
 	return st, sc.Err()
 }
 
+// openEUSState opens the state file for appending. A run killed mid-write leaves a last line
+// without its newline; the next record would be glued onto it and lost with it on the next load,
+// so the torn line is terminated first.
+func openEUSState(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err == nil && fi.Size() > 0 {
+		last := make([]byte, 1)
+		if _, err = f.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
+			_, err = f.Write([]byte{'\n'})
+		}
+	}
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // runEUStartups walks the EU-Startups directory into the same unmatched {name,website} JSON
 // that `resolve` consumes, resuming from (and appending to) statePath.
 func runEUStartups(slugFile, statePath string) int {
@@ -135,20 +157,24 @@ func runEUStartups(slugFile, statePath string) int {
 		log.Printf("harvest-ats: open state: %v", err)
 		return 1
 	}
-	out, err := os.OpenFile(statePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	out, err := openEUSState(statePath)
 	if err != nil {
 		log.Printf("harvest-ats: open state: %v", err)
 		return 1
 	}
 	defer out.Close()
-	var mu sync.Mutex
+	var (
+		mu       sync.Mutex
+		writeErr error // first failed checkpoint: the walk stops, since what it reads next would not persist
+	)
 	enc := json.NewEncoder(out)
-	save := func(rec eusRecord) {
+	save := func(rec eusRecord) error {
 		mu.Lock()
 		defer mu.Unlock()
-		if err := enc.Encode(rec); err != nil {
-			log.Printf("harvest-ats: write state: %v", err)
+		if err := enc.Encode(rec); err != nil && writeErr == nil {
+			writeErr = err
 		}
+		return writeErr
 	}
 	log.Printf("harvest-ats: eustartups: resuming with %d pages, %d cards", len(st.pages), len(st.cards))
 
@@ -164,7 +190,10 @@ func runEUStartups(slugFile, statePath string) int {
 			if found = parseEUSListing(body); len(found) == 0 {
 				break
 			}
-			save(eusRecord{Page: page, Slugs: found})
+			if err := save(eusRecord{Page: page, Slugs: found}); err != nil {
+				log.Printf("harvest-ats: write state: %v", err)
+				return 1
+			}
 			if page%100 == 0 {
 				log.Printf("harvest-ats: eustartups: listing page %d", page)
 			}
@@ -192,7 +221,9 @@ func runEUStartups(slugFile, statePath string) int {
 					continue
 				}
 				site := parseEUSCard(body)
-				save(eusRecord{Card: slug, Name: site.Name, Website: site.Website})
+				if save(eusRecord{Card: slug, Name: site.Name, Website: site.Website}) != nil {
+					continue
+				}
 				mu.Lock()
 				st.cards[slug] = site
 				if n := len(st.cards); n%500 == 0 {
@@ -206,7 +237,11 @@ func runEUStartups(slugFile, statePath string) int {
 	for _, s := range slugs {
 		mu.Lock()
 		_, done := st.cards[s]
+		stop := writeErr != nil
 		mu.Unlock()
+		if stop {
+			break
+		}
 		if !done && !queued[s] {
 			queued[s] = true
 			jobs <- s
@@ -214,6 +249,10 @@ func runEUStartups(slugFile, statePath string) int {
 	}
 	close(jobs)
 	wg.Wait()
+	if err := out.Close(); writeErr != nil || err != nil {
+		log.Printf("harvest-ats: write state: %v (re-run to resume)", errors.Join(writeErr, err))
+		return 1
+	}
 
 	var sites []companySite
 	for _, s := range st.cards {

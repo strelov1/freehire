@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,5 +61,32 @@ func TestLoadEUSStateSkipsTornLine(t *testing.T) {
 	want := map[string]companySite{"a": {Name: "A", Website: "https://a.example"}, "b": {Name: "B"}}
 	if !reflect.DeepEqual(st.cards, want) {
 		t.Errorf("cards = %v", st.cards)
+	}
+}
+
+func TestOpenEUSStateTerminatesTornLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.jsonl")
+	if err := os.WriteFile(path, []byte(`{"card":"a","name":"A"}`+"\n"+`{"card":"b","na`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := openEUSState(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(f).Encode(eusRecord{Card: "c", Name: "C"}); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	r, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	st, err := loadEUSState(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]companySite{"a": {Name: "A"}, "c": {Name: "C"}}; !reflect.DeepEqual(st.cards, want) {
+		t.Errorf("cards = %v, want %v", st.cards, want)
 	}
 }
