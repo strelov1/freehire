@@ -1,16 +1,21 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/autoapply"
+	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/resumeextract"
+	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
@@ -148,4 +153,61 @@ func TestAutoApplyStartTool_KeepsTheRefusalKindAndText(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A deployment without a plan meter must keep answering "auto-apply is not available" (503).
+// The wiring assigns the concrete *plan.Store into an interface field: a nil pointer put there
+// is a non-nil interface, which would skip the use case's own nil guard and panic in Consume.
+// The same holds for the queue.
+func TestAutoApplyEnqueuer_ANilDependencyStaysNil(t *testing.T) {
+	h := &assistantHandlers{}
+	e := h.autoApplyEnqueuer()
+	if e.Plans != nil {
+		t.Error("a nil *plan.Store became a non-nil Allowance: the use case's nil guard would be skipped")
+	}
+	if e.Queue != nil {
+		t.Error("a nil *db.Queries became a non-nil EnqueueStore")
+	}
+
+	// And the use case refuses as unmetered rather than dereferencing the nil store. The job
+	// lookup and CV gates are given so the start reaches the charge.
+	e.FindJob = func(context.Context, string) (db.Job, error) { return db.Job{ID: 42, Source: "greenhouse"}, nil }
+	e.BaseCV = func(context.Context, int64) (bool, error) { return true, nil }
+	e.Seeder = cv.Seeder(hasResume{})
+	e.Queue = unmeteredQueue{}
+	err := e.Start(context.Background(), 7, "acme-1")
+	var refused *autoapply.Refusal
+	if !errors.As(err, &refused) || refused.Reason != autoapply.RefusalNoPlanMeter {
+		t.Fatalf("a start without a meter = %v, want RefusalNoPlanMeter", err)
+	}
+	var fe *fiber.Error
+	if !errors.As(autoApplyEnqueueError(err), &fe) || fe.Code != fiber.StatusServiceUnavailable {
+		t.Errorf("without a meter the route answers %v, want 503", err)
+	}
+}
+
+// hasResume is a Seeder with no résumé: the base CV is present, so it is never asked.
+type hasResume struct{}
+
+func (hasResume) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
+	return resumeextract.Structured{}, false, nil
+}
+
+// unmeteredQueue is a queue the start never reaches once it refuses as unmetered.
+type unmeteredQueue struct{}
+
+func (unmeteredQueue) GetUserJobApplied(context.Context, db.GetUserJobAppliedParams) (bool, error) {
+	return false, nil
+}
+
+func (unmeteredQueue) EnqueueAutoApply(context.Context, db.EnqueueAutoApplyParams) (int64, error) {
+	panic("enqueued without a meter")
+}
+
+func (unmeteredQueue) GetAutoApplyQueueEntryForJob(context.Context, db.GetAutoApplyQueueEntryForJobParams) (db.GetAutoApplyQueueEntryForJobRow, error) {
+	panic("queue read without a meter")
+}
+
+func (unmeteredQueue) GetApplicationStage(context.Context, db.GetApplicationStageParams) (pgtype.Text, error) {
+	panic("queue read without a meter")
 }

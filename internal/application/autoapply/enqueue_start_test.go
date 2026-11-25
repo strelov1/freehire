@@ -3,6 +3,7 @@ package autoapply
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -254,8 +255,9 @@ func TestStart_ChargesTracksEnqueuesAndPublishes(t *testing.T) {
 	if f.b.tracked == nil || *f.b.tracked != "preparing" {
 		t.Errorf("tracked stage = %v, want preparing", f.b.tracked)
 	}
-	if f.q.inserts != 1 || len(f.published) != 1 {
-		t.Errorf("inserts = %d, published = %v, want one of each", f.q.inserts, f.published)
+	// The published id is the one the INSERT returned, not the job's.
+	if f.q.inserts != 1 || !slices.Equal(f.published, []int64{77}) {
+		t.Errorf("inserts = %d, published = %v, want 1 and [77] (the entry id)", f.q.inserts, f.published)
 	}
 }
 

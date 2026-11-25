@@ -34,9 +34,16 @@ func (h *assistantHandlers) autoApplyEnqueuer() *autoapply.Enqueuer {
 		FindJob: func(ctx context.Context, slug string) (db.Job, error) {
 			return jobBySlugOrCode(ctx, h.queries, slug)
 		},
-		Queue:         h.queries,
-		Plans:         h.plans,
 		PublishSubmit: h.publishSubmit,
+	}
+	// Assigned only when non-nil: a nil *plan.Store put into the Allowance interface is a
+	// non-nil interface, so the use case's own nil guard would be skipped and Consume would
+	// dereference it. The same goes for the queue.
+	if h.queries != nil {
+		e.Queue = h.queries
+	}
+	if h.plans != nil {
+		e.Plans = h.plans
 	}
 	if h.cv != nil {
 		if h.cv.cvStore != nil {
