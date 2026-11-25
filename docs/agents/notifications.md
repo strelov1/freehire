@@ -1,16 +1,19 @@
 # Notifications
 
 Three independent delivery use cases share one channel *vocabulary* (email,
-Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
+Telegram, and mobile push) and one generic `notify.Notifier[M]`/`notify.Router[M]`
+pair, each instantiated on its own payload (a digest, a reminder batch, a nudge
+batch):
 
 | Package | Use case | Worker |
 |---|---|---|
 | `internal/engage/notify` | Filter subscriptions — new jobs matching a saved search | `cmd/notify` |
 | `internal/engage/reminder` | Saved-job nudges — come back before the vacancy goes stale | `cmd/remind` |
 | `internal/engage/nudge` | Lifecycle nudges — an application went silent past its stage's threshold, or moved into `interview` | `cmd/nudge` |
-| `internal/engage/emailnotify` | Email channel (SES) — implements `notify.Notifier` (the `reminder`/`nudge`-side email transports live in their own `transports.go`) | — |
+| `internal/engage/emailnotify` | Email channel (SES) — implements `notify.Notifier[notify.Message]`; its `Sender` is what `batchnotify.Email` sends the reminder/nudge mails through | — |
+| `internal/engage/batchnotify` | The Telegram and email wrappers `reminder`/`nudge` share (`batchnotify.Telegram[T]`, `batchnotify.Email[T]`); each engine passes only its render function. It sits above `telegramnotify`/`emailnotify`, which implement `notify.Notifier`, so it cannot live in `notify` | — |
 | `internal/engage/telegramnotify` | Telegram channel (Bot API, deep-link token) | — |
-| `internal/engage/pushnotify` | Mobile push channel (Expo relay) — the bare Expo transport; each of `notify`/`reminder`/`nudge` has its own thin `PushNotifier` on top, same as Telegram/email | — |
+| `internal/engage/pushnotify` | Mobile push channel (Expo relay) — the bare Expo transport; `notify.Push[M]` on top is the one push wrapper all three engines use (each passes its render function) | — |
 | `internal/engage/webhooknotify` | Webhook channel (plain, unsigned HTTP POST to an account's own URL) — implements `notify.Notifier` for `notify` ONLY, see [notifications/channels.md](notifications/channels.md) | — |
 
 ## Daily inbox summary

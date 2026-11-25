@@ -65,7 +65,7 @@ func TestEmailNotifier_EscapesUserData(t *testing.T) {
 }
 
 func TestTelegramNotifier_RendersOnPlatformLink(t *testing.T) {
-	n := NewTelegramNotifier(nil, "https://freehire.me/")
+	n := newTelegramCopy("https://freehire.me/")
 	got := n.render([]ReminderMessage{{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}})
 	if !strings.Contains(got, "https://freehire.me/jobs/go-dev-acme") {
 		t.Errorf("telegram render missing on-platform link: %q", got)
@@ -135,7 +135,7 @@ func TestEmailNotifier_BatchOverTheListLimitCountsTheRest(t *testing.T) {
 }
 
 func TestTelegramNotifier_BatchListsJobsAndCountsTheRest(t *testing.T) {
-	n := NewTelegramNotifier(nil, "https://freehire.me")
+	n := newTelegramCopy("https://freehire.me")
 	got := n.render(batchOf(notify.ListLimit + 3))
 
 	if !strings.Contains(got, "+ 3 more") {
@@ -149,7 +149,7 @@ func TestTelegramNotifier_BatchListsJobsAndCountsTheRest(t *testing.T) {
 // An oversized body is rejected deterministically and every retry re-fails, so the
 // message must fit whatever the batch holds.
 func TestTelegramNotifier_BatchStaysUnderTheMessageLimit(t *testing.T) {
-	n := NewTelegramNotifier(nil, "https://freehire.me")
+	n := newTelegramCopy("https://freehire.me")
 	ms := batchOf(notify.ListLimit)
 	long := strings.Repeat("Extremely Long Job Title ", 40)
 	for i := range ms {
