@@ -97,6 +97,12 @@ period, computed only from jobs that disclose a single, comparable salary figure
 The endpoint SHALL accept role scoping (category and/or seniority) and geography
 scoping, and SHALL respond with the standard envelope.
 
+A posting's salary SHALL be its EFFECTIVE salary: the moderator-set figure when one
+exists, else the figure the source states in a structured field, else the figure
+enrichment extracted — taking currency, period and amounts from the same tier. The
+same resolution SHALL serve every salary rollup, so two salary figures on one page
+can never disagree about which salary a posting has.
+
 #### Scenario: Salary bands for a role
 
 - **WHEN** a client requests `GET /api/v1/insights/salary?category=engineering&seniority=senior`
@@ -115,6 +121,18 @@ scoping, and SHALL respond with the standard envelope.
   jobs than the configured minimum sample size
 - **THEN** that band is omitted rather than returned with an unreliable or
   potentially identifying figure
+
+#### Scenario: A source salary counts without enrichment
+
+- **WHEN** an open posting was never enriched but its source states a structured
+  salary
+- **THEN** that salary contributes to its role's band
+
+#### Scenario: The manual figure wins
+
+- **WHEN** a posting carries a manual salary, a source salary and an enrichment
+  salary that all differ
+- **THEN** only the manual figure, in the manual currency and period, contributes
 
 ### Requirement: Precomputed insights rollups
 

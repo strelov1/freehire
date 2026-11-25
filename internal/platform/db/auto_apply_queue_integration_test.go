@@ -345,7 +345,7 @@ func TestAutoApplyQueueFailure(t *testing.T) {
 }
 
 // TestClaimAutoApplyPreviewBatch and TestSetAutoApplyResolvedPreview cover
-// openspec/changes/auto-apply-review-tracking's own claim/write pair — the second, disjoint
+// openspec/changes/archive/2026-09-05-auto-apply-review-tracking's own claim/write pair — the second, disjoint
 // predicate cmd/auto-apply's preview pass shares the queue table with, and the guard that
 // keeps it from overwriting an entry the candidate already decided on.
 func TestClaimAutoApplyPreviewBatch(t *testing.T) {
@@ -474,7 +474,7 @@ func TestSetAutoApplyResolvedPreview(t *testing.T) {
 // review found: the preview pass and the real submission pass used to share
 // attempts/failed_at, so a transient preview-resolution error could spend down the same
 // retry budget the real ATS submission depends on, and could dead-letter a row before a
-// submission was ever attempted (openspec/changes/auto-apply-review-tracking).
+// submission was ever attempted (openspec/changes/archive/2026-09-05-auto-apply-review-tracking).
 func TestRecordAutoApplyPreviewFailure_IndependentFromSubmitFailureBudget(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

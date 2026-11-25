@@ -21,7 +21,7 @@ import (
 // The live runs themselves are a //go:build llmlive test; everything here is pure, so it
 // is checked by the ordinary suite rather than only by a run that spends money.
 //
-// See openspec/changes/assistant-model-bakeoff for why any of this is measured. The short
+// See openspec/changes/archive/2026-09-08-assistant-model-bakeoff for why any of this is measured. The short
 // version: a per-million price does not predict a turn's cost here, because the transcript
 // is replayed every round, so what a model costs is decided by how many rounds it takes
 // and how much of the replayed prefix its provider serves from cache. Neither figure

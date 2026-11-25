@@ -88,7 +88,7 @@ Claude Code cuts server instructions at 2048. Search and application
 workflows belong to the packaged skill; initialization describes capabilities and result
 states without prescribing a call sequence or presentation.
 
-`get_plan` (`internal/api/handler/mcp_plan_tool.go`, openspec/changes/mcp-plan-standing) lets
+`get_plan` (`internal/api/handler/mcp_plan_tool.go`, openspec/changes/archive/2026-11-25-mcp-plan-standing) lets
 an agent read the tier and today's per-feature allowances before it queues metered work,
 instead of learning them from a 402. It reads `loadPlan`, the use case `GET /me/plan` serves,
 so the two cannot disagree; it is an allowlist carrying no price or payment source (those are

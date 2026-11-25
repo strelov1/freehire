@@ -8,7 +8,7 @@ delivering it by email to the employer account's confirmed work address (`Servic
 employer's side of it, the applicant inbox and hiring pipeline (`Inbox`, `inbox.go`). The
 vacancy and its questions are authored in [internal/ingest/employer](../employer/AGENTS.md);
 the design records are [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply)
-and [openspec/changes/add-employer-applicant-pipeline](../../../openspec/changes/add-employer-applicant-pipeline).
+and [openspec/changes/archive/2026-11-25-add-employer-applicant-pipeline](../../../openspec/changes/archive/2026-11-25-add-employer-applicant-pipeline).
 
 ## Always true
 - **Nobody applies to their own company.** `Apply` refuses (as not found) a candidate who

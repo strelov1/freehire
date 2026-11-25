@@ -19,7 +19,7 @@
   import { timeAgo } from '#lib/utils.js';
 
   // The homepage's live "recently added jobs" feed (see
-  // openspec/changes/add-homepage-recent-jobs-feed). Renders nothing until the first
+  // openspec/changes/archive/2026-09-07-add-homepage-recent-jobs-feed). Renders nothing until the first
   // event arrives — a visibly empty section would read as broken, not as "nothing
   // yet". The stream itself is public and needs no credentials.
   const MAX_ENTRIES = 8;

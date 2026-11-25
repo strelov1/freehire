@@ -4,7 +4,7 @@
 
 The talent-network-profile-visibility change (see
 `docs/superpowers/specs/2026-08-10-talent-network-profile-visibility-design.md`
-and `openspec/changes/talent-network-profile-visibility/`) shipped a working
+and `openspec/changes/archive/2026-09-08-talent-network-profile-visibility/`) shipped a working
 slice: a tri-state visibility toggle buried inline on the Settings tab of
 `my/profile` (`TalentNetworkSettings.svelte`), and a plain single-column
 public profile page (`web/src/routes/talent-network/[publicId]/+page.svelte`).

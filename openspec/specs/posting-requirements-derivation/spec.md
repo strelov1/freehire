@@ -17,7 +17,6 @@ The output is structure, not display. It is served under `enrichment.requirement
 for a matcher or an API consumer to read; **the job page deliberately does not render
 it**, because the extractor fires exactly when the description already shows that
 list. See `internal/job/reqextract/AGENTS.md`.
-
 ## Requirements
 ### Requirement: A posting's requirements are derived deterministically from its description markup
 
@@ -28,11 +27,16 @@ contract defines: an ordered list of entries each carrying a `text` and a
 
 The derivation SHALL be gated on a controlled vocabulary of section headings
 (for example `Requirements`, `Qualifications`, `What you'll need`,
-`Nice to have`). It SHALL take the list items of the first list that follows a
-matching heading, stopping at the next heading. A description with no matching
-heading SHALL yield no entries: there is no fallback that infers which list in a
-posting is the requirements list, because a benefits or perks list must never be
-read as requirements.
+`Nice to have`). Under a matching heading, the derivation SHALL read items from
+either shape a section is stated in: the list items of the first list that
+follows the heading, stopping at the next heading; or, when no list is found
+before the section closes, a run of two or more paragraph-shaped items stated
+directly under the heading, each becoming one entry. A single paragraph-shaped
+item alone SHALL NOT be read as a section's content, since one paragraph cannot
+be told apart from prose that merely explains the section away. A description
+with no matching heading SHALL yield no entries: there is no fallback that
+infers which list or paragraph run in a posting is the requirements content,
+because a benefits or perks section must never be read as requirements.
 
 Each entry's `priority` SHALL be decided by the heading it was found under —
 headings expressing optionality (`nice to have`, `preferred`, `bonus`, `a plus`)
@@ -41,9 +45,10 @@ A description carrying more than one matching heading SHALL yield the entries of
 each, so a posting with both a required and an optional section produces both
 priorities.
 
-Entry text SHALL be extracted as plain text: markup inside a list item is
-stripped, character entities are decoded, and surrounding and repeated
-whitespace is collapsed. An entry that is empty after this SHALL be dropped.
+Entry text SHALL be extracted as plain text: markup inside a list item or
+paragraph is stripped, character entities are decoded, and surrounding and
+repeated whitespace is collapsed. An entry that is empty after this SHALL be
+dropped.
 
 The derivation SHALL be bounded by the same maximum entry count and maximum text
 length that the enrichment contract's sanitization enforces, read from those same
@@ -69,10 +74,20 @@ constants rather than restated, so both producers of the field obey one ceiling.
 - **WHEN** a description's only heading-and-list pair is a benefits or perks section whose heading is outside the vocabulary
 - **THEN** the derivation returns no entries
 
+#### Scenario: A matching heading followed by two or more paragraph items yields those items
+
+- **WHEN** a description contains a heading matching the vocabulary followed by two or more paragraph-shaped items, with no list found before the section closes
+- **THEN** the derivation returns one entry per paragraph, in document order, carrying the heading's priority
+
 #### Scenario: A matching heading with no list yields nothing
 
-- **WHEN** a description contains a heading matching the vocabulary but the content that follows is prose rather than a list
-- **THEN** the derivation returns no entries
+- **WHEN** a description contains a heading matching the vocabulary but the content that follows is neither a list nor two or more paragraph-shaped items — no content at all, or exactly one paragraph-shaped item, before the section closes
+- **THEN** the derivation returns no entries for that section
+
+#### Scenario: Genuine prose before a list closes the section instead of being read as items
+
+- **WHEN** a description contains a heading matching the vocabulary, followed by a paragraph of prose, followed by a list
+- **THEN** the derivation returns no entries for that section: the list belongs to whatever follows, not to this heading
 
 #### Scenario: A description with no markup yields nothing
 
@@ -81,7 +96,7 @@ constants rather than restated, so both producers of the field obey one ceiling.
 
 #### Scenario: Item markup is reduced to plain text
 
-- **WHEN** a list item contains nested markup or character entities
+- **WHEN** a list item or paragraph item contains nested markup or character entities
 - **THEN** the derived entry's text is the item's plain text with markup stripped, entities decoded, and whitespace collapsed
 
 #### Scenario: The derivation obeys the enrichment contract's bounds
@@ -141,3 +156,32 @@ configuration beyond the database connection.
 
 - **WHEN** the worker runs with a per-run maximum configured
 - **THEN** it stops after processing at most that many postings and exits successfully, leaving the remainder for a later run
+
+### Requirement: The heading vocabulary recognizes more than one language
+
+The controlled heading vocabulary SHALL recognize headings written in more than one
+language, matched after the same transliteration the vocabulary already applies to
+diacritics — a non-Latin heading is folded to its transliterated form and matched
+against the vocabulary in that spelling, the same way an accented Latin heading already
+is. Widening the vocabulary to a new language SHALL be additive: entries for one
+language SHALL NOT change whether a heading in another language matches.
+
+A vocabulary entry for a new language SHALL be added only after being measured against
+real postings that use it, not derived from translation alone — a phrase that
+transliterates correctly but is never actually used as a heading earns nothing.
+
+#### Scenario: A non-Latin-script heading opens a requirements section
+
+- **WHEN** a posting's description carries a heading written in a language the
+  vocabulary recognizes, in that language's own script, followed by a list
+- **THEN** the list's items are derived as requirements, the same as for an English
+  heading
+
+#### Scenario: A recognized non-English heading with no list still yields nothing
+
+- **WHEN** a posting's description carries a heading the vocabulary recognizes, in
+  any recognized language, but the section that follows is not a list the derivation
+  can read
+- **THEN** the description yields no entries for that section — recognizing the
+  heading does not relax the requirement that a list follow it
+

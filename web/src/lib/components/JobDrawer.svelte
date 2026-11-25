@@ -127,7 +127,7 @@
   // load — the server would stop sending it, but not until something asks it again.
   let stageSuggestion = $state.raw<StageSuggestion | null>(null);
   // The caller's own live auto-apply attempt for this job, loaded alongside everything
-  // else loadEmails() fetches (openspec/changes/auto-apply-review-tracking) — null for a
+  // else loadEmails() fetches (openspec/changes/archive/2026-09-05-auto-apply-review-tracking) — null for a
   // job with none.
   let autoApply = $state.raw<AutoApplyReviewInfo | null>(null);
 
@@ -185,7 +185,7 @@
   // Once a successful submission retires the live attempt, `autoApply` goes back to null
   // and the job's stage looks like any other "applied" job. The ledger still knows better:
   // cmd/auto-apply's Store.Submit records this exact fact (appevent.SourceAutoApply) when
-  // it calls MarkJobApplied. See openspec/changes/auto-apply-progress-tab/design.md.
+  // it calls MarkJobApplied. See openspec/changes/archive/2026-09-13-auto-apply-progress-tab/design.md.
   const autoApplied = $derived(events.some((e) => e.kind === 'applied' && e.source === 'auto_apply'));
 
   // The full posting. The listing serves a card — employer, role, and the facets a row draws —
