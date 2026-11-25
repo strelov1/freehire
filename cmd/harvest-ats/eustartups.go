@@ -113,7 +113,7 @@ func loadEUSState(r io.Reader) (eusState, error) {
 // without its newline; the next record would be glued onto it and lost with it on the next load,
 // so the torn line is terminated first.
 func openEUSState(path string) (*os.File, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0o600) //nolint:gosec // the operator's own CLI argument
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func openEUSState(path string) (*os.File, error) {
 		}
 	}
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	return f, nil
@@ -146,9 +146,9 @@ func runEUStartups(slugFile, statePath string) int {
 	}
 
 	st := eusState{pages: map[int][]string{}, cards: map[string]companySite{}}
-	if f, err := os.Open(statePath); err == nil {
+	if f, err := os.Open(statePath); err == nil { //nolint:gosec // the operator's own CLI argument
 		st, err = loadEUSState(f)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			log.Printf("harvest-ats: read state: %v", err)
 			return 1
@@ -162,7 +162,7 @@ func runEUStartups(slugFile, statePath string) int {
 		log.Printf("harvest-ats: open state: %v", err)
 		return 1
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 	var (
 		mu       sync.Mutex
 		writeErr error // first failed checkpoint: the walk stops, since what it reads next would not persist
@@ -227,7 +227,7 @@ func runEUStartups(slugFile, statePath string) int {
 				mu.Lock()
 				st.cards[slug] = site
 				if n := len(st.cards); n%500 == 0 {
-					log.Printf("harvest-ats: eustartups: %d/%d cards", n, len(slugs))
+					log.Printf("harvest-ats: eustartups: %d/%d cards", n, len(slugs)) //nolint:gosec // two counters, no external text
 				}
 				mu.Unlock()
 			}

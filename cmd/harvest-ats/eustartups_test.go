@@ -66,7 +66,7 @@ func TestLoadEUSStateSkipsTornLine(t *testing.T) {
 
 func TestOpenEUSStateTerminatesTornLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.jsonl")
-	if err := os.WriteFile(path, []byte(`{"card":"a","name":"A"}`+"\n"+`{"card":"b","na`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"card":"a","name":"A"}`+"\n"+`{"card":"b","na`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	f, err := openEUSState(path)
@@ -76,12 +76,12 @@ func TestOpenEUSStateTerminatesTornLine(t *testing.T) {
 	if err := json.NewEncoder(f).Encode(eusRecord{Card: "c", Name: "C"}); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
-	r, err := os.Open(path)
+	_ = f.Close()
+	r, err := os.Open(path) //nolint:gosec // the test's own temp file
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	st, err := loadEUSState(r)
 	if err != nil {
 		t.Fatal(err)
