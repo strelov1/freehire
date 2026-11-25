@@ -35,6 +35,8 @@ type Campaign struct {
 	// Timezones limits the audience to accounts whose stored timezone is listed; empty sends to everyone.
 	// There is no country column, so an account that never reported a timezone is never reached.
 	Timezones []string
+	// DataPlanOnly limits the audience to accounts holding a live Data plan.
+	DataPlanOnly bool
 	// Half limits a run to one side of a split test, "a" or "b". Empty sends to everyone.
 	// Lookup returns a copy, so setting it for one run leaves the registry alone.
 	Half string
@@ -92,6 +94,7 @@ type assets struct {
 	BuddiesURL     string
 	BuddiesDemoURL string
 	PricingURL     string
+	DataDocsURL    string
 }
 
 func (m *Mailer) assets() assets {
@@ -104,6 +107,7 @@ func (m *Mailer) assets() assets {
 		BuddiesURL:     m.baseURL + "/features/interview-buddies",
 		BuddiesDemoURL: m.baseURL + "/email-buddies-demo.gif",
 		PricingURL:     m.baseURL + "/pricing",
+		DataDocsURL:    m.baseURL + "/docs/api/data",
 	}
 }
 

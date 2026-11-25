@@ -13560,6 +13560,21 @@ func (s *GetCVTailorContextOK) SetData(val jx.Raw) {
 }
 
 // A single item: `{"data": ...}`.
+type GetDataJobOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetDataJobOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetDataJobOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type GetDirectApplyFormOK struct {
 	Data DirectApplyForm `json:"data"`
 }

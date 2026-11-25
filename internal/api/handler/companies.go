@@ -363,6 +363,7 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	hideOrigins(c.Context(), views)
 
 	// Referral availability is best-effort: a lookup error degrades to false (block hidden).
 	referralAvailable, _ := h.queries.CompanyHasApprovedReferrer(c.Context(), slug)
@@ -424,6 +425,7 @@ func (h *companiesHandlers) CompanyClosedJobs(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	hideOrigins(c.Context(), views)
 	return c.JSON(fiber.Map{
 		"data": views,
 		"meta": fiber.Map{"limit": limit, "offset": offset, "has_more": hasMore},

@@ -271,8 +271,8 @@
     const actions = el("div", "actions");
     const page = safeURL(job.url);
     if (page) actions.append(link("Open on freehire", page, true));
-    const employer = safeURL(job.official_job_url);
-    if (employer) actions.append(link("Employer's posting", employer, false));
+    const apply = safeURL(job.apply_url);
+    if (apply) actions.append(link("Apply", apply, false));
     if (hostCapabilities.serverTools && typeof job.slug === "string" && job.slug.trim()) {
       actions.append(accountActions(job));
     }

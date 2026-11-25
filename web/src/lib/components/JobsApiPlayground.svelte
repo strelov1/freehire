@@ -70,7 +70,7 @@
     "title": "Golang Software Engineer",
     "company": "1global",
     "source": "workable",
-    "url": "https://apply.workable.com/j/973E5FE25D",
+    "apply_url": "https://freehire.me/api/v1/go/golang-software-engineer-1global-7f3a?src=web",
     "countries": ["de", "pt"],
     "cities": ["Berlin", "Lisbon"],
     "skills": ["go", "grpc", "kafka", "kubernetes", "postgresql"],
@@ -89,7 +89,7 @@
     title: string;
     company: string;
     source: string;
-    url: string;
+    apply_url?: string;
     countries?: string[];
     cities?: string[];
     skills?: string[];
@@ -102,7 +102,7 @@
       title: job.title,
       company: job.company,
       source: job.source,
-      url: job.url,
+      apply_url: job.apply_url,
       countries: job.countries ?? [],
       cities: job.cities ?? [],
       skills: (job.skills ?? []).slice(0, 5),

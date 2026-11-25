@@ -57,3 +57,46 @@ func TestBroadcastCandidates_TimezoneAudience(t *testing.T) {
 		t.Errorf("campaign without timezones reached %v, want all three", got)
 	}
 }
+
+// A Data-plan campaign reaches only accounts whose Data plan is still live: not an expired one,
+// and not an API-plan holder.
+func TestBroadcastCandidates_DataPlanAudience(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateSubs(t, pool)
+
+	live := insertUser(t, pool, "data-live@example.test")
+	expired := insertUser(t, pool, "data-expired@example.test")
+	apiOnly := insertUser(t, pool, "api-only@example.test")
+	for _, id := range []int64{live, expired, apiOnly} {
+		verifyEmail(t, pool, id)
+	}
+	for _, stmt := range []struct {
+		sql string
+		id  int64
+	}{
+		{`UPDATE users SET api_data_until_stripe = now() + interval '30 days' WHERE id = $1`, live},
+		{`UPDATE users SET api_data_until_stripe = now() - interval '1 day' WHERE id = $1`, expired},
+		{`UPDATE users SET api_until_stripe = now() + interval '30 days' WHERE id = $1`, apiOnly},
+	} {
+		if _, err := pool.Exec(ctx, stmt.sql, stmt.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rows, err := q.ListBroadcastCandidates(ctx, ListBroadcastCandidatesParams{Campaign: "data-test", DataPlanOnly: true, MaxRows: 100})
+	if err != nil {
+		t.Fatalf("ListBroadcastCandidates: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != live {
+		t.Errorf("Data campaign reached %v, want only %d", rows, live)
+	}
+	count, err := q.CountBroadcastCandidates(ctx, CountBroadcastCandidatesParams{Campaign: "data-test", DataPlanOnly: true})
+	if err != nil {
+		t.Fatalf("CountBroadcastCandidates: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("count = %d, want 1", count)
+	}
+}

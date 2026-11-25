@@ -854,6 +854,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/data/jobs/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search open jobs with their original links (Data plan).
+         * @description The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
+         *     each job's `url` (the employer's own posting) and `source_url` where it differs. The public
+         *     job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
+         *     account gets `403`. Never cached: the answer is private to the plan holder.
+         */
+        get: operations["searchDataJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data/jobs/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A single job with its original links (Data plan).
+         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
+         *     Data plan: any other account gets `403`.
+         */
+        get: operations["getDataJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionary/gaps": {
         parameters: {
             query?: never;
@@ -9108,15 +9152,15 @@ export interface components {
             company: string;
             company_slug?: string;
             /**
-             * @description The employer's own application URL, as published. Match pages and deduplicate on this;
-             *     do not send people to it. Empty when `direct_apply` is true: that vacancy has no page
-             *     elsewhere.
+             * @description The employer's own application URL, as published. Served only by the Data plan's
+             *     `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
+             *     Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
              */
             url?: string;
             /**
              * @description Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)
-             *     that counts the click and forwards to `url`. Set `src` to the surface handing the link out:
-             *     `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is.
+             *     that counts the click and forwards to the employer's page. Set `src` to the surface handing the link out:
+             *     `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent for a vacancy taking applications on freehire.
              */
             apply_url?: string;
             /**
@@ -9132,7 +9176,8 @@ export interface components {
             external_id?: string;
             /**
              * @description The original posting when `url` points at a separately verified application
-             *     destination. Absent when both links are the same.
+             *     destination. Absent when both links are the same, and outside the Data plan's
+             *     `/data/jobs` endpoints.
              */
             source_url?: string;
             /**
@@ -13590,6 +13635,85 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchDataJobs: {
+        parameters: {
+            query?: {
+                /** @description Full-text query, as on `/jobs/search`. (e.g. `golang`) */
+                q?: string;
+                /** @description As on `/jobs/search`. (e.g. `title`) */
+                q_fields?: string;
+                /** @description As on `/jobs/search`. (e.g. `true`) */
+                q_prefix?: string;
+                /** @description As on `/jobs/search`. (e.g. `posted_at`) */
+                sort?: string;
+                /** @description `asc` or `desc` (default `desc`). (e.g. `desc`) */
+                order?: string;
+                /** @description Page size, 1–100. (e.g. `100`) */
+                limit?: string;
+                /** @description Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) */
+                offset?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSearchPage"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDataJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Job"];
                     };
                 };
             };
