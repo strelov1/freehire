@@ -19,7 +19,7 @@ sql:
           # No column or table is named "job", so the key renames only the jobs model.
           job: "JobRow"
           jobs_read: "Job"
-          # The same projection without the deleted-vacancy filter (migration 0319).
+          # The same projection without the deleted-vacancy filter (migration 0320).
           jobs_read_all: "JobAll"
         overrides:
           # Read jobs.enrichment as json.RawMessage, not []byte. RawMessage keeps

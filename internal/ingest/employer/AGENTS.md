@@ -72,7 +72,7 @@ for the full design record.
   `created_by = ANY(ARRAY(SELECT employer_team(actor_id))) AND source = 'employer'` to the same shape.
 - **Delete is a soft close that hides the row from `jobs_read`.** `DeleteEmployerJob` sets
   `closed_reason='employer_deleted'` (migration 0318); `jobs_read` excludes that reason
-  (migration 0319), so every public read, the employer's own `BySlug`/list and its analytics
+  (migration 0320), so every public read, the employer's own `BySlug`/list and its analytics
   stop seeing it with no filter of their own. Applications read the `jobs` table and keep it;
   the candidate's tracked-application detail reads `jobs_read_all` (`GetJobBySlugForApplicant`),
   the same projection without the filter, so a sent application stays readable. A migration

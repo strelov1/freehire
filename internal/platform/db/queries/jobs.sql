@@ -157,7 +157,7 @@ WHERE public_slug = $1;
 
 -- name: GetJobBySlugForApplicant :one
 -- GetJobBySlug that also finds a vacancy its employer deleted (jobs_read hides it, migration
--- 0319), for the candidate's own application history: an application that was sent stays
+-- 0320), for the candidate's own application history: an application that was sent stays
 -- readable after the employer removes the posting. Only for a read gated on the caller's own
 -- application; never a public one.
 SELECT *

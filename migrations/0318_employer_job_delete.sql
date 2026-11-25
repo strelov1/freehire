@@ -5,7 +5,7 @@
 --
 -- Delete is soft: direct_applications and other tables reference the jobs row, so the row
 -- stays. A deleted vacancy is closed with closed_reason 'employer_deleted'
--- and hidden from jobs_read (migration 0319). The reason is distinct from 'employer_closed',
+-- and hidden from jobs_read (migration 0320). The reason is distinct from 'employer_closed',
 -- which ReopenEmployerJob can undo; this one is final.
 ALTER TABLE public.jobs
     DROP CONSTRAINT IF EXISTS jobs_closed_reason_check;
