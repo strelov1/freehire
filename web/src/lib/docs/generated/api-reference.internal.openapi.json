@@ -16467,6 +16467,22 @@
             "type": "string",
             "description": "Click-tracking redirect (`/api/v1/sponsored/go/<token>`) for a sponsored hit; it always\nends at the job. `url` stays the organic link."
           },
+          "employment_type": {
+            "type": "string",
+            "description": "The employment type, the same value as `enrichment.employment_type`, lifted to the top\nlevel. Served by `getJob` only; absent when not known."
+          },
+          "salary": {
+            "$ref": "#/components/schemas/JobSalary",
+            "description": "The pay range, the same values as `enrichment.salary_*`. Served by `getJob` only; absent when no bound is stated."
+          },
+          "company_website": {
+            "type": "string",
+            "description": "The employer's own site as its company record states it. Served by `getJob` only; absent when none is on record."
+          },
+          "company_logo": {
+            "type": "string",
+            "description": "The employer's logo through freehire's logo proxy, resolved by the site's domain. The\nproxy answers 404 when it has no mark. Served by `getJob` only, beside `company_website`."
+          },
           "posted_at": {
             "anyOf": [
               {
@@ -16965,6 +16981,25 @@
           }
         },
         "description": "One requirement the posting states."
+      },
+      "JobSalary": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 (e.g. `USD`)."
+          },
+          "period": {
+            "type": "string"
+          }
+        },
+        "description": "A posting's pay range: either bound may be absent, never both."
       },
       "JobUpdate": {
         "type": "object",

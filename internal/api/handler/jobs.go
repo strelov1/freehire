@@ -216,13 +216,16 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 		view.ReferralAvailable = avail
 	}
 
-	// Recruiter contacts: offered only where a lookup can run, so nobody pays a click for a
-	// 422. Best-effort like the referral flag.
-	if h.recruiterContacts {
-		if d, err := h.queries.GetJobRecruiterDomain(ctx, job.PublicSlug); err == nil {
-			view.RecruiterContactsAvailable = d.Domain != ""
-		}
+	// The employer's site and logo, beside the employment type and pay range lifted out of
+	// enrichment. The same site host decides whether recruiter contacts are offered: only
+	// where a lookup can run, so nobody pays a click for a 422. Best-effort like the
+	// referral flag: a failed read leaves the site fields absent and contacts off.
+	var website, host string
+	if site, err := h.queries.GetCompanySite(ctx, job.CompanySlug); err == nil {
+		website, host = site.Website, site.Host
 	}
+	view.DetailFacts(website, host)
+	view.RecruiterContactsAvailable = h.recruiterContacts && host != ""
 
 	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
 	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
