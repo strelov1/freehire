@@ -9223,6 +9223,26 @@ export interface components {
              *     database may omit it.
              */
             apply_questions?: number;
+            /** @description Mirror of `enrichment.employment_type`, for flat readers. Absent when unknown. */
+            employment_type?: string;
+            /** @description Mirror of `enrichment.seniority`. Absent when unknown. */
+            experience_level?: string;
+            /** @description Mirror of `enrichment.category`. Absent when unknown. */
+            category?: string;
+            /** @description Mirror of `enrichment.education_level`. Absent when unknown. */
+            education_level?: string;
+            /**
+             * @description `true` when `work_mode` is `remote`, `false` for `hybrid` and `onsite`. Absent when
+             *     `work_mode` is.
+             */
+            remote?: boolean;
+            /** @description The company's website on record (`https://host`). Served by `getJob` only; absent when none is known. */
+            company_website?: string;
+            /**
+             * @description The company logo, from the freehire logo proxy keyed by the company NAME. Served by
+             *     `getJob` only. The proxy answers 404 for a name it cannot resolve, so keep a fallback.
+             */
+            company_logo?: string;
             /**
              * @description True only on a search hit placed as a paid slot (never on an organic hit). Render a
              *     visible "Sponsored" label, and link the card to `sponsored_url`.

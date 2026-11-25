@@ -212,12 +212,17 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 		view.ReferralAvailable = avail
 	}
 
-	// Recruiter contacts: offered only where a lookup can run, so nobody pays a click for a
-	// 422. Best-effort like the referral flag.
-	if h.recruiterContacts {
-		if d, err := h.queries.GetJobRecruiterDomain(ctx, job.PublicSlug); err == nil {
-			view.RecruiterContactsAvailable = d.Domain != ""
+	// The company's site on record and its logo-proxy URL (by NAME, never a posting host:
+	// docs/agents/public-figures.md). Best-effort like the flags around it. Recruiter
+	// contacts are offered only where a lookup can run, so nobody pays a click for a 422.
+	if d, err := h.queries.GetJobRecruiterDomain(ctx, job.PublicSlug); err == nil {
+		if d.Domain != "" {
+			view.CompanyWebsite = "https://" + d.Domain
 		}
+		view.RecruiterContactsAvailable = h.recruiterContacts && d.Domain != ""
+	}
+	if job.Company != "" {
+		view.CompanyLogo = "https://logo.freehire.me/" + url.PathEscape(job.Company)
 	}
 
 	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches

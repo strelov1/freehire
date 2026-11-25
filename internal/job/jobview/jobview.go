@@ -130,6 +130,20 @@ type Job struct {
 	// serialized; the two must never read alike. Not set by FromRow, which sees only the
 	// jobs row: the search-index writers and the detail endpoint attach it from apply_forms.
 	ApplyQuestions *int `json:"apply_questions,omitempty"`
+	// EmploymentType, ExperienceLevel, Category, EducationLevel and Remote are top-level
+	// mirrors of facts already served (enrichment.employment_type, .seniority, .category,
+	// .education_level, and work_mode), for consumers that read a flat posting. Remote is a
+	// pointer: false ("hybrid"/"onsite") is an answer, absent means work_mode is unknown.
+	EmploymentType  string `json:"employment_type,omitempty"`
+	ExperienceLevel string `json:"experience_level,omitempty"`
+	Category        string `json:"category,omitempty"`
+	EducationLevel  string `json:"education_level,omitempty"`
+	Remote          *bool  `json:"remote,omitempty"`
+	// CompanyWebsite (the company's site on record, https URL) and CompanyLogo (the logo
+	// proxy's URL for the company NAME, which may 404 on a miss) are attached by the detail
+	// handler only; list and search rows omit them.
+	CompanyWebsite string `json:"company_website,omitempty"`
+	CompanyLogo    string `json:"company_logo,omitempty"`
 	// Sponsored marks a search hit placed as a paid slot (never an organic one), and
 	// SponsoredURL is the click-tracking redirect the "Sponsored" card must link to
 	// (/api/v1/sponsored/go/<token>); URL stays the organic link for crawlers. Both are set
@@ -279,7 +293,17 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	e.Skills = nil
 	e.Cities = nil
 
+	var remote *bool
+	if workMode != "" {
+		r := workMode == "remote"
+		remote = &r
+	}
 	return Job{
+		EmploymentType:      e.EmploymentType,
+		ExperienceLevel:     e.Seniority,
+		Category:            e.Category,
+		EducationLevel:      e.EducationLevel,
+		Remote:              remote,
 		PublicSlug:          f.PublicSlug,
 		Source:              f.Source,
 		ManuallyAdded:       f.ManuallyAdded,
