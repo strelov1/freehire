@@ -2,6 +2,10 @@ package atsboard
 
 // recognizeCases7 is part 7 of 7 of the TestRecognize table, in order.
 var recognizeCases7 = []recognizeCase{
+	// A template placeholder a page's JavaScript fills in at runtime is not a board: careers pages
+	// carry them as bare literals (soundcloud.com's `job-boards.greenhouse.io/${ghSlug}`).
+	{"js template placeholder is not a board", "https://job-boards.greenhouse.io/${ghSlug}", "", "", "", false},
+	{"mustache placeholder is not a board", "https://jobs.lever.co/{{slug}}/apply", "", "", "", false},
 	// erecruiter: the cfg token, kept as spelled.
 	{"erecruiter posting", "https://skk.erecruiter.pl/Offer.aspx?oid=4885221&cfg=d9f100d80dcc4d9895201c2993c46816&ejoId=526476&ejorId=216430&comId=20134027", "erecruiter", "d9f100d80dcc4d9895201c2993c46816", "https://skk.erecruiter.pl/GetHtml.ashx?cfg=d9f100d80dcc4d9895201c2993c46816&grid=rows&pn=1", true},
 	{"erecruiter upper-case cfg kept as spelled", "https://skk.erecruiter.pl/Offer.aspx?oid=4978589&cfg=4D3DD27FCA3D40C79E01BEE9745902B7&ejoId=611624", "erecruiter", "4D3DD27FCA3D40C79E01BEE9745902B7", "https://skk.erecruiter.pl/GetHtml.ashx?cfg=4D3DD27FCA3D40C79E01BEE9745902B7&grid=rows&pn=1", true},
