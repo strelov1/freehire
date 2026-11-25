@@ -182,7 +182,8 @@ jobs:
           # need their own race cleanup first.
           # dict/classify runs without -race: it is pure regex code with no shared state, and
           # the detector slows its Unicode tables past the 10m test timeout (1s → 400-600s).
-          go test -race $(go list ./... | grep -vx github.com/strelov1/freehire/internal/dict/classify) -coverprofile=coverage/unit.out -covermode=atomic
+          mapfile -t packages < <(go list ./... | grep -vx github.com/strelov1/freehire/internal/dict/classify)
+          go test -race "${packages[@]}" -coverprofile=coverage/unit.out -covermode=atomic
           go test ./internal/dict/classify -coverprofile=coverage/unit-classify.out -covermode=atomic
           (cd tools && go test ./...)
 
