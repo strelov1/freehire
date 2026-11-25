@@ -84,6 +84,9 @@ func TestCareerjetFetchSendsCredentialsAndRequiredParams(t *testing.T) {
 	if got, want := f.headers[0]["Authorization"], "Basic "+base64.StdEncoding.EncodeToString([]byte("secret:")); got != want {
 		t.Fatalf("Authorization = %q, want %q", got, want)
 	}
+	if got := f.headers[0]["Referer"]; got != "https://freehire.me/" {
+		t.Fatalf("Referer = %q, want the registered site", got)
+	}
 	q, _ := url.Parse(f.gotURLs[0])
 	for k, want := range map[string]string{
 		"locale_code": "en_GB", "keywords": "software engineer", "sort": "date",
