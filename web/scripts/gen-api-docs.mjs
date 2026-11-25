@@ -86,13 +86,17 @@ const AUDIENCE_INTRO = {
     'Data plan endpoints',
     'This reference covers only the endpoints of the [Data plan](https://freehire.me/jobs-api): ' +
       'job reads that carry each posting’s original links (`url`, the employer’s own page, and ' +
-      '`source_url` where the application goes elsewhere), and the full-catalogue export. They ' +
-      'take the same parameters and return the same shapes as `GET /jobs/search` and ' +
-      '`GET /jobs/{slug}`. Every other job read leaves the two links out and links through ' +
-      '`apply_url`, a counted freehire redirect. Send a full-access key of the plan holder as ' +
-      '`Authorization: Bearer <token>`; any other account gets `403`. The 6,000-request window ' +
-      'applies on these endpoints only, counted apart from the 1,200-request window the plan holds ' +
-      'everywhere else. The rest of the API is documented at [freehire.me/docs/api](https://freehire.me/docs/api).',
+      '`source_url` where the application goes elsewhere), and the full-catalogue export. ' +
+      '`GET /data/jobs/search` and `GET /data/jobs/{slug}` take the same parameters and return the ' +
+      'same shapes as `GET /jobs/search` and `GET /jobs/{slug}`. On every other job read, a posting ' +
+      'with an `apply_url` (a counted freehire redirect) has `url` empty and no `source_url`; a ' +
+      'posting without one, and an Adzuna posting (whose `url` is Adzuna’s own page), keeps `url`. ' +
+      'Wherever the overview says to refresh a posting with `GET /jobs/{slug}`, a Data plan mirror ' +
+      'uses `GET /data/jobs/{slug}` so it keeps the links. Send a full-access key of the plan holder ' +
+      'as `Authorization: Bearer <token>`; any other account gets `403`. The 6,000-request window ' +
+      'applies to the two `/data/jobs` endpoints only, counted apart; every other endpoint, the ' +
+      'catalogue export included, holds the 1,200-request window. The rest of the API is documented ' +
+      'at [freehire.me/docs/api](https://freehire.me/docs/api).',
   ],
 };
 

@@ -133,7 +133,7 @@ var campaigns = map[string]Campaign{
 		DataPlanOnly: true,
 		body: body("data-plan-endpoints", `
 {{template "p" "Hi — a change to the freehire API that touches your integration."}}
-{{template "p" "Job reads on the public API (/jobs, /jobs/search, /jobs/{slug}, company jobs and the MCP server) no longer carry the employer’s own link: url is empty and source_url is gone wherever apply_url, the freehire redirect to the same page, is set."}}
+{{template "p" "Job reads on the public API (/jobs, /jobs/search, /jobs/{slug}, company jobs and the MCP server) no longer carry the employer’s own link: url is empty and source_url is gone wherever apply_url, the freehire redirect to the same page, is set. Adzuna postings keep url, since it is Adzuna’s own page."}}
 {{template "lead" "Your Data plan keeps both, on two new endpoints."}}
 {{template "p" "GET /api/v1/data/jobs/search and GET /api/v1/data/jobs/{slug} take the same parameters and return the same shape as /jobs/search and /jobs/{slug}, with url and source_url filled in. Call them with the same API key."}}
 {{template "p" "Your 6,000 requests a minute now apply on these endpoints, counted on their own. Everywhere else your key gets the API plan’s 1,200. The daily catalogue export is unchanged and still carries url."}}
@@ -144,7 +144,8 @@ var campaigns = map[string]Campaign{
 			return "Hi — a change to the freehire API that touches your integration.\n\n" +
 				"Job reads on the public API (/jobs, /jobs/search, /jobs/{slug}, company jobs and the MCP\n" +
 				"server) no longer carry the employer's own link: url is empty and source_url is gone wherever\n" +
-				"apply_url, the freehire redirect to the same page, is set.\n\n" +
+				"apply_url, the freehire redirect to the same page, is set. Adzuna postings keep url, since it\n" +
+				"is Adzuna's own page.\n\n" +
 				"Your Data plan keeps both, on two new endpoints.\n\n" +
 				"GET /api/v1/data/jobs/search and GET /api/v1/data/jobs/{slug} take the same parameters and\n" +
 				"return the same shape as /jobs/search and /jobs/{slug}, with url and source_url filled in.\n" +

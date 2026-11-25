@@ -330,7 +330,7 @@ func (h *feedHandlers) Feed(c *fiber.Ctx) error {
 	segment := func(hits []search.JobDocument, isNew bool) ([]feedCard, string) {
 		cards := make([]feedCard, len(hits))
 		for i, hit := range hits {
-			hit.Job.HideOrigin()
+			hit.HideOrigin()
 			cards[i] = feedCard{Job: hit.Job, Match: matchBlock(hit.Job, profile.Skills), IsNew: isNew}
 		}
 		if meta.Degraded != "" {

@@ -61,7 +61,7 @@ func (h *searchHandlers) SearchDataJobs(ctx context.Context, _ apigen.SearchData
 
 // GetDataJob is /jobs/{slug} for the Data plan; dataPlanGate marks the request.
 func (h *jobsHandlers) GetDataJob(ctx context.Context, params apigen.GetDataJobParams) (*apigen.GetDataJobOK, error) {
-	out, err := h.GetJob(ctx, apigen.GetJobParams{Slug: params.Slug})
+	out, err := h.GetJob(ctx, apigen.GetJobParams(params))
 	if err != nil {
 		return nil, err
 	}
