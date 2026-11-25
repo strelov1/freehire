@@ -12,7 +12,7 @@
 
 - **English only** in all code, comments, identifiers, docs and commit messages.
 - Before committing any `*.go`: `gofmt -w` those paths, then `go vet ./...` and `go test ./...`. Before pushing: `go vet -tags=integration ./...`.
-- Pre-commit hooks (gofmt, gitleaks, doc-links, go vet, golangci-lint) run automatically. If one fails, fix the cause — never `--no-verify`.
+- Pre-commit hooks (gofmt, secret scanning, doc-links, go vet, golangci-lint) run automatically. If one fails, fix the cause — never `--no-verify`.
 - The Go build cache is shared and has been observed corrupting mid-build (`no such file or directory` under `~/Library/Caches/go-build`). On that, `export GOCACHE=/tmp/gocache-lv` and retry.
 - Use `git commit -F <file>` for multi-line messages, never `-m` with backticks.
 - **A submit click is irreversible.** Nothing in this plan may make one more likely on a page nobody measured. When a value is unknown, park.

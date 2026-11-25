@@ -105,6 +105,6 @@ configuration was changed. The integration agent should coordinate this with
 other newly hydrating adapters and the existing sliced refresh budget.
 
 Implementation commit: `c8a243647ce48cb791ccdb5e72b180825cf0ba33`. All pre-commit
-checks passed, including lint, sqlc drift, go vet, gitleaks, and doc links.
+checks passed, including lint, sqlc drift, go vet, secret scanning, and doc links.
 The commit-message hook skipped commitlint because root pnpm dependencies were
 not installed; the title uses the repository's required Conventional Commit form.

@@ -166,7 +166,7 @@ DOM helpers; no new abstraction, dependency or crawler.
 Passed with `GOMAXPROCS=2` and `-p 2`: `go vet ./...`, `go test ./...`,
 and `go vet -tags=integration ./...`. Gofmt, targeted Clinch tests, all 36 captured
 Clinch destination replays, size/relative-link checks, staged whitespace check and
-Gitleaks passed. No database-backed integration suite or production crawl was run.
+the secret scan passed. No database-backed integration suite or production crawl was run.
 
 CodeRabbit CLI 0.9.5, `review --agent --uncommitted --fresh`, exited zero with
 `outcome=completed`, 11 reviewed files and zero findings. A final documentation addendum
