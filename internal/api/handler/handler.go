@@ -305,7 +305,7 @@ func Register(app *fiber.App, cfg Config) {
 	mail := newAPIMail(cfg, queries, authH.accounts, reportsH)
 	mailClient := mail.client
 	assistantH.wireOptional(cfg, assistantStore, answerBank, reportsH, mailClient)
-	employerSvc, employerH := newEmployerSurfaces(cfg, queries, authH.accounts, mail.claimMailer, mailClient, moderationSvc)
+	employerSvc, employerH := newEmployerSurfaces(cfg, queries, authH.accounts, mail.claimMailer, mailClient, moderationSvc, submissionsH.prefiller)
 	directApplyH := newDirectApplySurface(cfg, queries, mailClient, cvRenderer, cvPDF, resumeStore, employerSvc, employerH, tracking, answerBank)
 	referralsH := newReferralSurface(cfg, queries, mail, telegramH, cvRenderer, cvStore, photoStore, resumeStore)
 	conversationH, buddyH := newBuddySurfaces(cfg, queries, mailClient)

@@ -9132,6 +9132,21 @@ func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 // DeleteEmailNoContent is response for DeleteEmail operation.
 type DeleteEmailNoContent struct{}
 
+// A single item: `{"data": ...}`.
+type DeleteEmployerVacancyOK struct {
+	Data EmployerRemoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DeleteEmployerVacancyOK) GetData() EmployerRemoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DeleteEmployerVacancyOK) SetData(val EmployerRemoved) {
+	s.Data = val
+}
+
 // DeleteEmploymentNoContent is response for DeleteEmployment operation.
 type DeleteEmploymentNoContent struct{}
 
@@ -24732,6 +24747,21 @@ func (s *PostJobAutoApplyRetryOK) SetData(val AutoApplyRetried) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type PrefillEmployerVacancyOK struct {
+	Data SubmissionPrefill `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PrefillEmployerVacancyOK) GetData() SubmissionPrefill {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PrefillEmployerVacancyOK) SetData(val SubmissionPrefill) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/PrefillRequest
 type PrefillRequest struct {
 	// The job posting URL to parse.
@@ -30708,7 +30738,8 @@ type SubmissionPrefill struct {
 	Seniority      OptString `json:"seniority"`
 	Skills         []string  `json:"skills"`
 	Source         OptString `json:"source"`
-	// Set, with every other field empty, when the catalogue already carries the vacancy.
+	// Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is
+	// then empty; on `/employer/jobs/prefill` they hold the stored vacancy.
 	ExistingJobSlug OptString `json:"existing_job_slug"`
 }
 

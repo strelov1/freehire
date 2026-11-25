@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -20,11 +21,15 @@ type arbeitsagenturFake struct {
 	searchByPage map[int]string    // page -> search JSON body ("" => empty page)
 	detailByRef  map[string]string // refnr -> detail JSON body ("" => empty detail)
 	detailErr    map[string]bool   // refnr -> detail fetch returns an error
-	gotHeaders   map[string]string
-	searchPages  []int // pages requested, in order
+	// mu guards gotHeaders and searchPages: the detail workers call this fake concurrently.
+	mu          sync.Mutex
+	gotHeaders  map[string]string
+	searchPages []int // pages requested, in order
 }
 
 func (f *arbeitsagenturFake) GetJSONWithHeaders(_ context.Context, u string, headers map[string]string, v any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.gotHeaders = headers
 	if strings.Contains(u, arbeitsagenturDetailAPIURL) {
 		enc := u[strings.LastIndex(u, "/")+1:]
