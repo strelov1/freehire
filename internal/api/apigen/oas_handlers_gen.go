@@ -8595,6 +8595,102 @@ func (s *Server) handleDeleteEmailRequest(args [1]string, argsEscaped bool, w ht
 	}
 }
 
+// handleDeleteEmployerVacancyRequest handles deleteEmployerVacancy operation.
+//
+// Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen
+// does not bring it back.
+//
+// DELETE /employer/jobs/{slug}
+func (s *Server) handleDeleteEmployerVacancyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: DeleteEmployerVacancyOperation,
+			ID:   "deleteEmployerVacancy",
+		}
+	)
+	params, err := decodeDeleteEmployerVacancyParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *DeleteEmployerVacancyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    DeleteEmployerVacancyOperation,
+			OperationSummary: "",
+			OperationID:      "deleteEmployerVacancy",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = DeleteEmployerVacancyParams
+			Response = *DeleteEmployerVacancyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackDeleteEmployerVacancyParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.DeleteEmployerVacancy(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.DeleteEmployerVacancy(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeDeleteEmployerVacancyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleDeleteEmploymentRequest handles deleteEmployment operation.
 //
 // 409 for a keyed caller while the place still holds achievements.
@@ -21146,7 +21242,9 @@ func (s *Server) handleListEmployerPendingClaimsRequest(args [0]string, argsEsca
 
 // handleListEmployerVacanciesRequest handles listEmployerVacancies operation.
 //
-// Every vacancy the caller published, newest first.
+// The caller's dashboard list, open first: the vacancies its team published (`source` is `employer`,
+// editable; at most 200) and the open ones of its company collected from other sources (read-only; at
+// most 200).
 //
 // GET /employer/jobs
 func (s *Server) handleListEmployerVacanciesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -26908,6 +27006,102 @@ func (s *Server) handlePostJobAutoApplyRetryRequest(args [1]string, argsEscaped 
 	}
 
 	if err := encodePostJobAutoApplyRetryResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handlePrefillEmployerVacancyRequest handles prefillEmployerVacancy operation.
+//
+// Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in
+// the catalogue returns its stored fields.
+//
+// POST /employer/jobs/prefill
+func (s *Server) handlePrefillEmployerVacancyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PrefillEmployerVacancyOperation,
+			ID:   "prefillEmployerVacancy",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodePrefillEmployerVacancyRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *PrefillEmployerVacancyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PrefillEmployerVacancyOperation,
+			OperationSummary: "",
+			OperationID:      "prefillEmployerVacancy",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *PrefillRequest
+			Params   = struct{}
+			Response = *PrefillEmployerVacancyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PrefillEmployerVacancy(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PrefillEmployerVacancy(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePrefillEmployerVacancyResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

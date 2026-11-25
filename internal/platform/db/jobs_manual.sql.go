@@ -48,6 +48,42 @@ func (q *Queries) CloseEmployerJob(ctx context.Context, arg CloseEmployerJobPara
 	return count, err
 }
 
+const deleteEmployerJob = `-- name: DeleteEmployerJob :one
+WITH deleted AS (
+    UPDATE jobs
+    SET closed_at     = COALESCE(closed_at, now()),
+        closed_reason = 'employer_deleted',
+        updated_at    = now()
+    WHERE jobs.public_slug = $1
+      AND jobs.created_by = ANY(ARRAY(SELECT employer_team($2::bigint)))
+      AND jobs.source = 'employer'
+      AND jobs.closed_reason <> 'employer_deleted'
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM deleted
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM deleted
+`
+
+type DeleteEmployerJobParams struct {
+	PublicSlug string `json:"public_slug"`
+	ActorID    int64  `json:"actor_id"`
+}
+
+// Soft delete of an employer-authored posting (same scope as CloseEmployerJob). The row
+// stays because applications reference it (they read the jobs table, not jobs_read); it is
+// closed, marked 'employer_deleted' (which jobs_read hides, migration 0318) and queued for
+// removal from search. ReopenEmployerJob only undoes 'employer_closed', so it stays gone;
+// the employer re-creating the same URL (UpsertManualJob) is the one way to publish it again.
+func (q *Queries) DeleteEmployerJob(ctx context.Context, arg DeleteEmployerJobParams) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteEmployerJob, arg.PublicSlug, arg.ActorID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const insertPrivateJob = `-- name: InsertPrivateJob :one
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description,
@@ -170,6 +206,117 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 	return id, err
 }
 
+const listEmployerCollectedJobs = `-- name: ListEmployerCollectedJobs :many
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes, team, application_url
+FROM jobs_read
+WHERE company_slug = public.active_employer_company($1::bigint)
+  AND source <> 'employer'
+  AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ORDER BY created_at DESC, id DESC
+LIMIT 200
+`
+
+// The open vacancies of the actor's active company that were collected from other sources
+// (active_employer_company, migration 0318): shown to the employer read-only, next to the ones
+// it published. Open only, since a company's closed postings are history and can be hundreds
+// of thousands; a posting flagged as a duplicate of another is left out so a role is not
+// listed twice. Newest first and capped at 200, served by jobs_open_company_created_at_id_idx.
+// A company with more than 200 open postings shows its newest 200.
+func (q *Queries) ListEmployerCollectedJobs(ctx context.Context, actorID int64) ([]Job, error) {
+	rows, err := q.db.Query(ctx, listEmployerCollectedJobs, actorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.ExternalID,
+			&i.URL,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.Remote,
+			&i.Description,
+			&i.PostedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompanySlug,
+			&i.Enrichment,
+			&i.EnrichedAt,
+			&i.EnrichmentVersion,
+			&i.PublicSlug,
+			&i.ClosedAt,
+			&i.Countries,
+			&i.Regions,
+			&i.WorkMode,
+			&i.Skills,
+			&i.Seniority,
+			&i.Category,
+			&i.CreatedBy,
+			&i.UpdatedBy,
+			&i.PostingLanguage,
+			&i.EmploymentType,
+			&i.EducationLevel,
+			&i.ExperienceYearsMin,
+			&i.Collections,
+			&i.ContentHash,
+			&i.EnglishLevel,
+			&i.Cities,
+			&i.ViewCount,
+			&i.AppliedCount,
+			&i.RoleFingerprint,
+			&i.SemanticEmbeddedModel,
+			&i.SemanticEmbeddedHash,
+			&i.DuplicateOf,
+			&i.IsTech,
+			&i.SalaryMinManual,
+			&i.SalaryMaxManual,
+			&i.SalaryCurrencyManual,
+			&i.SalaryPeriodManual,
+			&i.UpvoteCount,
+			&i.DownvoteCount,
+			&i.AtsAbsentAt,
+			&i.ClosedReason,
+			&i.IsPrivate,
+			&i.SalaryMinSource,
+			&i.SalaryMaxSource,
+			&i.SalaryCurrencySource,
+			&i.SalaryPeriodSource,
+			&i.CompanySlugFolded,
+			&i.DuplicateOfAggregator,
+			&i.DuplicateOfRole,
+			&i.DuplicateOfFuzzy,
+			&i.RequiresClearance,
+			&i.RequirementsDerived,
+			&i.AiInterviewReports,
+			&i.Metros,
+			&i.SemanticEmbeddedInputHash,
+			&i.ViaRecruiter,
+			&i.ClearanceLevels,
+			&i.Equity,
+			&i.Perks,
+			&i.ApplicationDeadline,
+			&i.Engagement,
+			&i.LastSeenAt,
+			&i.HydratedAt,
+			&i.LivenessStrikes,
+			&i.Team,
+			&i.ApplicationUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEmployerJobs = `-- name: ListEmployerJobs :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, closed_at, countries, regions, work_mode, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement, last_seen_at, hydrated_at, liveness_strikes, team, application_url
 FROM jobs_read
@@ -180,11 +327,11 @@ LIMIT 200
 `
 
 // An employer's own dashboard list: every vacancy the actor's company team created through
-// this path (employer_team, migration 0271),
-// newest first, open and closed both (the dashboard shows a closed one with its own badge
-// rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
-// ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
-// postings, not the public catalogue.
+// this path (employer_team, migration 0271), newest first, open and closed both (the
+// dashboard shows a closed one with its own badge rather than dropping it — the employer's
+// own re-Create-to-reopen path needs the closed ones findable). Capped rather than
+// paginated: an MVP dashboard for one employer's own postings, not the public catalogue.
+// A deleted one is gone from jobs_read (migration 0318).
 func (q *Queries) ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listEmployerJobs, actorID)
 	if err != nil {
