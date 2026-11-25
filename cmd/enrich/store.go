@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/outbox"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
@@ -162,10 +163,10 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	return tx.Commit(ctx)
 }
 
-func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, policy enrich.FailurePolicy) (bool, error) {
+func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, policy outbox.FailurePolicy) (bool, error) {
 	row, err := s.q.RecordEnrichmentFailure(ctx, db.RecordEnrichmentFailureParams{
 		LastError:         errMsg,
-		PostingAtFault:    policy.PostingAtFault,
+		PostingAtFault:    policy.AtFault,
 		MaxAttempts:       int32(policy.MaxAttempts),
 		UpstreamGraceDays: int32(policy.UpstreamGraceDays),
 		ID:                outboxID,

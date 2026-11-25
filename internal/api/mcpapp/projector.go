@@ -8,6 +8,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -63,6 +64,7 @@ func (p Projector) JobSummary(j jobview.Job) JobSummary {
 		Source:          j.Source,
 		URL:             p.pageURL("/jobs/", j.PublicSlug),
 		OfficialJobURL:  sources.EmployerURL(p.publishesEmployerURL, j.Source, j.URL),
+		ApplyURL:        j.ApplyURLFor(outboundurl.SrcMCP),
 	}
 }
 

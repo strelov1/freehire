@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"slices"
 	"sort"
@@ -167,7 +166,7 @@ func (s justjoinSite) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 	picked := hydrationLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(picked, justjoinDetailWorkers, func(p justjoinPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -191,14 +190,6 @@ func (s justjoinSite) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 		log.Printf("%s: %d new offers past this run's bound of %d, deferred to later runs", s.provider, deferred, len(picked))
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNew returns, so one that
-// runs into its deadline stores nothing at all.
-func (s justjoinSite) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list reads the sitemap index and every part it names, and returns their offers, most recently
@@ -302,8 +293,7 @@ func (s justjoinSite) detail(ctx context.Context, p justjoinPosting) (Job, bool,
 	}
 	page, err := s.http.GetText(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

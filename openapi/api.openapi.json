@@ -4619,6 +4619,103 @@
         ]
       }
     },
+    "/employer/jobs/{slug}/outbound-clicks": {
+      "get": {
+        "operationId": "getEmployerVacancyOutboundClicks",
+        "summary": "Read a vacancy's outbound clicks by day, country and source.",
+        "description": "Human clicks that freehire sent to the employer's site for the team's own vacancy; bots are excluded.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "description": "The employer-authored vacancy's public slug.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "First UTC day, inclusive. Defaults to 29 days before `to`. (e.g. `2026-11-01`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Last UTC day, inclusive. Defaults to today. At most 366 days after `from`. (e.g. `2026-11-30`)",
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EmployerOutboundClicks"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                },
+                "example": {
+                  "data": {
+                    "days": [
+                      {
+                        "day": "2026-11-20",
+                        "clicks": 12,
+                        "visitors": 9
+                      }
+                    ],
+                    "countries": [
+                      {
+                        "key": "DE",
+                        "clicks": 12
+                      }
+                    ],
+                    "sources": [
+                      {
+                        "key": "web",
+                        "clicks": 12
+                      }
+                    ],
+                    "clicks": 12,
+                    "visitors": 9
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ]
+      }
+    },
     "/employer/jobs/{slug}/reopen": {
       "post": {
         "operationId": "reopenEmployerVacancy",
@@ -30800,6 +30897,90 @@
         "properties": {
           "code": {
             "type": "string"
+          }
+        }
+      },
+      "EmployerOutboundClicks": {
+        "type": "object",
+        "required": [
+          "days",
+          "countries",
+          "sources",
+          "clicks",
+          "visitors"
+        ],
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerOutboundDay"
+            },
+            "description": "Days with at least one click, oldest first."
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerOutboundCount"
+            },
+            "description": "Most clicks first."
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployerOutboundCount"
+            },
+            "description": "Most clicks first."
+          },
+          "clicks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Clicks in the range."
+          },
+          "visitors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Visitors in the range, one per visitor per day."
+          }
+        }
+      },
+      "EmployerOutboundCount": {
+        "type": "object",
+        "required": [
+          "key",
+          "clicks"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The country code (`CF-IPCountry`) or the surface (`web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram`, `api`, `other`). Empty when unknown."
+          },
+          "clicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "EmployerOutboundDay": {
+        "type": "object",
+        "required": [
+          "day",
+          "clicks",
+          "visitors"
+        ],
+        "properties": {
+          "day": {
+            "type": "string",
+            "description": "UTC day, `YYYY-MM-DD`."
+          },
+          "clicks": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Human clicks through the freehire redirect to the employer's site that day."
+          },
+          "visitors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Distinct visitors that day."
           }
         }
       },

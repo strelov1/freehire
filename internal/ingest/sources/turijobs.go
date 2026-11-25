@@ -3,9 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"slices"
 	"sort"
@@ -196,11 +194,6 @@ func turijobsOneOrMany[T any](raw json.RawMessage) []T {
 	return many
 }
 
-// errTurijobsNoPosting marks a page that answered without a JobPosting. It is not the site's
-// answer that the posting is gone — a bot-management interstitial answers the same way — so it
-// counts as no answer.
-var errTurijobsNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410); an error is the absence of an answer.
 func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, error) {
@@ -209,8 +202,7 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 	}
 	root, err := s.pages.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
@@ -220,7 +212,8 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 		// Some pages carry no JobPosting; the page's own Next.js state always holds the offer.
 		next, found, blind := turijobsFromNextData(root)
 		if !found {
-			return Job{}, false, errTurijobsNoPosting
+			// Not a gone answer: a bot-management interstitial answers the same way.
+			return Job{}, false, errNoPosting
 		}
 		if blind {
 			// The employer chose to stay hidden: a posting under no company is not stored.

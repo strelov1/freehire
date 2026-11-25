@@ -140,8 +140,8 @@ func TestDualooIndexFailureFailsTheCrawl(t *testing.T) {
 func TestDualooNoPostingIsNoAnswer(t *testing.T) {
 	_, _, err := (dualoo{pages: emptyPageGetter{}, limiter: noWait{}}).detail(context.Background(),
 		dualooPosting{id: "x", url: "https://jobs.dualoo.com/link/x/detail"})
-	if !errors.Is(err, errDualooNoPosting) {
-		t.Errorf("err = %v, want errDualooNoPosting", err)
+	if !errors.Is(err, errNoPosting) {
+		t.Errorf("err = %v, want errNoPosting", err)
 	}
 }
 

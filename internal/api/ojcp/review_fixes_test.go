@@ -39,7 +39,7 @@ func TestVerifiedDestinationDoesNotReuseTheSourceForm(t *testing.T) {
 	row.ApplicationUrl = "https://careers.example.org/application?id=7"
 	posting := projector().JobPosting(viewOf(row), capturedForm("lever"))
 	path := posting.ApplyPaths[0]
-	if path.URL != row.ApplicationUrl || path.ATSProvider != "" || path.SupportsAgentSubmission || posting.OfficialJobURL != "" {
+	if path.URL != "https://freehire.me/api/v1/go/"+row.PublicSlug+"?src=ojcp" || path.ATSProvider != "" || path.SupportsAgentSubmission || posting.OfficialJobURL != "" {
 		t.Fatalf("source form claims leaked onto a verified destination: path=%+v official=%q", path, posting.OfficialJobURL)
 	}
 }

@@ -60,6 +60,10 @@ type Exchange struct {
 	ExpectedUserID       *int64
 	ExpectedTokenVersion *int32
 	ExpectedSessionHash  []byte
+	// LinkProvider and LinkProviderUserID are set for purpose "link" only: the identity
+	// the provider vouched for at the callback, which the exchange attaches to UserID.
+	LinkProvider       string
+	LinkProviderUserID string
 }
 
 type Store struct {
@@ -108,11 +112,16 @@ func bindingValues(binding *Binding) (any, any, any) {
 	return binding.UserID, binding.TokenVersion, binding.SessionHash
 }
 
+// bound reports whether a purpose acts for the signed-in session that started it, and so
+// carries that session's binding end to end. Sign-in has no session yet; re-authentication
+// proves the member behind one; linking attaches a provider to the account behind one.
+func bound(purpose string) bool { return purpose == "reauth" || purpose == "link" }
+
 func validatePurpose(purpose string, binding *Binding) error {
-	if purpose != "sign_in" && purpose != "reauth" {
+	if purpose != "sign_in" && !bound(purpose) {
 		return ErrInvalid
 	}
-	if (purpose == "reauth") != (binding != nil) {
+	if bound(purpose) != (binding != nil) {
 		return ErrSession
 	}
 	if binding != nil && (binding.UserID <= 0 || len(binding.SessionHash) != sha256.Size) {
@@ -123,7 +132,9 @@ func validatePurpose(purpose string, binding *Binding) error {
 
 // CreateBrowserAttempt stores a v2 attempt and returns its raw browser state.
 func (s *Store) CreateBrowserAttempt(ctx context.Context, provider, platform, callbackTarget, purpose, challenge string, binding *Binding) (Attempt, string, error) {
-	validPlatform := platform == "ios" || platform == "android" || (platform == "web" && purpose == "reauth")
+	// Linking is a web-only flow: its exchange is checked against the browser's session
+	// cookie, which a native client does not present.
+	validPlatform := ((platform == "ios" || platform == "android") && purpose != "link") || (platform == "web" && bound(purpose))
 	if provider == "" || !validPlatform || callbackTarget == "" || (provider == "apple" && platform != "web") {
 		return Attempt{}, "", ErrInvalid
 	}
@@ -186,6 +197,10 @@ func (s *Store) CreateAppleAttempt(ctx context.Context, nonceChallenge, purpose 
 	if !challengePattern.MatchString(nonceChallenge) || len(audiences) == 0 {
 		return Attempt{}, ErrVerifier
 	}
+	// The native Apple exchange knows sign-in and re-authentication only.
+	if purpose == "link" {
+		return Attempt{}, ErrInvalid
+	}
 	if err := validatePurpose(purpose, binding); err != nil {
 		return Attempt{}, err
 	}
@@ -242,6 +257,29 @@ func (s *Store) MintCode(ctx context.Context, a Attempt, userID int64) (string, 
 	return code, err
 }
 
+// MintLinkCode issues the exchange code of a "link" attempt. It is minted for the user the
+// attempt was bound to — never for an account resolved from the provider's answer — and
+// carries the identity the provider vouched for, which the exchange attaches.
+func (s *Store) MintLinkCode(ctx context.Context, a Attempt, provider, providerUserID string) (string, error) {
+	if a.Purpose != "link" || a.ExpectedUserID == nil || provider == "" || providerUserID == "" {
+		return "", ErrInvalid
+	}
+	code, err := randomCredential()
+	if err != nil {
+		return "", err
+	}
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO oauth_exchange_codes
+			(code_hash, user_id, source_attempt_id, code_challenge,
+			 code_challenge_method, purpose, expected_user_id,
+			 expected_token_version, expected_session_hash, expires_at,
+			 link_provider, link_provider_user_id)
+		VALUES ($1,$2,$3,$4,'S256','link',$2,$5,$6,$7,$8,$9)`,
+		digest(code), *a.ExpectedUserID, a.ID, a.CodeChallenge,
+		a.ExpectedTokenVersion, a.ExpectedSessionHash, s.now().Add(CodeTTL), provider, providerUserID)
+	return code, err
+}
+
 // ConsumeCode always burns a live code, including on verifier mismatch.
 func (s *Store) ConsumeCode(ctx context.Context, code, verifier string) (Exchange, error) {
 	if code == "" {
@@ -249,14 +287,16 @@ func (s *Store) ConsumeCode(ctx context.Context, code, verifier string) (Exchang
 	}
 	var e Exchange
 	var storedChallenge string
+	var linkProvider, linkSubject *string
 	err := s.pool.QueryRow(ctx, `
 		UPDATE oauth_exchange_codes SET consumed_at = now()
 		WHERE code_hash = $1 AND consumed_at IS NULL AND expires_at > now()
 		RETURNING user_id, purpose, code_challenge,
 		          expected_user_id, expected_token_version,
-		          expected_session_hash`, digest(code),
+		          expected_session_hash, link_provider, link_provider_user_id`, digest(code),
 	).Scan(&e.UserID, &e.Purpose, &storedChallenge,
-		&e.ExpectedUserID, &e.ExpectedTokenVersion, &e.ExpectedSessionHash)
+		&e.ExpectedUserID, &e.ExpectedTokenVersion, &e.ExpectedSessionHash,
+		&linkProvider, &linkSubject)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Exchange{}, ErrInvalid
 	}
@@ -270,8 +310,14 @@ func (s *Store) ConsumeCode(ctx context.Context, code, verifier string) (Exchang
 	if subtle.ConstantTimeCompare([]byte(actual), []byte(storedChallenge)) != 1 {
 		return Exchange{}, ErrVerifier
 	}
-	if e.Purpose == "reauth" && (e.ExpectedUserID == nil || *e.ExpectedUserID != e.UserID || len(e.ExpectedSessionHash) != sha256.Size) {
+	if bound(e.Purpose) && (e.ExpectedUserID == nil || *e.ExpectedUserID != e.UserID || len(e.ExpectedSessionHash) != sha256.Size) {
 		return Exchange{}, ErrIdentity
+	}
+	if e.Purpose == "link" {
+		if linkProvider == nil || linkSubject == nil || *linkProvider == "" || *linkSubject == "" {
+			return Exchange{}, ErrIdentity
+		}
+		e.LinkProvider, e.LinkProviderUserID = *linkProvider, *linkSubject
 	}
 	return e, nil
 }

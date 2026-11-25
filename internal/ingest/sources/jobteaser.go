@@ -3,10 +3,8 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"slices"
 	"sort"
@@ -323,11 +321,6 @@ type jobteaserPlace struct {
 	} `json:"address"`
 }
 
-// errJobteaserNoPosting marks a page that answered without a JobPosting. It is not the site's
-// answer that the posting is gone — an unknown id answers 404, and a challenge page answers
-// without one too — so it counts as no answer.
-var errJobteaserNoPosting = errors.New("page carries no JobPosting")
-
 const (
 	jobteaserRemoteTestID   = "jobad-DetailView__CandidacyDetails__RemotePolicy"
 	jobteaserContractTestID = "jobad-DetailView__CandidacyDetails__Contract"
@@ -341,15 +334,15 @@ func (s jobteaser) detail(ctx context.Context, p jobteaserPosting) (Job, bool, e
 	}
 	root, err := s.pages.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	var ld jobteaserLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errJobteaserNoPosting
+		// Not a gone answer: an unknown id answers 404, and a challenge page answers without one too.
+		return Job{}, false, errNoPosting
 	}
 	job, ok := jobteaserJob(ld, p, jobteaserFact(root, jobteaserRemoteTestID), jobteaserFact(root, jobteaserContractTestID))
 	return job, ok, nil

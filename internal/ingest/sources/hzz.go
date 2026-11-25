@@ -2,10 +2,8 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -248,8 +246,7 @@ func (s hzz) detail(ctx context.Context, p hzzPosting) (Job, bool, error) {
 	}
 	root, err := s.http.GetHTML(ctx, hzzPostingURL(p.id))
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

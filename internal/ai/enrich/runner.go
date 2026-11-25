@@ -33,21 +33,13 @@ type Store interface {
 	// Complete writes the enrichment payload + provenance stamp to the entry's job
 	// and deletes the outbox entry, atomically.
 	Complete(ctx context.Context, entry Claimed, payload json.RawMessage) error
-	// Fail records a failed attempt under the given policy; it returns whether the
-	// entry was dead-lettered.
-	Fail(ctx context.Context, outboxID int64, errMsg string, policy FailurePolicy) (deadLettered bool, err error)
+	// Fail records a failed attempt under the given policy and returns whether the entry
+	// was dead-lettered. AtFault is postingAtFault's verdict: the posting's own fault spends
+	// the attempt budget, anything else is bounded by queue age (RecordEnrichmentFailure).
+	Fail(ctx context.Context, outboxID int64, errMsg string, policy outbox.FailurePolicy) (deadLettered bool, err error)
 	// Reap deletes up to maxRows live entries Claim can never take (their job closed,
 	// became a non-canonical repost, or is gone), returning how many it removed.
 	Reap(ctx context.Context, maxRows int) (int64, error)
-}
-
-// FailurePolicy is how one failure is bounded, decided by PostingAtFault. MaxAttempts counts
-// tries at a possibly impossible task; UpstreamGraceDays waits out a dependency expected
-// back. See postingAtFault and RecordEnrichmentFailure.
-type FailurePolicy struct {
-	PostingAtFault    bool
-	MaxAttempts       int
-	UpstreamGraceDays int
 }
 
 // RunOptions are the per-run knobs.
@@ -325,15 +317,15 @@ func (rn *run) fail(ctx context.Context, entry Claimed, cause error) outbox.Outc
 // to dead-letter at once. The ceiling applies only when postingAtFault says the posting is
 // at fault; everything else is bounded by queue age, so an outage costs nothing permanently.
 func (rn *run) failN(ctx context.Context, entry Claimed, cause error, maxAttempts int) outbox.Outcome {
-	policy := FailurePolicy{
-		PostingAtFault:    postingAtFault(cause),
-		MaxAttempts:       maxAttempts,
-		UpstreamGraceDays: rn.opt.UpstreamGraceDays,
-	}
-	if !policy.PostingAtFault {
+	atFault := postingAtFault(cause)
+	if !atFault {
 		rn.upstreamFailed.Add(1)
 	}
-	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), policy)
+	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), outbox.FailurePolicy{
+		AtFault:           atFault,
+		MaxAttempts:       maxAttempts,
+		UpstreamGraceDays: rn.opt.UpstreamGraceDays,
+	})
 	if err != nil {
 		// Log the cause so a bookkeeping outage doesn't hide behind a bare Failed tally.
 		log.Printf("enrich: outbox=%d fail-bookkeeping error: %v", entry.OutboxID, err)

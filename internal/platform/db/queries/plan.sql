@@ -232,9 +232,9 @@ WHERE c.user_id = sqlc.arg(user_id)
   AND c.agent_session_id = ANY(sqlc.arg(session_ids)::text[]);
 
 -- name: DeleteUsageForUser :exec
--- Erase one user's consumption ledger. Account deletion calls this alongside the counter
--- delete; the foreign keys cascade, but deletion states what it erases explicitly rather
--- than relying on a constraint to mean it.
+-- Erase one user's consumption ledger. Account deletion does NOT call this: usage_ledger
+-- cascades on users (0121), so DeleteUser already erases it, and me_delete's integration
+-- test asserts that. These two exist so the plan's own tests can prove the tables empty.
 DELETE FROM usage_ledger WHERE user_id = $1;
 
 -- name: DeleteUsageDailyForUser :exec

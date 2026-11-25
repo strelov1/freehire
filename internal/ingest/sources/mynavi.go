@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -331,8 +330,7 @@ var mynaviEscapedBreak = strings.NewReplacer("&amp;lt;br&amp;gt;", "<br>", "&lt;
 func (s mynavi) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, base.URL)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

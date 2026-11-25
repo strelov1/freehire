@@ -6,9 +6,9 @@ import (
 	"github.com/strelov1/freehire/internal/application/mailclassify"
 )
 
-// messageAtFault reports whether the message itself caused err, which decides how the
-// failed entry is bounded: the message's own fault spends the attempt budget, anything
-// else waits out the grace window (see FailEmailClassification).
+// messageAtFault reports whether the message itself caused err, which sets AtFault on the
+// outbox.FailurePolicy its failure is recorded under: the message's own fault spends the
+// attempt budget, anything else waits out the grace window (see FailEmailClassification).
 //
 // It lists only what is about THIS message; the default is "not at fault". Nearly
 // every failure here is shared by the whole queue (Postgres, the model gateway), and

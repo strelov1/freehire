@@ -178,8 +178,14 @@ var blocks = map[string][]string{
 		// sequence. Both exist to reach the user.
 		// deliverywindow is the quiet-hours and digest-time clock the notify, reminder and
 		// nudge engines share; mailtpl is the shell every outgoing mail is rendered into.
+		// foundermail is the envelope (human sender, Reply-To, news group and unsubscribe link)
+		// shared by the five first-person founder-letter senders: onboarding, limitnudge,
+		// broadcast, cvlifecycle and prowelcome. Each still owns its copy.
 		// Standard library only, and only engage imports them.
-		"maildaily", "cvlifecycle", "deliverywindow", "mailtpl",
+		"maildaily", "cvlifecycle", "deliverywindow", "mailtpl", "foundermail",
+		// digest is the snapshot → render → claim → send → record loop the inbox and application
+		// digests share; each keeps its own query and mail.
+		"digest",
 		"linkedinauth", "mailpreview", "mentorship", "messaging",
 		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
 		// reaches into application (gmailsync) as mentorship does for calendar-write consent.

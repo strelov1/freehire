@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -205,7 +204,7 @@ func (s jobsch) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(picked, jobschDetailWorkers, func(p jobschPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -229,13 +228,6 @@ func (s jobsch) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		log.Printf("jobsch: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.freshPerRun+s.backlogPerRun)
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s jobsch) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list returns every posting the two sitemaps and the newest search pages name, each once: the
@@ -404,8 +396,7 @@ func (s jobsch) detail(ctx context.Context, p jobschPosting) (Job, bool, error) 
 	}
 	body, err := s.http.GetText(ctx, p.url())
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
