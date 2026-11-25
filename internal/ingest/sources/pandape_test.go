@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,7 +35,9 @@ func pdFixture(t *testing.T, name string) string {
 // pdFake serves listing pages by "<url>#<PageNumber>" and vacancy pages by URL.
 type pdFake struct {
 	pages map[string]string
-	gets  []string
+	// mu guards gets, which the detail workers append to concurrently.
+	mu   sync.Mutex
+	gets []string
 }
 
 func (f *pdFake) PostFormJSON(_ context.Context, u string, v url.Values, out any) error {
@@ -46,7 +49,9 @@ func (f *pdFake) PostFormJSON(_ context.Context, u string, v url.Values, out any
 }
 
 func (f *pdFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 404, URL: u}

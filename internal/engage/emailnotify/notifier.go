@@ -60,7 +60,10 @@ func (n *Notifier) Send(ctx context.Context, _ string, dest string, m notify.Mes
 	if err != nil {
 		return fmt.Errorf("emailnotify: unsubscribe link for user %d: %w", m.UserID, err)
 	}
-	e := n.render(m, unsubscribe)
+	e, err := n.render(m, unsubscribe)
+	if err != nil {
+		return err
+	}
 	return SoftSkipIfPaused(n.sender.Send(ctx, Message{
 		From:           n.from,
 		To:             dest,
@@ -118,7 +121,9 @@ func (n *Notifier) section(d notify.Digest, titled bool) section {
 	return s
 }
 
-func (n *Notifier) render(m notify.Message, unsubscribeURL string) renderedEmail {
+// render builds the mail. An error means there is no mail to send, so the caller
+// counts a failed attempt instead of delivering an empty or truncated body.
+func (n *Notifier) render(m notify.Message, unsubscribeURL string) (renderedEmail, error) {
 	titled := len(m.Digests) > 1
 	sections := make([]section, len(m.Digests))
 	for i, d := range m.Digests {
@@ -139,9 +144,9 @@ func (n *Notifier) render(m notify.Message, unsubscribeURL string) renderedEmail
 	}
 
 	var b bytes.Buffer
-	// The template is a trusted constant, so Execute can only fail on a template
-	// bug, which the render tests surface.
-	_ = htmlTemplate.Execute(&b, htmlData{Sections: sections})
+	if err := htmlTemplate.Execute(&b, htmlData{Sections: sections}); err != nil {
+		return renderedEmail{}, fmt.Errorf("emailnotify: render digest for user %d: %w", m.UserID, err)
+	}
 
 	html := n.layout.Render(mailtpl.Body{
 		Preheader: preheader,
@@ -152,7 +157,7 @@ func (n *Notifier) render(m notify.Message, unsubscribeURL string) renderedEmail
 		UnsubscribeURL: unsubscribeURL,
 	})
 
-	return renderedEmail{subject: subject, html: html, text: n.renderText(textHeading, sections, unsubscribeURL)}
+	return renderedEmail{subject: subject, html: html, text: n.renderText(textHeading, sections, unsubscribeURL)}, nil
 }
 
 // renderText builds the plain-text alternative, mirroring the HTML body.

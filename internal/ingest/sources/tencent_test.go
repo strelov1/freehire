@@ -7,14 +7,17 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // tencentFake serves the trimmed real responses (2026-10-15): a technology-category listing of
 // four Tencent-authored postings and two Workday re-listings, and each native posting's detail.
 type tencentFake struct {
-	mutate      func(body map[string]any)
-	failDetail  string
+	mutate     func(body map[string]any)
+	failDetail string
+	// mu guards asked and detailsRead: the detail workers call this fake concurrently.
+	mu          sync.Mutex
 	asked       []url.Values
 	detailsRead int
 }
@@ -28,10 +31,14 @@ func (f *tencentFake) GetJSON(_ context.Context, u string, v any) error {
 	var file string
 	switch {
 	case strings.HasPrefix(u, tencentQueryURL+"?"):
+		f.mu.Lock()
 		f.asked = append(f.asked, q)
+		f.mu.Unlock()
 		file = "query.json"
 	case strings.HasPrefix(u, tencentDetailURL+"?"):
+		f.mu.Lock()
 		f.detailsRead++
+		f.mu.Unlock()
 		if q.Get("postId") == f.failDetail {
 			return errors.New("HTTP 500")
 		}

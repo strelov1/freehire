@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,11 +35,15 @@ func ijbrFixture(t *testing.T, name string) string {
 // ijbrFake serves pages by URL and pager answers by "<listing>?page=N".
 type ijbrFake struct {
 	pages map[string]string
-	gets  []string
+	// mu guards gets, which the detail workers append to concurrently.
+	mu   sync.Mutex
+	gets []string
 }
 
 func (f *ijbrFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 500, URL: u}

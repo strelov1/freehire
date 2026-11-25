@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -48,7 +49,9 @@ func hrCards(t *testing.T, name string) []hiringroomCard {
 type hrFake struct {
 	pages map[string]string
 	forms []url.Values
-	gets  []string
+	// mu guards gets, which the detail workers append to concurrently.
+	mu   sync.Mutex
+	gets []string
 	// missing is the status a GET for an unserved URL answers; 0 means 500.
 	missing int
 }
@@ -63,7 +66,9 @@ func (f *hrFake) PostFormJSON(_ context.Context, u string, v url.Values, out any
 }
 
 func (f *hrFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		code := f.missing
