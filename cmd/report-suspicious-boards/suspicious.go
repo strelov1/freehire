@@ -109,8 +109,8 @@ func nameWords(name string) (words []string, acronym string) {
 var stopWord = map[string]bool{"the": true, "and": true, "of": true, "for": true, "de": true, "la": true, "du": true, "der": true, "und": true}
 
 // filler is what a board id may carry before the employer's name without naming another
-// employer: jobsatphamily, yourgesture, beparallel.
-var filler = []string{"jobsat", "careersat", "workat", "joinus", "join", "your", "team", "hire", "life", "the", "get", "my", "we", "be", "at"}
+// employer: jobsatphamily, yourgesture, beparallel (and a site: aboutamazon.com).
+var filler = []string{"about", "jobsat", "careersat", "workat", "joinus", "join", "your", "team", "hire", "life", "the", "get", "my", "we", "be", "at"}
 
 // matchesWords reports whether key (a folded board id or website label) starts with the name,
 // a word of it or its acronym, after any filler.
@@ -298,6 +298,9 @@ func suspicious(rows []db.ListOpenJobsByCompanyBoardRow, companies []company) []
 			// shared word alone (woodward, viva) is not reported.
 			if strings.HasPrefix(ownKey, core) {
 				other, conf := siteOwner[core], "high"
+				if core == ownKey && label != "" {
+					other = "" // the slug states its own site (amazon at aboutamazon.com): the id is its own
+				}
 				if (other == "" || other == slug) && len(core) > minKey {
 					// A three-letter id (lex4, dev2) names too many employers to mean one.
 					other, conf = slugOwner[core], "medium"

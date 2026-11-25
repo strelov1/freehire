@@ -28,6 +28,9 @@ func fixture() ([]db.ListOpenJobsByCompanyBoardRow, []company) {
 		row("motive", "polymer", "motive", "Motive", 6),
 		row("stripe", "greenhouse", "stripe", "Stripe", 50),
 		row("acme", "ashby", "acme", "Acme", 2),
+		// amazon states its own site; another company stating amazon.com does not make the
+		// amazon board someone else's.
+		row("amazon", "personio", "amazon", "Amazon", 4),
 		// A chain: one name over many boards of one provider and slug, ids opaque or branded.
 		row("chick-fil-a", "workstream", "004a7767", "Chick-fil-A", 3),
 		row("chick-fil-a", "workstream", "00c2cf6e", "Chick-fil-A", 3),
@@ -45,6 +48,8 @@ func fixture() ([]db.ListOpenJobsByCompanyBoardRow, []company) {
 		{Slug: "motive", Name: "Motive", Website: "https://gomotive.com"},
 		{Slug: "employer-0", Name: "Employer", Website: "employer.de"},
 		{Slug: "stripe", Name: "Stripe", Website: "stripe.com"},
+		{Slug: "amazon", Name: "Amazon", Website: "aboutamazon.com"},
+		{Slug: "amazon-web-services", Name: "AWS", Website: "amazon.com"},
 	}
 	return rows, companies
 }
