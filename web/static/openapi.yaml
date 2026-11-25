@@ -4391,26 +4391,16 @@
         "name": "employee_count_min",
         "in": "query",
         "description": "Minimum headcount: A non-negative integer, inclusive — the headcount of the company itself, as opposed to `company_size` (the size bands of its postings); a company with no known headcount never matches.",
-        "style": "form",
-        "explode": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "type": "integer"
         }
       },
       "company.employee_count_max": {
         "name": "employee_count_max",
         "in": "query",
         "description": "Maximum headcount: A non-negative integer, inclusive; combine with `employee_count_min` for a range.",
-        "style": "form",
-        "explode": true,
         "schema": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "type": "integer"
         }
       }
     },

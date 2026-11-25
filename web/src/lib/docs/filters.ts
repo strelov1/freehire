@@ -268,12 +268,14 @@ COMPANY_FILTERS.push({
 COMPANY_FILTERS.push(
   {
     param: 'employee_count_min',
+    type: 'integer',
     label: 'Minimum headcount',
     values:
       'A non-negative integer, inclusive — the headcount of the company itself, as opposed to `company_size` (the size bands of its postings); a company with no known headcount never matches',
   },
   {
     param: 'employee_count_max',
+    type: 'integer',
     label: 'Maximum headcount',
     values: 'A non-negative integer, inclusive; combine with `employee_count_min` for a range',
   },

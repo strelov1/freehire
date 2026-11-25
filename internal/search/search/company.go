@@ -281,9 +281,11 @@ type CompanyRebuild struct {
 func (c *Client) NewCompanyRebuild() *CompanyRebuild { return &CompanyRebuild{c: c} }
 
 // Prepare ensures the live companies index exists (Promote's swap needs both) and creates a fresh
-// rebuild index, discarding any leftover from an aborted run.
+// rebuild index, discarding any leftover from an aborted run. The live index gets no settings: a
+// new filterable attribute applied to it before the swap would make filters on it match nothing
+// in the old documents instead of erroring into the Postgres fallback.
 func (r *CompanyRebuild) Prepare(ctx context.Context) error {
-	if err := r.c.ensure(ctx, r.c.manager.Index(companyIndexUID), companyIndexUID, companyPrimaryKey, companySettings()); err != nil {
+	if err := r.c.createIndex(ctx, r.c.manager.Index(companyIndexUID), companyIndexUID, companyPrimaryKey); err != nil {
 		return err
 	}
 	if err := r.c.dropIndex(ctx, companyRebuildUID); err != nil {

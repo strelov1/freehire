@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -64,20 +62,4 @@ func orEmpty(v []string) []string {
 		return []string{}
 	}
 	return v
-}
-
-func int4Ptr(n pgtype.Int4) *int64 {
-	if !n.Valid {
-		return nil
-	}
-	v := int64(n.Int32)
-	return &v
-}
-
-func int32Ptr(n *int32) *int64 {
-	if n == nil {
-		return nil
-	}
-	v := int64(*n)
-	return &v
 }
