@@ -193,14 +193,12 @@ func newEmailCopy(origin string) emailCopy {
 
 // render renders the batch as one mail: a single nudge keeps its own wording, a
 // batch shares one list template. Every message of a batch carries the group's
-// kind, so the first one names it.
+// kind, so the first one names it. An error means there is no mail to send.
 func (n emailCopy) render(ms []Message, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	if len(ms) == 1 {
-		subject, htmlBody, textBody = n.renderOne(ms[0], unsubscribe)
-		return subject, htmlBody, textBody, nil
+		return n.renderOne(ms[0], unsubscribe)
 	}
-	subject, htmlBody, textBody = n.renderBatch(ms[0].Kind, ms, unsubscribe)
-	return subject, htmlBody, textBody, nil
+	return n.renderBatch(ms[0].Kind, ms, unsubscribe)
 }
 
 // batchBody is what the batch template renders from. Jobs carries the source data,
@@ -227,7 +225,7 @@ var batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`
 {{template "button" (mailLink .URL .CTA)}}`))
 
 // renderBatch builds the multi-nudge mail for one kind.
-func (n emailCopy) renderBatch(kind string, ms []Message, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) renderBatch(kind string, ms []Message, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
@@ -238,9 +236,9 @@ func (n emailCopy) renderBatch(kind string, ms []Message, unsubscribe string) (s
 	url, cta := n.batchCTA(kind)
 
 	var content bytes.Buffer
-	// The template is a trusted constant and the data is escaped in context, so this
-	// fails only on a template bug — caught by the golden previews.
-	_ = batchTemplate.Execute(&content, batchBody{Jobs: rows, More: more, Lead: lead, URL: url, CTA: cta})
+	if err := batchTemplate.Execute(&content, batchBody{Jobs: rows, More: more, Lead: lead, URL: url, CTA: cta}); err != nil {
+		return "", "", "", fmt.Errorf("nudge: render %s batch for %d nudges: %w", kind, len(ms), err)
+	}
 
 	htmlBody = n.layout.Render(mailtpl.Body{
 		Preheader:      pre,
@@ -263,7 +261,7 @@ func (n emailCopy) renderBatch(kind string, ms []Message, unsubscribe string) (s
 		fmt.Fprintf(&b, "\n+ %d more\n", more)
 	}
 	fmt.Fprintf(&b, "\n%s: %s\n", cta, url)
-	return subject, htmlBody, b.String()
+	return subject, htmlBody, b.String(), nil
 }
 
 // batchCopy is the per-kind wording for a batch of `count` nudges.
@@ -377,7 +375,7 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 {{template "button" (mailLink .URL .CTA)}}{{end}}
 `))
 
-func (n emailCopy) renderOne(m Message, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) renderOne(m Message, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	trackingURL := n.origin + "/my/tracking?utm_source=email"
 	jobURL := n.origin + "/jobs/" + m.Slug + "?utm_source=email"
 	applicationURL := n.origin + "/my/tracking/" + m.Slug + "?utm_source=email"
@@ -439,9 +437,9 @@ func (n emailCopy) renderOne(m Message, unsubscribe string) (subject, htmlBody, 
 	}
 
 	var content bytes.Buffer
-	// The templates are trusted constants and the data is escaped in context, so
-	// this fails only on a template bug — caught by the golden previews.
-	_ = bodies.ExecuteTemplate(&content, block, data)
+	if err := bodies.ExecuteTemplate(&content, block, data); err != nil {
+		return "", "", "", fmt.Errorf("nudge: render %s nudge for job %s: %w", m.Kind, m.Slug, err)
+	}
 
 	htmlBody = n.layout.Render(mailtpl.Body{
 		Preheader:      pre,
@@ -450,5 +448,5 @@ func (n emailCopy) renderOne(m Message, unsubscribe string) (subject, htmlBody, 
 		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted templates above
 		Footer:         "You’re getting this because you are tracking this application on freehire.",
 	})
-	return subject, htmlBody, textBody
+	return subject, htmlBody, textBody, nil
 }
