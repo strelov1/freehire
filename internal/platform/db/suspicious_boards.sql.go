@@ -12,8 +12,11 @@ import (
 const listHiringCompanySites = `-- name: ListHiringCompanySites :many
 SELECT slug, name,
        COALESCE(NULLIF(company_info ->> 'website', ''), company_info ->> 'feed_website', '')::text AS website
-FROM companies
-WHERE job_count > 0
+FROM companies c
+WHERE EXISTS (
+    SELECT 1 FROM jobs j
+    WHERE j.company_slug = c.slug AND j.closed_at IS NULL AND NOT j.is_private
+)
 `
 
 type ListHiringCompanySitesRow struct {
@@ -22,8 +25,10 @@ type ListHiringCompanySitesRow struct {
 	Website string `json:"website"`
 }
 
-// Every company with open jobs and the website it states (curated, else from a feed, else ”),
-// for cmd/report-suspicious-boards.
+// Every company with open public jobs and the website it states (curated, else from a feed,
+// else ”), for cmd/report-suspicious-boards. Membership comes from the open postings, not
+// job_count: that column counts the search index, so it can be 0 while a board still feeds the
+// slug, and the company would lose its website-owner signal.
 func (q *Queries) ListHiringCompanySites(ctx context.Context) ([]ListHiringCompanySitesRow, error) {
 	rows, err := q.db.Query(ctx, listHiringCompanySites)
 	if err != nil {
@@ -54,6 +59,7 @@ FROM (
     SELECT company_slug, source, split_part(external_id, ':', 1) AS board, count(*) AS open_jobs
     FROM jobs
     WHERE closed_at IS NULL
+      AND NOT is_private
       AND company_slug <> ''
       AND source <> ALL($1::text[])
     GROUP BY 1, 2, 3

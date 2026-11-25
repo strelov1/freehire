@@ -88,6 +88,16 @@ func TestSuspiciousFindsTheBenchmarkCollisions(t *testing.T) {
 	}
 }
 
+// A slug stating an unrelated site keeps the other company that states the id's site: gomotive
+// at unrelated.com is still Motive's board while motive states gomotive.com.
+func TestTokenNamesOtherIgnoresAnUnrelatedOwnSite(t *testing.T) {
+	rows, companies := fixture()
+	companies = append(companies, company{Slug: "gomotive", Name: "GoMotive", Website: "unrelated.com"})
+	if got := reasons(suspicious(rows, companies))["gomotive greenhouse/gomotive"]; !strings.Contains(got, "token_names_other_company:high") {
+		t.Errorf("gomotive greenhouse/gomotive = %q, want token_names_other_company:high", got)
+	}
+}
+
 func TestTokenCoreSkipsOpaqueIDs(t *testing.T) {
 	for board, want := range map[string]string{
 		"xebialatam":                           "xebialatam",
@@ -95,6 +105,7 @@ func TestTokenCoreSkipsOpaqueIDs(t *testing.T) {
 		"jackson-hewitt-1674":                  "jacksonhewitt",
 		"004a7767":                             "",
 		"40b4b8db-3e63-43fb-85d2-c178b2fffb87": "",
+		"abcdefab-cdef-4abc-abcd-efabcdefabcd": "",
 		"recruiting2.ultipro.com/cul1004culfs": "",
 	} {
 		if got, _ := tokenCore(board); got != want {

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/google/uuid"
+
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/job/logodomain"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -48,6 +50,9 @@ func tokenCore(board string) (string, bool) {
 	s := strings.ToLower(board)
 	s, _, _ = strings.Cut(s, "/")
 	s, _, _ = strings.Cut(s, ".")
+	if uuid.Validate(s) == nil {
+		return "", false // a uuid may carry few digits (abcdefab-cdef-4abc-...): its shape, not its digits, makes it opaque
+	}
 	core := strings.TrimRightFunc(fold(s), unicode.IsDigit)
 	digits := 0
 	for _, r := range core {
@@ -298,7 +303,7 @@ func suspicious(rows []db.ListOpenJobsByCompanyBoardRow, companies []company) []
 			// shared word alone (woodward, viva) is not reported.
 			if strings.HasPrefix(ownKey, core) {
 				other, conf := siteOwner[core], "high"
-				if core == ownKey && label != "" {
+				if core == ownKey && ownSite(label, core) {
 					other = "" // the slug states its own site (amazon at aboutamazon.com): the id is its own
 				}
 				if (other == "" || other == slug) && len(core) > minKey {
@@ -408,6 +413,20 @@ func resemblesAfterFiller(label string, boards []db.ListOpenJobsByCompanyBoardRo
 			if matchesWords(rest, r.BoardCompany) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// ownSite is whether a website label, or the label past a filler prefix, resembles the board
+// id: aboutamazon for amazon. An unrelated site the slug states does not make the id its own.
+func ownSite(label, core string) bool {
+	if label == "" {
+		return false
+	}
+	for _, k := range keyForms(label) {
+		if alike(k, core) {
+			return true
 		}
 	}
 	return false
