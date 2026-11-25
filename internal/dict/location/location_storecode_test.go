@@ -25,3 +25,18 @@ func TestParseStoreCodePrefix(t *testing.T) {
 		}
 	}
 }
+
+// TestParseStoreCodeKeepsPlaceNames: a place whose own name is a letter, a hyphen and a
+// word keeps its city; only an unknown "x-town" token loses the letter.
+func TestParseStoreCodeKeepsPlaceNames(t *testing.T) {
+	for loc, want := range map[string][]string{
+		"L-Iklin, Malta":            {"L-Iklin"},
+		"X-Can, Mexico":             {"X-Cán"},
+		"s-Gravendeel, Netherlands": {"s-Gravendeel"},
+		"J-Florence, KY":            {"Florence"},
+	} {
+		if got := Parse(loc).Cities; !reflect.DeepEqual(got, want) {
+			t.Errorf("Parse(%q).Cities = %v, want %v", loc, got, want)
+		}
+	}
+}

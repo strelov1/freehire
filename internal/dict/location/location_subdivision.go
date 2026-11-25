@@ -32,13 +32,14 @@ func stripPostalPrefix(tok string) string {
 
 // storeCodeRE matches a one-letter store/site code glued to a place with a hyphen
 // ("j-florence", Workday's Texas Roadhouse stores), which would otherwise split into a
-// bogus place ("florence" the Italian city) and swallow the state code beside it.
+// bogus place ("florence" the Italian city) and swallow the state code beside it. A
+// place whose own name has that shape ("l-iklin", "x-cán", "s-gravendeel") is kept.
 var storeCodeRE = regexp.MustCompile(`^\p{L}-(\p{L}{3}.*)$`)
 
-// stripCityPrefix removes a leading Russian city marker from an already-lowercased,
+// stripCityPrefix removes a leading store code and Russian city marker from an already-lowercased,
 // trimmed token, returning the bare city name (or the token unchanged).
 func stripCityPrefix(tok string) string {
-	if m := storeCodeRE.FindStringSubmatch(tok); m != nil {
+	if m := storeCodeRE.FindStringSubmatch(tok); m != nil && !knownPlaceToken(tok) {
 		tok = m[1]
 	}
 	for _, p := range cityMarkerPrefixes {
@@ -47,6 +48,14 @@ func stripCityPrefix(tok string) string {
 		}
 	}
 	return tok
+}
+
+// knownPlaceToken reports whether the whole token is a place in the city or small-places table.
+func knownPlaceToken(tok string) bool {
+	if _, ok := cityDict[tok]; ok {
+		return true
+	}
+	return len(smallPlaces()[tok]) > 0
 }
 
 // resolveSubdivision resolves a US-state / Canadian-province token to its ISO
