@@ -190,7 +190,9 @@ func (n *Notifier) sendEmail(ctx context.Context, d db.ListUnreadDueRow, nt Noti
 		return fmt.Errorf("messaging: unsubscribe link for user %d: %w", d.UserID, err)
 	}
 	var content bytes.Buffer
-	_ = noticeHTML.Execute(&content, struct{ Line, URL string }{nt.Line, url}) // trusted template; a failure is a template bug
+	if err := noticeHTML.Execute(&content, struct{ Line, URL string }{nt.Line, url}); err != nil {
+		return fmt.Errorf("messaging: render notice for conversation %d: %w", d.ConversationID, err)
+	}
 	body := n.layout.Render(mailtpl.Body{
 		Preheader:      nt.Title,
 		Heading:        nt.Title,
