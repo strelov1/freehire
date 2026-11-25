@@ -17,44 +17,37 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/foundermail"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // ErrNotPaying is returned by render/Send when asked to welcome a free tier.
 var ErrNotPaying = errors.New("prowelcome: refusing to welcome a free-tier account")
 
-// senderName is what the recipient's message list shows; see onboarding.senderName.
-const senderName = "Ilya from freehire"
-
 // Mailer renders and sends the welcome letter.
 type Mailer struct {
-	sender  emailnotify.Sender
-	from    string
-	replyTo string
+	*foundermail.Mailer
 	baseURL string
 	layout  *mailtpl.Layout
-	links   *emailprefs.Links
 }
 
 // NewMailer builds a Mailer. from is the verified sending address; replyTo is the human
 // inbox that answers (blank is a configuration error, see onboarding.NewMailer).
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
+	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
-		sender:  sender,
-		from:    emailnotify.From(senderName, from),
-		replyTo: replyTo,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		layout:  mailtpl.New(baseURL),
-		links:   links,
+		Mailer:  foundermail.New(sender, from, replyTo, links),
+		baseURL: base,
+		layout:  mailtpl.New(base),
 	}
 }
 
 // Send delivers the welcome letter for one newly-paying account. Refuses TierFree — see
 // ErrNotPaying.
 func (m *Mailer) Send(ctx context.Context, userID int64, to string, tier plan.Tier, until time.Time) error {
-	unsubscribe, err := m.links.For(userID, emailprefs.GroupNews)
+	unsubscribe, err := m.Unsubscribe(userID)
 	if err != nil {
 		return fmt.Errorf("prowelcome: unsubscribe link for user %d: %w", userID, err)
 	}
@@ -62,10 +55,8 @@ func (m *Mailer) Send(ctx context.Context, userID int64, to string, tier plan.Ti
 	if err != nil {
 		return err
 	}
-	return m.sender.Send(ctx, emailnotify.Message{
-		From: m.from, To: to, ReplyTo: m.replyTo, Subject: mail.subject,
-		HTML: mail.html, Text: mail.text,
-		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+	return m.Mailer.Send(ctx, to, unsubscribe, emailnotify.Message{
+		Subject: mail.subject, HTML: mail.html, Text: mail.text,
 	})
 }
 

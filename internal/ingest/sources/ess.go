@@ -7,7 +7,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -193,68 +192,12 @@ func (s ess) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(postings))
-		for _, p := range postings {
-			companies = append(companies, essClean(p.card.Employer))
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []essPosting
-	deferred := 0
-	for _, p := range postings {
-		base := essBaseJob(p)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[base.Company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, p)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, essDetailWorkers, func(p essPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, p)
-		if err != nil {
-			log.Printf("ess: vacancy %s failed; deferring: %v", p.card.ID, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no detail at all is broken, not quiet. "Answered" counts a vacancy the
-	// API reported gone; vacancies left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("ess: requested %d vacancy details and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("ess: %d new vacancies left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("ess: %d new vacancies past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns, so one
-// that runs into its deadline stores nothing at all.
-func (s ess) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "ess", Noun: "vacancy", Plural: "vacancies", Unit: "vacancy details",
+		MaxNewPerRun: s.maxNewPerRun, Workers: essDetailWorkers, Deadline: s.deadlineMargin}, postings, seen, gate,
+		nil,
+		essBaseJob,
+		func(p essPosting) any { return p.card.ID },
+		s.detail)
 }
 
 // list walks the whole catalogue, newest first, then the IT and part-time slices. Any page of the

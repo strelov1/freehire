@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
@@ -117,67 +116,12 @@ func (s infoempleo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(cards))
-		for _, c := range cards {
-			companies = append(companies, c.company)
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []infoempleoCard
-	deferred := 0
-	for _, c := range cards {
-		base := infoempleoBaseJob(c)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[c.company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, c)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, infoempleoDetailWorkers, func(c infoempleoCard) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, c)
-		if err != nil {
-			log.Printf("infoempleo: posting %d failed; deferring: %v", c.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone; postings left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("infoempleo: requested %d posting pages and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("infoempleo: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("infoempleo: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s infoempleo) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "infoempleo", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: infoempleoDetailWorkers, Deadline: s.deadlineMargin}, cards, seen, gate,
+		nil,
+		infoempleoBaseJob,
+		func(c infoempleoCard) any { return c.id },
+		s.detail)
 }
 
 // list walks the listing pages until one carries no card, and returns the postings newest id

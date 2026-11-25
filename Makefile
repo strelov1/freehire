@@ -63,7 +63,7 @@ api-contract: ## Compile typespec/ to openapi/api.openapi.json, then generate in
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	cd tools && go run ./gen-contracts
 
-gen-cities: ## Regenerate internal/location/cities1000.tsv from the GeoNames dump
+gen-cities: ## Regenerate internal/dict/location/cities1000.tsv from the GeoNames dump
 	go run ./cmd/gen-cities
 
 gen-metros: ## Regenerate internal/dict/location/metros.tsv from GeoNames + GHS-FUA

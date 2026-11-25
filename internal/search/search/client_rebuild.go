@@ -46,15 +46,18 @@ func (r *Rebuild) Prepare(ctx context.Context) error {
 
 // Push enqueues a batch without waiting; Promote awaits the kept task uids.
 func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
-	if len(docs) == 0 {
-		return nil
+	parts, err := ndjsonParts(docs, maxPushBytes)
+	if err != nil {
+		return err
 	}
 	pk := primaryKey
-	task, err := r.rebuild.UpdateDocuments(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
-	if err != nil {
-		return fmt.Errorf("search: rebuild push: %w", err)
+	for _, part := range parts {
+		task, err := r.rebuild.AddDocumentsNdjson(ctx, part, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+		if err != nil {
+			return fmt.Errorf("search: rebuild push: %w", err)
+		}
+		r.tasks = append(r.tasks, task.TaskUID)
 	}
-	r.tasks = append(r.tasks, task.TaskUID)
 	return nil
 }
 

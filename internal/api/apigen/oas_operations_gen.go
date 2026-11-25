@@ -147,6 +147,7 @@ const (
 	GetEmployerCompanyOperation                 OperationName = "GetEmployerCompany"
 	GetEmployerTeamOperation                    OperationName = "GetEmployerTeam"
 	GetEmployerVacancyAnalyticsOperation        OperationName = "GetEmployerVacancyAnalytics"
+	GetEmployerVacancyOutboundClicksOperation   OperationName = "GetEmployerVacancyOutboundClicks"
 	GetInboxOperation                           OperationName = "GetInbox"
 	GetInterviewPrepOperation                   OperationName = "GetInterviewPrep"
 	GetInterviewsOperation                      OperationName = "GetInterviews"

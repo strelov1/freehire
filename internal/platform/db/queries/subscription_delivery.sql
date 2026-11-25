@@ -12,7 +12,7 @@
 -- delivery the same way; its secret signs the delivery), and the delivery-timing context
 -- (live, not snapshotted, same as the channel checks above) — the account's
 -- timezone and its saved-search digest frequency settings, read via
--- internal/application/deliverywindow before a digest is sent.
+-- internal/engage/deliverywindow before a digest is sent.
 SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        ss.query AS saved_search_query,
@@ -91,7 +91,7 @@ WHERE s.active
 
 -- name: MarkDigestSent :exec
 -- Stamp the subscription's last digest send instant. A `daily` subscription reads it
--- through internal/application/deliverywindow.DigestDue ("already sent today"); an
+-- through internal/engage/deliverywindow.DigestDue ("already sent today"); an
 -- `interval` one through ClaimSubscriptionMatches' elapsed-interval gate. Called after
 -- every successful delivery in either mode — `instant`-mode subscriptions never touch
 -- this column.

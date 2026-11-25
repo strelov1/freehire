@@ -397,6 +397,7 @@ func Register(app *fiber.App, cfg Config) {
 		recruiterContactHandlers:     &recruiterContactHandlers{queries: queries, plans: plans, finder: cfg.RecruiterContacts}}
 	contract := newContract(handlers)
 	emailPrefsH.register(api, mw, contract)
+	newGoHandlers(queries, cfg.TracerLinkSalt).register(api)
 
 	a.mountRoutes(app, api, mw, contract, routeHandlers{
 		contractHandlers: handlers,

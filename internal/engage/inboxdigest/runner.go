@@ -3,21 +3,15 @@ package inboxdigest
 
 import (
 	"context"
-	"errors"
-	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/engage/digest"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 )
 
-const BatchSize int32 = 200
+const BatchSize = digest.BatchSize
 
-type Candidate struct {
-	UserID    int64
-	Email     string
-	Timezone  string
-	EnabledAt time.Time
-}
+type Candidate = digest.Candidate
 
 type Item struct {
 	ID         int64     `json:"id"`
@@ -43,6 +37,11 @@ type Snapshot struct {
 	Activity    []SchedulingActivity
 }
 
+// Empty reports whether there is nothing to show: no conversation and no scheduling activity.
+func (s Snapshot) Empty() bool {
+	return len(s.Items) == 0 && len(s.Activity) == 0
+}
+
 type Store interface {
 	Candidates(context.Context, time.Time, int32) ([]Candidate, error)
 	Snapshot(context.Context, Candidate, time.Time) (Snapshot, error)
@@ -51,7 +50,15 @@ type Store interface {
 	ReleasePaused(context.Context, Candidate, time.Time) error
 }
 
-type Stats struct{ Sent, Failed, Skipped int }
+// singleBatch takes one page of recipients per run.
+type singleBatch struct{ Store }
+
+func (s singleBatch) Candidates(ctx context.Context, at time.Time, _ int64) ([]Candidate, bool, error) {
+	rows, err := s.Store.Candidates(ctx, at, BatchSize)
+	return rows, false, err
+}
+
+type Stats = digest.Stats
 
 type Runner struct {
 	store  Store
@@ -64,73 +71,5 @@ func New(store Store, mailer *Mailer, sender emailnotify.Sender) *Runner {
 }
 
 func (r *Runner) Run(ctx context.Context, now time.Time) (Stats, error) {
-	started := time.Now() // the selection query's time counts too
-	candidates, err := r.store.Candidates(ctx, now, BatchSize)
-	if err != nil {
-		return Stats{}, err
-	}
-	var stats Stats
-	for _, c := range candidates {
-		at := now.Add(time.Since(started))
-		snapshot, err := r.store.Snapshot(ctx, c, at)
-		if err != nil {
-			stats.Failed++
-			log.Printf("inbox-digest: user %d snapshot: %v", c.UserID, err)
-			continue
-		}
-		// Claim against the instant after the snapshot, so a run crossing local midnight books the new day.
-		at = now.Add(time.Since(started))
-		if len(snapshot.Items) == 0 && len(snapshot.Activity) == 0 {
-			continue
-		}
-		message, err := r.mailer.Render(c, snapshot)
-		if err != nil {
-			stats.Failed++
-			log.Printf("inbox-digest: user %d render: %v", c.UserID, err)
-			continue
-		}
-		claimed, err := r.store.Claim(ctx, c, snapshot, at)
-		if err != nil {
-			stats.Failed++
-			log.Printf("inbox-digest: user %d claim: %v", c.UserID, err)
-			continue
-		}
-		if !claimed {
-			continue
-		}
-		if err = r.sender.Send(ctx, message); err != nil {
-			if errors.Is(err, emailnotify.ErrSendingPaused) {
-				// No request was dispatched. Unlike an uncertain network result, this can be retried today.
-				cleanup, cancel := detached(ctx)
-				releaseErr := r.store.ReleasePaused(cleanup, c, at)
-				cancel()
-				if releaseErr != nil {
-					stats.Failed++
-					log.Printf("inbox-digest: user %d release: %v", c.UserID, releaseErr)
-				} else {
-					stats.Skipped++
-				}
-				break
-			}
-			stats.Failed++
-			log.Printf("inbox-digest: user %d send: %v", c.UserID, err)
-			continue
-		}
-		// The mail is out: a shutdown now must not leave the day unrecorded and resend it tomorrow.
-		finalize, cancel := detached(ctx)
-		err = r.store.MarkSent(finalize, c, at)
-		cancel()
-		if err != nil {
-			stats.Failed++
-			log.Printf("inbox-digest: user %d mark sent: %v", c.UserID, err)
-			continue
-		}
-		stats.Sent++
-	}
-	return stats, nil
-}
-
-// detached outlives the run's cancellation for a short, bounded write.
-func detached(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	return digest.Run(ctx, now, "inbox-digest", singleBatch{r.store}, r.sender, r.mailer.Render)
 }

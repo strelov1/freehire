@@ -37,11 +37,11 @@ func researchTitle(j JobSummary) string {
 	return j.Title + " — " + j.Company
 }
 
-// researchURL is the posting's freehire page, or the employer's own where this deployment has
+// researchURL is the posting's freehire page, or the apply redirect where this deployment has
 // no origin configured — a citation needs SOME link a person can follow.
 func researchURL(j JobSummary) string {
 	if j.URL != "" {
 		return j.URL
 	}
-	return j.OfficialJobURL
+	return j.ApplyURL
 }

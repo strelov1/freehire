@@ -7,7 +7,31 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const getEmployerOwnedJobID = `-- name: GetEmployerOwnedJobID :one
+SELECT j.id FROM public.jobs j
+WHERE j.public_slug = $1
+  AND j.source = 'employer' AND NOT j.is_private
+  AND j.created_by IN (SELECT public.active_employer_team($2::bigint))
+`
+
+type GetEmployerOwnedJobIDParams struct {
+	PublicSlug string `json:"public_slug"`
+	ActorID    int64  `json:"actor_id"`
+}
+
+// The job id behind a public slug, only for an employer vacancy the actor's active team owns:
+// the same guard as GetEmployerVacancyAnalytics, so a stranger's slug is indistinguishable
+// from a missing one.
+func (q *Queries) GetEmployerOwnedJobID(ctx context.Context, arg GetEmployerOwnedJobIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getEmployerOwnedJobID, arg.PublicSlug, arg.ActorID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
 
 const getEmployerVacancyAnalytics = `-- name: GetEmployerVacancyAnalytics :one
 WITH report_window AS (
@@ -49,6 +73,67 @@ func (q *Queries) GetEmployerVacancyAnalytics(ctx context.Context, arg GetEmploy
 	var i GetEmployerVacancyAnalyticsRow
 	err := row.Scan(&i.Views, &i.ApplyClicks, &i.Applications)
 	return i, err
+}
+
+const getJobOutboundClickStats = `-- name: GetJobOutboundClickStats :many
+WITH c AS (
+    SELECT (clicked_at AT TIME ZONE 'UTC')::date AS day, src, country, visitor_hash
+    FROM public.job_outbound_clicks
+    WHERE job_id = $1 AND NOT is_likely_bot
+      AND clicked_at >= $2 AND clicked_at < $3
+)
+SELECT dim, key, clicks, visitors FROM (
+    SELECT 'day'::text AS dim, to_char(day, 'YYYY-MM-DD') AS key, count(*)::bigint AS clicks,
+           count(DISTINCT NULLIF(visitor_hash, ''))::bigint AS visitors
+    FROM c GROUP BY day
+    UNION ALL
+    SELECT 'country', country, count(*), 0 FROM c GROUP BY country
+    UNION ALL
+    SELECT 'src', src, count(*), 0 FROM c GROUP BY src
+) r
+ORDER BY dim, CASE WHEN dim = 'day' THEN 0 ELSE clicks END DESC, key
+`
+
+type GetJobOutboundClickStatsParams struct {
+	JobID  int64              `json:"job_id"`
+	FromAt pgtype.Timestamptz `json:"from_at"`
+	ToAt   pgtype.Timestamptz `json:"to_at"`
+}
+
+type GetJobOutboundClickStatsRow struct {
+	Dim      string `json:"dim"`
+	Key      string `json:"key"`
+	Clicks   int64  `json:"clicks"`
+	Visitors int64  `json:"visitors"`
+}
+
+// One job's human outbound clicks in [from_at, to_at), as rows of (dim, key, clicks, visitors).
+// Bots are stored flagged and excluded here. Visitors are counted per UTC day (one per
+// visitor_hash), and only on the day rows; a click with no hash (no salt configured) counts as a
+// click but not as a visitor.
+func (q *Queries) GetJobOutboundClickStats(ctx context.Context, arg GetJobOutboundClickStatsParams) ([]GetJobOutboundClickStatsRow, error) {
+	rows, err := q.db.Query(ctx, getJobOutboundClickStats, arg.JobID, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetJobOutboundClickStatsRow{}
+	for rows.Next() {
+		var i GetJobOutboundClickStatsRow
+		if err := rows.Scan(
+			&i.Dim,
+			&i.Key,
+			&i.Clicks,
+			&i.Visitors,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const recordEmployerVacancyApplyClick = `-- name: RecordEmployerVacancyApplyClick :exec

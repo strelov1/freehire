@@ -2,7 +2,6 @@ package sources
 
 import (
 	"github.com/strelov1/freehire/internal/job/job"
-	"github.com/strelov1/freehire/internal/job/outboundurl"
 )
 
 // Provider-kind taxonomy for the public status view and the search `source_type` facet. It reuses the adapter markers
@@ -105,13 +104,9 @@ func EmployerURLProviders() map[string]bool {
 
 // EmployerURL is the employer's own page for a posting, or "" where publishes (from
 // EmployerURLProviders) does not vouch that the stored URL is one.
-//
-// The tracking parameter is stripped rather than left in place: jobview stamps utm_source on
-// every URL it serves, and this field is what consumers deduplicate and domain-verify against,
-// so the tag defeats both purposes. A surface's own `url` keeps it.
 func EmployerURL(publishes map[string]bool, source, storedURL string) string {
 	if !publishes[source] {
 		return ""
 	}
-	return outboundurl.Untag(storedURL)
+	return storedURL
 }

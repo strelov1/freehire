@@ -3,7 +3,7 @@ package broadcast
 import (
 	"html/template"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // body parses one campaign's markup with the shell's sign-off appended, so a campaign carries the

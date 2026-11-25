@@ -144,11 +144,8 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 		{"job interaction", `INSERT INTO user_jobs (user_id, job_id, saved_at) VALUES ($1, $2, now())`, []any{leaver, jobID}},
 		{"job analysis", `INSERT INTO user_job_analysis (user_id, job_id, analysis, model) VALUES ($1, $2, '{}'::jsonb, 'test-model')`, []any{leaver, jobID}},
 		{"cv", `INSERT INTO cvs (user_id, title, data) VALUES ($1, 'CV', '{}'::jsonb)`, []any{leaver}},
-		{"credit balance", `INSERT INTO credit_balances (user_id, period, remaining) VALUES ($1, '2026-07', 10)`, []any{leaver}},
-		{"credit ledger", `INSERT INTO credit_ledger (user_id, period, kind, delta) VALUES ($1, '2026-07', 'grant', 10)`, []any{leaver}},
-		// The plan's two tables and the plan itself. The old credit pair above is still
-		// seeded because it still exists: it is written by nobody now, dropped in a later
-		// change, and until then deletion has to reach both.
+		// The plan's two tables and the plan itself. The old monthly credit pair (0031) was
+		// seeded here too until 0309 dropped it.
 		{"usage counter", `INSERT INTO usage_daily (user_id, feature, day, used) VALUES ($1, 'match', CURRENT_DATE, 2)`, []any{leaver}},
 		{"usage ledger", `INSERT INTO usage_ledger (user_id, feature, day, kind, delta, ref) VALUES ($1, 'match', CURRENT_DATE, 'consume', 1, 'job-1')`, []any{leaver}},
 		{"pro subscription", `UPDATE users SET pro_until_stripe = now() + interval '30 days' WHERE id = $1`, []any{leaver}},
@@ -214,8 +211,6 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 			{"user_jobs", "user_id"},
 			{"user_job_analysis", "user_id"},
 			{"cvs", "user_id"},
-			{"credit_balances", "user_id"},
-			{"credit_ledger", "user_id"},
 			// The plan's tables. A daily counter that outlived its owner would follow a
 			// new account registered on the same address into a spent allowance it never
 			// used — the address is released deliberately, so what hangs off the old id

@@ -106,7 +106,7 @@ func (r Runner) run(ctx context.Context, opt RunOptions, oneWave bool) (Stats, e
 		rn.stats.Reaped = reap(ctx, r.Store)
 	}
 
-	_, err := outbox.RunBatch(ctx, claimFunc(func(ctx context.Context, batch, lease int) ([]Claimed, error) {
+	_, err := outbox.RunBatch(ctx, outbox.ClaimFunc[Claimed](func(ctx context.Context, batch, lease int) ([]Claimed, error) {
 		if oneWave && rn.stats.Claimed > 0 {
 			return nil, nil
 		}

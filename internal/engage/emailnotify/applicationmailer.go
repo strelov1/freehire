@@ -6,8 +6,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // ApplicationMailer sends the mail of an on-site application (internal/ingest/directapply):

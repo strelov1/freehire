@@ -26,6 +26,12 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     return requestData(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/analytics`);
   }
 
+  async function getEmployerVacancyOutboundClicks(
+    slug: string,
+  ): Promise<components['schemas']['EmployerOutboundClicks']> {
+    return requestData(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/outbound-clicks`);
+  }
+
   async function recordEmployerVacancyApplyClick(slug: string): Promise<void> {
     await call(`/api/v1/jobs/${encodeURIComponent(slug)}/apply-click`, {
       method: 'POST',
@@ -252,6 +258,7 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
 
   return {
     getEmployerVacancyAnalytics,
+    getEmployerVacancyOutboundClicks,
     recordEmployerVacancyApplyClick,
     claimCompany,
     confirmEmployerClaim,

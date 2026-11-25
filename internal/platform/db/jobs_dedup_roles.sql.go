@@ -264,7 +264,7 @@ member AS (
     JOIN jobs c ON c.duplicate_of = m.member_id
     WHERE c.closed_at IS NULL AND m.depth < 8
 )
-SELECT j.public_slug, j.location, COALESCE(NULLIF(j.application_url, ''), j.url)::text AS url, j.posted_at,
+SELECT j.public_slug, j.source, j.external_id, j.location, COALESCE(NULLIF(j.application_url, ''), j.url)::text AS url, j.posted_at,
     COUNT(*) OVER()::bigint AS total
 FROM member m
 JOIN jobs j ON j.id = m.member_id
@@ -282,6 +282,8 @@ type ListJobCopiesParams struct {
 
 type ListJobCopiesRow struct {
 	PublicSlug string             `json:"public_slug"`
+	Source     string             `json:"source"`
+	ExternalID string             `json:"external_id"`
 	Location   string             `json:"location"`
 	URL        string             `json:"url"`
 	PostedAt   pgtype.Timestamptz `json:"posted_at"`
@@ -330,6 +332,8 @@ func (q *Queries) ListJobCopies(ctx context.Context, arg ListJobCopiesParams) ([
 		var i ListJobCopiesRow
 		if err := rows.Scan(
 			&i.PublicSlug,
+			&i.Source,
+			&i.ExternalID,
 			&i.Location,
 			&i.URL,
 			&i.PostedAt,

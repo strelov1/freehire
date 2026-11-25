@@ -9,17 +9,19 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/application/viewlog"
 	"github.com/strelov1/freehire/internal/engage/sponsored"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/tracerlink"
 )
 
 // Click limits (design D7): one IP gets at most sponsoredClicksPerMinute clicks across all
 // campaigns before further ones stop being charged. A click is never refused.
 const (
 	sponsoredClicksPerMinute = 20
-	sponsoredClickTimeout    = 2 * time.Second
+	// clickTimeout bounds the database work of any click redirect; the redirect itself never waits on more.
+	clickTimeout = 2 * time.Second
 )
 
 type clickCharger interface {
@@ -52,10 +54,7 @@ func (s *sponsoredClicks) register(api fiber.Router) {
 }
 
 func (s *sponsoredClicks) redirect(c *fiber.Ctx, to string) error {
-	c.Set("Cache-Control", "no-store")
-	c.Set("X-Robots-Tag", "noindex, nofollow")
-	c.Set("Referrer-Policy", "no-referrer-when-downgrade")
-	return c.Redirect(to, fiber.StatusFound)
+	return redirectOut(c, to)
 }
 
 func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
@@ -65,7 +64,7 @@ func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
 	if err != nil {
 		return s.redirect(c, jobsPage)
 	}
-	ctx, cancel := context.WithTimeout(c.UserContext(), sponsoredClickTimeout)
+	ctx, cancel := context.WithTimeout(c.UserContext(), clickTimeout)
 	defer cancel()
 
 	row, err := s.queries.GetJob(ctx, claims.JobID)
@@ -77,7 +76,7 @@ func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
 		return s.redirect(c, jobsPage)
 	}
 	// A freehire-hosted job has no outside destination: its Apply lives on its own page.
-	target := view.URL
+	target := outboundurl.Tag(view.URL)
 	if target == "" {
 		target = s.origin + "/jobs/" + view.PublicSlug
 	}
@@ -98,7 +97,7 @@ func (s *sponsoredClicks) handle(c *fiber.Ctx) error {
 		Placement:       claims.Placement,
 		VisitorHash:     sponsored.VisitorHash(s.key, ip, ua, now),
 		PrevVisitorHash: sponsored.VisitorHash(s.key, ip, ua, now.Add(-sponsored.DuplicateWindow)),
-		Bot:             ua == "" || viewlog.IsBot(ua),
+		Bot:             ua == "" || tracerlink.IsBotUserAgent(ua),
 		RateLimited:     !s.limiter.Allow(ip, now),
 	}
 	if _, err := s.charger.Charge(ctx, claims.CampaignID, click, now); err != nil && !errors.Is(err, context.Canceled) {

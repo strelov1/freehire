@@ -34,8 +34,10 @@ func newTracerHandlers(queries *db.Queries, salt string) *tracerHandlers {
 	return &tracerHandlers{links: queries, salt: salt}
 }
 
-// goneBody is what a recruiter sees when the CV behind a link was deleted; a bare 404 reads as a broken site.
-const goneBody = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+// gonePage is what a visitor sees at a redirect link that leads nowhere any more; a bare 404 reads as a
+// broken site. why is plain text, never request input.
+func gonePage(why string) string {
+	return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <title>This link is no longer active</title>
@@ -51,9 +53,10 @@ a{display:inline-block;margin-top:1.5rem;color:#3f3f46;font-size:.875rem}
 @media(prefers-color-scheme:dark){body{color:#fafafa;background:#09090b}p{color:#a1a1aa}a{color:#d4d4d8}}
 </style></head><body><main>
 <h1>This link is no longer active</h1>
-<p>The CV it pointed to has been removed by its owner.</p>
+<p>` + why + `</p>
 <a href="https://freehire.me">freehire.me</a>
 </main></body></html>`
+}
 
 // Redirect resolves a traced link, records the click, and sends the visitor on.
 //
@@ -63,7 +66,7 @@ a{display:inline-block;margin-top:1.5rem;color:#3f3f46;font-size:.875rem}
 func (h *tracerHandlers) Redirect(c *fiber.Ctx) error {
 	link, err := h.links.TracerLinkByToken(c.Context(), c.Params("token"))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return c.Status(fiber.StatusGone).Type("html").SendString(goneBody)
+		return c.Status(fiber.StatusGone).Type("html").SendString(gonePage("The CV it pointed to has been removed by its owner."))
 	}
 	if err != nil {
 		// Only a missing token earns the 410 ("gone for good"); a pool timeout must not tell a
