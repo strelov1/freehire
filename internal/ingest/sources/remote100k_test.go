@@ -45,7 +45,8 @@ func TestRemote100kID(t *testing.T) {
 }
 
 func TestRemote100kMapsPostingsAndDropsAGonePage(t *testing.T) {
-	jobs, err := fastRemote100k(newRemote100kFake(t)).Fetch(context.Background(), CompanyEntry{})
+	f := newRemote100kFake(t)
+	jobs, err := fastRemote100k(f).Fetch(context.Background(), CompanyEntry{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestRemote100kMapsPostingsAndDropsAGonePage(t *testing.T) {
 	if h.ApplyMethod != ApplyExternal || h.ExternalApplyURL == "" {
 		t.Errorf("apply = %q %q", h.ApplyMethod, h.ExternalApplyURL)
 	}
-	if f := newRemote100kFake(t); f.fetched("https://remote100k.com/remote-jobs/anywhere") {
+	if f.fetched("https://remote100k.com/remote-jobs/anywhere") {
 		t.Error("a category page was fetched")
 	}
 }

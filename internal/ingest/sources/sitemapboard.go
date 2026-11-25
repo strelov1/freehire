@@ -187,7 +187,8 @@ type sitemapBoardPosting struct {
 	JobLocationType string             `json:"jobLocationType"`
 	JobLocation     sitemapBoardPlaces `json:"jobLocation"`
 	// ApplicantLocationRequirements is read only by a board that sets applicantCountries.
-	ApplicantLocationRequirements schemaNamedAreas   `json:"applicantLocationRequirements"`
+	// Kept raw so a shape the decoder rejects cannot fail a posting on a board that never reads it.
+	ApplicantLocationRequirements json.RawMessage    `json:"applicantLocationRequirements"`
 	HiringOrganization            sitemapldjsonOrg   `json:"hiringOrganization"`
 	BaseSalary                    sitemapBoardSalary `json:"baseSalary"`
 }
@@ -266,7 +267,10 @@ func (p sitemapBoardPosting) countryCodes() []string {
 
 func (b sitemapBoard) countryCodes(p sitemapBoardPosting) []string {
 	if codes := p.countryCodes(); b.applicantCountries && !slices.ContainsFunc(codes, func(c string) bool { return c != "" }) {
-		return p.ApplicantLocationRequirements.Names()
+		var areas schemaNamedAreas
+		if json.Unmarshal(p.ApplicantLocationRequirements, &areas) == nil {
+			return areas.Names()
+		}
 	}
 	return p.countryCodes()
 }
