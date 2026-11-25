@@ -105,3 +105,20 @@ func TestCountingClientDoesNotCountServiceUnavailableAsRefusal(t *testing.T) {
 		t.Errorf("answered = %d, want 1 — the platform did answer", got)
 	}
 }
+
+// Discovery answers (Common Crawl, through the same client) must not outvote the platform's
+// refusals once probing starts.
+func TestCountingClientResetDropsDiscoveryAnswers(t *testing.T) {
+	c := newCountingClient(fakeGetter{"https://index.commoncrawl.org/collinfo.json": commonCrawlCollInfoBody})
+	for range 5 {
+		_, _ = c.GetText(context.Background(), "https://index.commoncrawl.org/collinfo.json")
+	}
+	c.reset()
+	c.record(&sources.StatusError{Method: http.MethodGet, Code: http.StatusTooManyRequests, URL: "u"})
+	if c.refused() != 1 || c.answered() != 0 {
+		t.Fatalf("after reset: refused=%d answered=%d, want 1/0", c.refused(), c.answered())
+	}
+	if !refusalsDominated(c.refused(), c.answered()) {
+		t.Error("a refused probe after discovery must still dominate")
+	}
+}

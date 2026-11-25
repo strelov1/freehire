@@ -133,6 +133,10 @@ func run() int {
 		log.Printf("harvest-boards: %v", err)
 		return 1
 	}
+	if seedPath == "" {
+		// The refusal guard below judges the platform being probed, not the index discovery read.
+		client.reset()
+	}
 
 	listed, err := boardcatalog.LoadForProvider(ctx, repo, provider)
 	if err != nil {
