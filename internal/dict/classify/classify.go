@@ -33,6 +33,9 @@ func Parse(title string) Classification {
 // The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere.
 func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
+	if strings.Contains(lower, "  ") {
+		lower = strings.Join(strings.Fields(lower), " ")
+	}
 	c := matchOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
 	if c == "" {
 		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go), Turkish (turkish.go) and Vietnamese (vietnamese.go) heads in that order.

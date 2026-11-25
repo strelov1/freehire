@@ -140,6 +140,7 @@ var coreCategoryTable9 = []aliasEntry{
 	// Bare craft words ("video", "audio", "art", "sound", "photo") are not aliases: each occurs across every discipline ("Audio DSP Engineer", "Art Director").
 	{"video editor", "creative"},
 	{"video producer", "creative"},
+	{"voice acting specialist", "creative"},
 	{"videographer", "creative"},
 	{"photographer", "creative"},
 	{"photo editor", "creative"},

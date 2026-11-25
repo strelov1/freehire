@@ -32,6 +32,11 @@ var coreCategoryTable2 = []aliasEntry{
 	{"penetration testing", "security"},
 	{"pentester", "security"},
 	{"pentest", "security"},
+	{"linguistic evaluator", "qa"},
+	{"linguistic quality evaluator", "qa"},
+	{"language quality specialist", "qa"},
+	{"linguistic ai auditor", "qa"},
+	{"linguistic tester", "qa"},
 	{"qa", "qa"},
 	{"quality assurance", "qa"},
 	{"tester", "qa"},
@@ -180,6 +185,19 @@ var coreCategoryTable2 = []aliasEntry{
 	{"localization specialist", "technical_writing"},
 	{"localization manager", "technical_writing"},
 	{"localization engineer", "technical_writing"},
+	// A language craft can serve a marketing or design project. File it by the
+	// craft before the generic aliases for those departments.
+	{"language specialist - ai trainer", "technical_writing"},
+	{"language specialist – ai trainer", "technical_writing"},
+	{"language expert - ai trainer", "technical_writing"},
+	{"language expert – ai trainer", "technical_writing"},
+	{"audio transcription adjudicator", "technical_writing"},
+	{"audio transcription rater", "technical_writing"},
+	{"audio transcription raters", "technical_writing"},
+	{"audio transcription reviewer", "technical_writing"},
+	{"audio transcription specialist", "technical_writing"},
+	{"linguist", "technical_writing"},
+	{"linguists", "technical_writing"},
 	// Instructional/curriculum design is a content craft (courses, learning materials), not product design, so it
 	// must precede the bare "designer" entry. It stays out of `hr`'s "learning and development" alias: L&D is the
 	// internal-training function, this is the authoring craft, and it appears at companies with no L&D team.

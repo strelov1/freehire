@@ -105,7 +105,8 @@ func Derive(in Input) Derived {
 		// resolved local `category` — NOT in.Category — so it also fires when the
 		// title dictionary supplied the category, the common case since most
 		// sources carry no structured category signal.
-		Skills:             unionSkills(in.Skills, skilltag.Parse(in.Description, skilltag.WithAcronymCategory(category))),
+		Skills: unionSkills(in.Skills, skilltag.Parse(in.Description,
+			skilltag.WithAcronymCategory(category), skilltag.WithJobTitle(in.Title))),
 		Seniority:          seniority,
 		Category:           category,
 		IsTech:             isTech,

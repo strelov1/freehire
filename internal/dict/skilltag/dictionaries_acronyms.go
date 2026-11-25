@@ -126,7 +126,7 @@ var nonCorroboratingPhrases = func() map[string]bool {
 	// Not covered, because neither is a phrase: the EHS platforms (Enablon, Cority are products you
 	// administer, like "Ahrefs") and the word aliases osha/epa/nfpa/rcra/hazop, where a regulator's
 	// name is not English prose. Both stay corroborating.
-	for _, p := range slices.Concat(occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases, procurementPhraseAliases) {
+	for _, p := range slices.Concat(occupationalSafetyPhraseAliases, industrialMaintenancePhraseAliases, procurementPhraseAliases, languageWorkPhraseAliases) {
 		out[p.canonical] = true
 	}
 	return out
