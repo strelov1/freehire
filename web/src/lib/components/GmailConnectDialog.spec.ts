@@ -1,14 +1,10 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { must } from '#lib/utils.js';
 import GmailConnectDialog from './GmailConnectDialog.svelte';
 
 // The dialog is mounted by its parent to open it and reports every way of leaving through
 // onClose, so that is the whole contract: two ways out that only close, and one that proceeds.
-
-function must<T>(v: T | null | undefined, what: string): T {
-  if (v == null) throw new Error(`missing ${what}`);
-  return v;
-}
 
 function dialog(): HTMLElement {
   return must(

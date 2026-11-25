@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '#lib/api.js';
 import { clipboardText } from '#lib/followup.js';
+import { must } from '#lib/utils.js';
 import type { FollowUpDraft } from '#lib/types.js';
 import FollowUpDialog from './FollowUpDialog.svelte';
 
@@ -21,11 +22,6 @@ const DRAFT: FollowUpDraft = {
   body: 'Hi Acme,\n\nI wanted to follow up on my application.',
   days_silent: 9,
 };
-
-function must<T>(v: T | null | undefined, what: string): T {
-  if (v == null) throw new Error(`missing ${what}`);
-  return v;
-}
 
 function dialog(): HTMLElement {
   return must(
@@ -93,6 +89,25 @@ describe('FollowUpDialog', () => {
       expect(onclose).not.toHaveBeenCalled();
       expect((dialog() as HTMLDialogElement).open).toBe(true);
     }
+  });
+
+  it('announces a failed chase record inside the modal, which it does not close', async () => {
+    vi.mocked(api.recordFollowUp).mockRejectedValue(new Error('boom'));
+    const onrecorded = vi.fn();
+    const onclose = vi.fn();
+    render(FollowUpDialog, { slug: 'acme-senior-product-engineer', company: 'Acme', onclose, onrecorded });
+    await waitFor(() => expect(within(dialog()).getByRole('link', { name: 'Gmail' })).toBeTruthy());
+
+    await fireEvent.click(within(dialog()).getByRole('button', { name: 'Copy draft' }));
+
+    // The page behind a native modal is inert, root Announcer included, so the error is
+    // announced by being an alert in here — and the draft stays on screen to take again.
+    // errorMessage() shows the Error's own message when it has one; the fallback is for
+    // anything else. What matters here is that it is an alert, in here.
+    expect(within(dialog()).getByRole('alert').textContent).toBe('boom');
+    expect(onrecorded).not.toHaveBeenCalled();
+    expect(onclose).not.toHaveBeenCalled();
+    expect((dialog() as HTMLDialogElement).open).toBe(true);
   });
 
   it('reports the header X, the footer Close and Escape through onclose', async () => {

@@ -94,7 +94,7 @@
 >
   <div class="flex flex-col gap-4">
     {#if error && !draft}
-      <p class="text-sm text-destructive">{error}</p>
+      <p role="alert" class="text-sm text-destructive">{error}</p>
     {:else if !draft}
       <p class="text-sm text-muted-foreground">{s.building}</p>
     {:else}
@@ -118,7 +118,7 @@
         {s.privacyNote}
       </p>
       {#if error}
-        <p class="mt-2 text-xs text-destructive">{error}</p>
+        <p role="alert" class="mt-2 text-xs text-destructive">{error}</p>
       {/if}
     {/if}
     <div class="flex flex-wrap items-center gap-2">
