@@ -17,6 +17,7 @@ const (
 )
 
 func newRemote100kFake(t *testing.T) *sitemapBoardFake {
+	t.Helper()
 	return &sitemapBoardFake{t: t, dir: "remote100k", files: map[string]string{
 		remote100kSitemapURL: "sitemap.xml",
 		remote100kHumanaURL:  "posting-humana.html",
