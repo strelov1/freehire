@@ -7,7 +7,7 @@ at all. It does, and the reasoning is worth recording because the instinct to cl
 strong and the usual arguments for closing it do not apply here.
 
 **The two stated worries are not addressed by closing the code.** Secrets never live in
-source, open or closed: they live in `/opt/freehire/.env`, and `gitleaks` guards both the
+source, open or closed: they live in `/opt/freehire/.env`, and Betterleaks guards both the
 staged index and the whole history. Legal exposure — who is the seller, who owes VAT, who
 refunds — is decided by the legal entity and the payment provider, not by the visibility
 of a webhook handler.

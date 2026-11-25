@@ -1,0 +1,149 @@
+# Secret scanning includes the built-in rules. Exceptions match specific findings.
+# Keep every exception narrow. An entire file can contain unrelated credentials.
+# If a real credential reaches Git, revoke it even after removing it from the tree.
+minVersion = "2.0.0-rc.12"
+filter = '''
+// Chrome extension manifest keys are RSA *public* keys (SPKI, DER, base64). The extension pins
+// its development id with one, which is what the id is derived from — publishing it is the
+// mechanism, not a slip. A private key carries a different prefix (MIIEv/MIIJ), so this shape
+// cannot cover one.
+matchesAny(finding.secret, [`^MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A`]) ||
+
+// RFC 6455 §1.3 prints this exact Sec-WebSocket-Key on the page that defines the handshake. The
+// WebSocket tests use it because a reader who knows the RFC recognises it.
+matchesAny(finding.secret, [`^dGhlIHNhbXBsZSBub25jZQ==$`]) ||
+
+// Source-adapter test fixtures: captured response bodies with the vendor's token field filled
+// by an obvious placeholder. Listed one by one rather than by path — a fixture is where a real
+// captured token would hide.
+matchesAny(finding.secret, [
+  `^ABCDEF1234567890ABCDEF12$`,
+  `^KEY-abc\.def-123_xyz$`,
+  `^3aa5b098-aa6d-4f6c-950a-b92a81363cf8$`,
+  `^747e3af5-f7ef-4bd9-87f2-69c6499f4914$`,
+  `^4bf8bdb8-e735-4205-a17e-891be1e1ffbd$`,
+  `^0721c00d-3962-48a3-bc8b-3834a3765170$`,
+  `^PDX_[A-Z0-9]+_[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}_[0-9]+$`,
+]) ||
+
+// Auth and mail test constants. Each is long enough to trip generic-api-key and says in its own
+// text that it is not a credential.
+matchesAny(finding.secret, [
+  `^test-secret-that-is-long-enough-0001$`,
+  `^fh_live_abc123$`,
+]) ||
+
+// logo.dev publishable key, history only. It was a `pk_` token — the kind designed to ship to a
+// browser — and the code no longer carries it: company logos now go through our own
+// logo.freehire.me proxy, which holds the credential server-side. Kept because the finding is
+// in the history, where it stays.
+matchesAny(finding.secret, [`^pk_fKgOEo0OT4KXvUshjPMGAQ$`]) ||
+
+// ITviec listing markup names each posting by a UUID in a `data-job-key` attribute
+// (internal/ingest/sources/testdata/itviec_list_page1.html). It is the posting's public id,
+// printed on every listing page, and the word `key` is what trips generic-api-key. Pinned to
+// the attribute AND the UUID shape, so any other token in that markup is still scanned.
+matchesAny(finding.match, [`^data-job-key='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'$`]) ||
+
+// Paradox names each posting by a `job_token` of the shape PDX_JONB_<UUID>_<number>
+// (internal/ingest/sources/testdata/paradox/). It is the posting's id inside the public job
+// JSON every visitor's browser receives, not a credential; the field name is what trips
+// generic-api-key. Pinned to that exact shape.
+matchesAny(finding.secret, [`^PDX_JONB_[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}_[0-9]+$`]) ||
+
+// The extension's GA4 Measurement Protocol API secret. It ships inside every published build
+// (MV3 cannot fetch it at runtime from anywhere a reader could not), and all it permits is
+// sending events to the site's own analytics stream — public by construction, like the gtag
+// measurement id beside it. Matched by the variable it is assigned to, so a different key
+// pasted into the same file still fails.
+matchesAny(finding.line, [`WXT_GA_API_SECRET=[A-Za-z0-9_-]{16,40}`]) ||
+
+// A git commit SHA pinned as a version: a workflow's `uses: owner/action@<sha> # vX.Y.Z`
+// (zizmor requires every action pinned so) and a mise tool built from a commit (`rev:<sha>`).
+// sourcegraph-access-token fires on any 40-hex string near the word sourcegraph, and the scip-
+// typescript indexer is `@sourcegraph/scip-typescript`, so a pin beside it trips the rule.
+// Pinned to those two line shapes, so a bare 40-hex value anywhere else is still scanned.
+matchesAny(finding.line, [
+  `^\s*(?:-\s+)?uses:\s+[\w.-]+/[\w./-]+@[0-9a-f]{40}\s+#\s+v\S+\s*$`,
+  `"cargo:https://github\.com/[\w.-]+/[\w.-]+" = "rev:[0-9a-f]{40}"`,
+]) ||
+
+// Test passwords, API examples, UI strings and local MinIO/perf defaults.
+(finding.rule_id == "generic-password" && crypto.sha256(finding.secret) in [
+  "1817cf31da74e02a9902eaa3b99a54ccd9465624db7f987ea7eb0a36908cc514",
+  "1c3007ebfc27403d4575584ad410316887e9a094ca88afa1fffcd1f7edea90d9",
+  "2621c4f88e30975ca35c88a41adbdc36ece641d8f1e673be8d65a1addc3c0bf6",
+  "2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b",
+  "326522afb981c7ceca24483a86fe62970c69062c0aad2d05bfe73591197adb98",
+  "372549a71c6c54cae8ddb8abeac474def5fc6c50d2f907c4713035f4eda8438c",
+  "448408b0970d5a6f8a68fa1db56c5e622daa103e6573a8d084834309e8d8672e",
+  "595c3e976fe08b24517e583c35b9faef3e8bf103c3355fba7c23f972baee47e8",
+  "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+  "60cde42e8cef5f7e05bde317b0949248106991715153ac33c749b1faeeff855e",
+  "6267f09f1b5033e3be863ed444dcfd65dfb51b4c3b8b7e967b9ccf7693aaf451",
+  "630258be4c1997225c807c632363a31f5a4c43cda2433c4bedc6be9c72f8bb98",
+  "6e15374c50e39fcd111d800beba2b0666d629ae8d07bed80d9eb0df8d364dab9",
+  "6e306c515177ca5a1968fe96b4d727833af2214eaf0922dfda29a1d0d063cf34",
+  "6f399917e93d22b9e65eca16f3cf111e556a0d30dc00767f86075017b190a5c5",
+  "76880d60191af3b3f803a656b7716f0179928357fc32421ced973ed265e15718",
+  "81d5caedfeeece47c4de11252f13f81a753e8538b75d74139da18c378dc4fcdb",
+  "82a80dfd62520a5233b43ca35ed567deb7637172c8d003aa697185bdbcea46f1",
+  "8ecd67dceb90a898b1f94bddf570ce1c23629cd328140d81f1e02e43d42eb44e",
+  "9dca666eb54730714630d1519264a7bf1eeaad00b8f2edc90d3ecbfad928d163",
+  "a87b0b0f514d56033355324826d95e9efc4fd511d3ec73cc551549abfa49dfdb",
+  "ad9858116e63b0c5a4d7dc7f50f034c7247e56838dae22c1832712ffde48e694",
+  "b8b9f8f23992ebc2617febc03d92ecb1763fba7b77a5d053b69c416bad18a369",
+  "bdb6d859f00b934a95d72f983222f7dd9f5e4722b6918e8c9bf35360698f5ed6",
+  "c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a",
+  "ccd4ae2c26d0d8220cd9740693e2b67600c5ded8b0184c7691d833f1acff4a08",
+  "ced1ab83de5a8adba574f0b3e7abb23758cb22db1cd04fdd90c5867c2a672172",
+  "cffb43a7a3c5724f43197b6df1bd0ba6aa7710ab873eed5a98227c123a60a189",
+  "e3bd458a8b3e6f395c46fecaa4ce632d6cc5ceecad9c50fa990015f5488f8719",
+  "e4e0e9af0e52536064750efed1261943faa4fda16952ecc97d8c405c5e45fb88",
+  "e7cf3ef4f17c3999a94f2c6f612e8a888e5b1026878e4e19398b23bd38ec221a",
+  "eb859eeba80bc3c6cd4fea0a7c24b60ec4f3f7f8f2c2c61f8173a2df583c2bdb",
+  "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+  "f52fbd32b2b3b86ff88ef6c490628285f482af15ddcb29541f94bcf526a3f6c7",
+  "f9b0078b5df596d2ea19010c001bbd009e651de2c57e8fb7e355f31eb9d3f739",
+  "fc66b0c99eb4ce5b2daa368457c26e27ca1cd008e8283d22624424abc87a4315",
+]) ||
+
+// Local database defaults, placeholder proxy/SMTP URLs and redaction tests.
+(finding.rule_id == "generic-credential-uri" && crypto.sha256(finding.secret) in [
+  "272f44a5681429c51241810917074dba6eb1abf0e5b90e11a0d57cddabb183a7",
+  "2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b",
+  "30c952fab122c3f9759f02a6d95c3758b246b4fee239957b2d4fee46e26170c4",
+  "47facce23a4e378e2db6678d49886c2c01fb69ec0fba65258571f9c19c06eb7f",
+  "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+  "6382b3cc881412b77bfcaeed026001c00d9e3025e66c20f6e7e92f079851462a",
+  "918b363988c4c79e7cc31be01a9ee6bfe228bab66f97dabed41a45065d0e3843",
+  "bf90ace460be66498a913aaca0b7868806603cf0fef114305fcf81396c30b5ba",
+  "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1",
+  "e9f8d6884a8eba884cf5fcdcd4ebf183cbe485eda81690850f23f44673b7db76",
+  "f8dfc61b65c9969d12bc28629fa569def958b0d0577103ac1465e3cc3c35150e",
+]) ||
+
+// Historical public form and browser values in captured ATS fixtures.
+(finding.rule_id == "generic-api-key" && attributes["git.sha"] in [
+  "2c4412be826f0516267c0dea07d9cae4d40e71af",
+  "83c14906d65d4fad25a3d72e2f0d871410704499",
+  "9f16502b289c9ed01e4473f79b33121ba1362f47",
+  "eafd220b02ae2c51e41f56364a7cb280facf18cc",
+] && crypto.sha256(finding.secret) in [
+  "039cb9f52e01886f0c1003361e86faa9278d8e8f6223e604cccef7aed32d43d7",
+  "0df9c1afcb208168f62e550087f75ee8ad002650a21d8c0a2fbc89643f8bf1b4",
+  "1799ae4661e0579f4a28c38198a2d19f69f51edde8cccd148168a9d4eabe8efe",
+  "38bc5622fe8775b81c9ad3026caf82f0ebbe546344055637fb9ab12b2edde799",
+  "4890f62070203e1bb4b62c3e9474f11469f1b546056fb070487bc5ac14c49326",
+  "5f1a124bc7b2af6c09e71cfca429d98eaed948828f32a1916c82ddf74cabd926",
+  "8c7d6bd66da4f12f64279f5a8f28e2ed21443aaa10be4889c1ee7b58282defbd",
+  "aa28e388fc060c7d98fc4e73d356bca477f8a26de959ddb998f78c61e8caa360",
+  "b4da7aca4b692ec92baaeb8187ee5597f552dd5ad9bfd36c6b3b43056d4028fe",
+  "bbd209c7c9d98d508acc7f8018f9ad3996c8cbbac878a84e49d3a2c231204868",
+  "f90745abce303adf9468c3263889a92c20edd913ab57126de72b8a555528edaf",
+])
+
+'''
+
+[extend]
+useDefault = true
