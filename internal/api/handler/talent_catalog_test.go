@@ -377,7 +377,13 @@ func TestTalentCatalogGetPhoto_ServesABlurredImageForAMemberWithAHeadshot(t *tes
 	photos := photoStoreWithOneMember(t, 42)
 	app := talentCatalogApp(store, photos)
 
-	resp := doTalent(t, app, "/talent/backend-aaaa/photo")
+	// The Gaussian blur is a wide float loop, which the race detector slows by more than
+	// an order of magnitude: this route outruns app.Test's default 1s under -race on a
+	// busy runner. 30s keeps the wait bounded.
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/talent/backend-aaaa/photo", nil), 30_000)
+	if err != nil {
+		t.Fatalf("request /talent/backend-aaaa/photo: %v", err)
+	}
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
