@@ -129,7 +129,7 @@ findings are in the design's "The provider contract, as verified".
 - [ ] 6.3 Add the four variables to `/opt/freehire/.env` on the host. Confirm which env
       file the worker unit actually reads before assuming — a variable in the wrong file
       degrades silently
-- [x] 6.4 Confirm `.gitleaks.toml` needs no new allowlist entry, and that no key reached a
+- [x] 6.4 Confirm the secret-scanner configuration needs no new allowlist entry, and that no key reached a
       tracked file
 - [x] 6.5 Do **not** add billing to `docker-compose`'s default services
 

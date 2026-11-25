@@ -275,7 +275,7 @@ jobs:
           key: ci-tools-${{ github.job }}-${{ hashFiles('.github/workflows/lint.yml') }}
           restore-keys: ci-tools-${{ github.job }}-
 
-      # Checked before it is unpacked, like gitleaks: the digest is the release's own and
+      # Checked before it is unpacked, like Betterleaks: the digest is the release's own and
       # moves with AST_GREP_VERSION, which .mise.toml pins too (bump both together).
       - name: Install ast-grep
         env:

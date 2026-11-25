@@ -20,7 +20,7 @@ pre-commit:
       run: make lint
     # Blocking: `govulncheck ./...` is clean on main under the pinned toolchain, so a
     # failure now comes from a dependency advisory or from the commit itself.
-    # A missing binary skips on purpose, unlike gitleaks; the CI job is the gate.
+    # A missing binary skips on purpose, unlike betterleaks; the CI job is the gate.
     # The glob mirrors the path scope of .github/workflows/govulncheck.yml's
     # pull_request trigger.
     govulncheck:
@@ -197,7 +197,7 @@ pre-commit:
     # Rewriting history does not un-leak anything. This hook is the last moment at
     # which that has not happened yet.
     #
-    # .github/workflows/gitleaks.yml is NOT a redundant copy: it scans the whole
+    # .github/workflows/betterleaks.yml is NOT a redundant copy: it scans the whole
     # history and cannot be bypassed, so it covers whoever never ran `lefthook
     # install` or reached for --no-verify. But by the time it speaks the leak is
     # real. Two controls, two moments, neither replaces the other.
@@ -208,7 +208,7 @@ pre-commit:
     #
     # Unlike govulncheck above, a missing binary FAILS. A scanner that quietly
     # skips is worse than no scanner: it makes the commit look examined.
-    # The rules in ast-grep/rules over the staged files. Unlike gitleaks it steps aside when
+    # The rules in ast-grep/rules over the staged files. Unlike betterleaks it steps aside when
     # the binary is missing (`mise install` brings it): the ast-grep CI job is the gate.
     ast-grep:
       glob:
@@ -221,20 +221,21 @@ pre-commit:
           exit 0
         fi
         ast-grep scan --error {staged_files}
-    gitleaks:
+    betterleaks:
       run: |
-        if ! command -v gitleaks >/dev/null 2>&1; then
-          echo 'gitleaks is not installed (brew install gitleaks), and this hook will'
-          echo 'not pretend a commit was scanned when it was not. Install it, or use'
-          echo '--no-verify knowing CI scans the history anyway.'
+        if ! command -v betterleaks >/dev/null 2>&1; then
+          echo 'Betterleaks is required to scan staged changes. Run mise install.'
           exit 1
         fi
-        gitleaks git --staged --no-banner
+        bash -o pipefail -c '
+          git diff --cached --no-ext-diff --no-textconv --no-color --src-prefix=a/ --dst-prefix=b/ |
+            betterleaks stdin --git-diff --config .betterleaks.toml --validate=false --analyze=false --redact
+        '
     # A PACKAGE'S OWN ROOT IS NOT UNDER `**/`. The second pattern in each pair is
     # what reaches vite.config.ts, svelte.config.js, eslint.config.js and — in web —
     # cluster.js, which is the process that actually serves the site in production.
     # Thirteen such files sat outside every hook here, checked one at a time with
-    # `lefthook run pre-commit --file`: only gitleaks fired, because it has no glob.
+    # `lefthook run pre-commit --file`: only betterleaks fired, because it has no glob.
     #
     # NO `.oxlintrc.json` IN THESE TWO, THOUGH IT IS IN design-system-lint BELOW, AND
     # the difference is what the command does with its glob. These two pass

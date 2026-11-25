@@ -123,7 +123,7 @@ full integration suite was not run; tagged vet establishes compilation only.
 Targeted PageUp/Clinch/Scrapling regressions passed, including existing challenge
 latch/error and real metadata fixtures. Seven Python tests, Ruff check/format,
 gofmt, changed-code golangci-lint (zero issues), size/link/whitespace checks and
-Gitleaks over the followup diff passed. Simplify retained existing APIs and moved
+the secret scan over the followup diff passed. Simplify retained existing APIs and moved
 the board-specific parsing selection outside the per-link walk; no dependency,
 new crawler, body-refresh activation or unrelated provider changes were added.
 
