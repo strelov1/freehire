@@ -304,6 +304,24 @@ export interface Job {
    */
   apply_questions?: number /* int */;
   /**
+   * EmploymentType, ExperienceLevel, Category, EducationLevel and Remote are top-level
+   * mirrors of facts already served (enrichment.employment_type, .seniority, .category,
+   * .education_level, and work_mode), for consumers that read a flat posting. Remote is a
+   * pointer: false ("hybrid"/"onsite") is an answer, absent means work_mode is unknown.
+   */
+  employment_type?: string;
+  experience_level?: string;
+  category?: string;
+  education_level?: string;
+  remote?: boolean;
+  /**
+   * CompanyWebsite (the company's site on record, https URL) and CompanyLogo (the logo
+   * proxy's URL for the company NAME, which may 404 on a miss) are attached by the detail
+   * handler only; list and search rows omit them.
+   */
+  company_website?: string;
+  company_logo?: string;
+  /**
    * Sponsored marks a search hit placed as a paid slot (never an organic one), and
    * SponsoredURL is the click-tracking redirect the "Sponsored" card must link to
    * (/api/v1/sponsored/go/<token>); URL stays the organic link for crawlers. Both are set
