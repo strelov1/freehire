@@ -945,12 +945,6 @@ type Handler interface {
 	//
 	// GET /jobs/{slug}
 	GetJob(ctx context.Context, params GetJobParams) (*GetJobOK, error)
-	// GetJobFit implements getJobFit operation.
-	//
-	// Alias of `getMatchAnalysis`.
-	//
-	// GET /jobs/{slug}/fit
-	GetJobFit(ctx context.Context, params GetJobFitParams) (*FitAnalysisResponse, error)
 	// GetJobMatch implements getJobMatch operation.
 	//
 	// How well the job’s skills are covered by your profile skills — exact, adjacent, and missing,
@@ -2279,12 +2273,6 @@ type Handler interface {
 	//
 	// POST /me/autofill/run
 	RunAutofill(ctx context.Context) (*RunAutofillOK, error)
-	// RunJobFit implements runJobFit operation.
-	//
-	// Alias of `runMatchAnalysis`.
-	//
-	// POST /jobs/{slug}/fit
-	RunJobFit(ctx context.Context, params RunJobFitParams) (RunJobFitRes, error)
 	// RunMatchAnalysis implements runMatchAnalysis operation.
 	//
 	// Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh

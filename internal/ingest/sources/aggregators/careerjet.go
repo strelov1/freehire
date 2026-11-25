@@ -131,8 +131,13 @@ func (c careerjet) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, er
 	return jobs, nil
 }
 
+// authHeaders carries the key and the Referer: the API answers 403 "Undeclared referrer"
+// without one, and it must be the site the key is registered to.
 func (c careerjet) authHeaders() map[string]string {
-	return map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(c.apiKey+":"))}
+	return map[string]string{
+		"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(c.apiKey+":")),
+		"Referer":       "https://freehire.me/",
+	}
 }
 
 func careerjetPageURL(locale, keywords string, page int, userIP string) string {

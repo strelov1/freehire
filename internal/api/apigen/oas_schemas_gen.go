@@ -13222,7 +13222,6 @@ func (s *FitAnalysisResponse) SetData(val FitAnalysis) {
 	s.Data = val
 }
 
-func (*FitAnalysisResponse) runJobFitRes()        {}
 func (*FitAnalysisResponse) runMatchAnalysisRes() {}
 
 // A job posting scraped off any page.
@@ -13293,7 +13292,6 @@ func (s *FitRefusal) SetUpgradeURL(val OptString) {
 	s.UpgradeURL = val
 }
 
-func (*FitRefusal) runJobFitRes()        {}
 func (*FitRefusal) runMatchAnalysisRes() {}
 
 // ForgotPasswordAccepted is response for ForgotPassword operation.

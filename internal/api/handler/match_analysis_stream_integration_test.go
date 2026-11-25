@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration test for the SSE fit-stream endpoint:
-// GET /api/v1/jobs/:slug/fit/stream must emit ordered stage/section events ending in
+// GET /api/v1/jobs/:slug/match-analysis/stream must emit ordered stage/section events ending in
 // `final`, and cache the analysis. Run with: go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -100,13 +100,13 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 				plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithProCeiling(plan.FeatureFit, fitProDailyForTests)), an),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/match-analysis/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 		return app
 	}
 
 	get := func(t *testing.T, app *fiber.App, tok string) (int, string) {
 		t.Helper()
-		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/stream-job/fit/stream", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/stream-job/match-analysis/stream", nil)
 		if tok != "" {
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})
 			// The shape the SPA's EventSource produces: a same-origin cookie request stamps
@@ -218,7 +218,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 
 		ask := func(slug, secFetchSite string) int {
 			t.Helper()
-			req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/fit/stream", nil)
+			req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/match-analysis/stream", nil)
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 			if secFetchSite != "" {
 				req.Header.Set(headerSecFetchSite, secFetchSite)
@@ -262,7 +262,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		// settled state rather than a race.
 		askBody := func(slug, tok, secFetchSite string) string {
 			t.Helper()
-			req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/fit/stream", nil)
+			req := httptest.NewRequestWithContext(ctx, fiber.MethodGet, "/api/v1/jobs/"+slug+"/match-analysis/stream", nil)
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})
 			req.Header.Set(headerSecFetchSite, secFetchSite)
 			resp, err := app.Test(req, 10000)
