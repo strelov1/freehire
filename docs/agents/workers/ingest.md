@@ -2,6 +2,11 @@
 
 Part of the [worker index](../workers.md): what each `cmd/<name>` worker does, when it runs, what it needs, and the trap behind it. Crawling boards, closing and re-checking postings, apply forms.
 
+- `harvest-ats eustartups <company-slugs.txt> <state.jsonl>` — hand-run discovery from the
+  eu-startups.com directory (~33k companies, one request per listing page and per card, ~10 h
+  at 1 req/s). Needs `SCRAPLING_FETCH_URL`/`TOKEN`; the state file makes a killed run resume
+  where it stopped. Its stdout feeds `harvest-ats resolve`. Expect few new boards: a 200-card
+  sample found an ATS on ~11% of sites, nearly all already in the catalogue.
 - `harvest-linkedin` — hand-run discovery and search registration. The default
   `harvest-linkedin <queries.yml> [company-slugs.txt]` exports candidate companies for
   `harvest-ats resolve`. `harvest-linkedin --register-searches <queries.yml>` previews
