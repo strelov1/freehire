@@ -17,6 +17,8 @@ func TestParseStoreCodePrefix(t *testing.T) {
 		"J-Greenwood, IN":          {"us"},
 		"Florence, KY":             {"us"},
 		"Florence, Italy":          {"it"},
+		"s-Hertogenbosch":          {"nl"},
+		"'s-Hertogenbosch, NL":     {"nl"},
 	} {
 		if got := Parse(loc).Countries; !reflect.DeepEqual(got, want) {
 			t.Errorf("Parse(%q).Countries = %v, want %v", loc, got, want)
