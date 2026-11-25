@@ -63,6 +63,15 @@ export default {
       entry: ['entrypoints/**/*.{ts,svelte,html}'],
       project: ['entrypoints/**', 'lib/**'],
       ignoreDependencies: ['svelte-eslint-parser'],
+      // lib/assistant/chat.ts is a verbatim port of web/src/lib/assistant/chat.ts (held
+      // byte-for-byte by scripts/check-assistant-ports.mjs), so it carries every export
+      // the web has, whether or not the extension's panel reads it yet — the same reason
+      // types.ts's re-exports carry theirs. This is the one case the `@public` tag cannot
+      // cover: the tag would have to go into the ported file and break the port. Scoped to
+      // the two issue types so anything else knip finds in this file is still a finding.
+      ignoreIssues: {
+        'lib/assistant/chat.ts': ['exports', 'types'],
+      },
     },
 
     web: {

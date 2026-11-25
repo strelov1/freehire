@@ -3,7 +3,7 @@
 // accumulation is unit-testable (vitest) without a DOM — mirroring how
 // `matchAnalysis.ts` isolates `reduceMatchEvent`.
 
-import type { TurnEvent } from './wire';
+import { eventsFromTranscript, type StoredMessage, type TurnEvent } from './wire';
 import type { ToolCall } from './tool-formatters';
 
 /** One rendered message. Assistant messages accumulate `text` (the reply),
@@ -11,9 +11,10 @@ import type { ToolCall } from './tool-formatters';
  *  call with its arguments and, once it comes back, its result) while
  *  `streaming`; `errored` is set when the turn ends with an error. User messages
  *  carry only `text`. */
-interface ChatMessage {
+export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
+  attachments: string[];
   thinking: string;
   tools: ToolCall[];
   streaming: boolean;
@@ -22,18 +23,42 @@ interface ChatMessage {
 
 export interface ChatState {
   messages: ChatMessage[];
+  /** The turn is waiting for another one to finish in this session. Its own frames have not
+   *  started, so without this the view would show a silent stream and nothing else. */
+  queued: boolean;
+}
+
+/** Whether a frame shows the turn actually ran, rather than waiting behind another one. */
+export function turnBegins(event: TurnEvent): boolean {
+  return (
+    event.type === 'user_prompt' ||
+    event.type === 'assistant_text' ||
+    event.type === 'assistant_thought' ||
+    event.type === 'tool_use'
+  );
 }
 
 export function initChat(): ChatState {
-  return { messages: [] };
+  return { messages: [], queued: false };
+}
+
+/** A stored transcript replayed through the same reducer live events go through, so
+ *  history and a running turn render identically. */
+export function chatFromTranscript(messages: StoredMessage[]): ChatState {
+  let next = initChat();
+  for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
+  return next;
 }
 
 /** Fold one `TurnEvent` into the chat state, returning a new state (never
  *  mutates the input). Unmodeled/unknown event kinds are ignored (no throw). */
 export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
   switch (event.type) {
+    case 'queued':
+      return { ...prev, queued: true };
     case 'user_prompt':
-      return { messages: [...prev.messages, userMessage(event.text)] };
+      // The turn is under way: whatever wait preceded it is over.
+      return { ...prev, messages: [...prev.messages, userMessage(event.text, event.attachments ?? [])], queued: false };
     case 'assistant_text':
       return upsertAssistant(prev, (m) => ({ ...m, text: m.text + event.text }));
     case 'assistant_thought':
@@ -46,21 +71,33 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
     case 'tool_result':
       return upsertAssistant(prev, (m) => ({ ...m, tools: attachResult(m.tools, event) }));
     case 'result': {
-      const next = closeAssistant(prev, event.is_error ?? false);
+      // Clears the wait as well as closing the turn: a wait can end WITHOUT the turn ever
+      // starting (it timed out, or was stopped), and a banner still claiming to be queued
+      // would then mask the next turn's real progress.
+      let next = closeAssistant(prev, event.is_error ?? false);
       // A failure before any assistant frame left only the user prompt — still surface an
       // errored assistant so the Retry control has somewhere to sit.
       if (event.is_error) {
         const last = next.messages[next.messages.length - 1];
         if (!last || last.role !== 'assistant' || !last.errored) {
-          return {
+          next = {
+            ...next,
             messages: [
               ...next.messages,
-              { role: 'assistant', text: '', thinking: '', tools: [], streaming: false, errored: true },
+              {
+                role: 'assistant',
+                text: '',
+                attachments: [],
+                thinking: '',
+                tools: [],
+                streaming: false,
+                errored: true,
+              },
             ],
           };
         }
       }
-      return next;
+      return { ...next, queued: false };
     }
     default:
       // usage, and anything not in the union — ignored.
@@ -90,12 +127,12 @@ function attachResult(tools: ToolCall[], event: { name: string; result?: string;
   return tools;
 }
 
-function userMessage(text: string): ChatMessage {
-  return { role: 'user', text, thinking: '', tools: [], streaming: false, errored: false };
+function userMessage(text: string, attachments: string[]): ChatMessage {
+  return { role: 'user', text, attachments, thinking: '', tools: [], streaming: false, errored: false };
 }
 
 function newAssistant(): ChatMessage {
-  return { role: 'assistant', text: '', thinking: '', tools: [], streaming: true, errored: false };
+  return { role: 'assistant', text: '', attachments: [], thinking: '', tools: [], streaming: true, errored: false };
 }
 
 /** Apply `fn` to the open (streaming) assistant message, or start a new one if
@@ -104,9 +141,9 @@ function newAssistant(): ChatMessage {
 function upsertAssistant(prev: ChatState, fn: (m: ChatMessage) => ChatMessage): ChatState {
   const last = prev.messages[prev.messages.length - 1];
   if (last && last.role === 'assistant' && last.streaming) {
-    return { messages: [...prev.messages.slice(0, -1), fn(last)] };
+    return { ...prev, messages: [...prev.messages.slice(0, -1), fn(last)] };
   }
-  return { messages: [...prev.messages, fn(newAssistant())] };
+  return { ...prev, messages: [...prev.messages, fn(newAssistant())] };
 }
 
 /** Close the open assistant turn. A result with no open turn is ignored (never
@@ -115,5 +152,5 @@ function closeAssistant(prev: ChatState, errored: boolean): ChatState {
   const last = prev.messages[prev.messages.length - 1];
   if (!last || last.role !== 'assistant' || !last.streaming) return prev;
   const closed: ChatMessage = { ...last, streaming: false, errored };
-  return { messages: [...prev.messages.slice(0, -1), closed] };
+  return { ...prev, messages: [...prev.messages.slice(0, -1), closed] };
 }

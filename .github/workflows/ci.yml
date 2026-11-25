@@ -385,6 +385,14 @@ jobs:
       - name: Type check
         run: pnpm run check
 
+      # extension/lib/assistant holds verbatim ports of these files, and a port edited on
+      # the web side breaks the extension just as surely as one edited on its own. A step
+      # here and one in extension.yml rather than a job: a web-only change selects this job
+      # and an extension-only change selects that one, and the required check list stays as it is.
+      - name: Check the extension's assistant ports
+        working-directory: .
+        run: node scripts/check-assistant-ports.mjs
+
       # The boundaries between the app's parts (web/easement.yml): a component never
       # imports a route or lib/server, src/lib never imports a component, and a new
       # dependency between two parts has to be written into the config with its reason.

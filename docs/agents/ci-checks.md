@@ -242,6 +242,18 @@ See [design-system/AGENTS.md](../../design-system/AGENTS.md) — `scripts/check-
 (the `shared-deps` CI job) holds `web/`, `extension/` and `design-system/` to the same
 declared version for every package the design system imports as a type.
 
+## Verbatim ports: `pnpm check:ports`
+
+`scripts/check-assistant-ports.mjs` (a pre-commit hook with no glob, and a step in the `web`
+and `extension` CI jobs) fails when `extension/lib/assistant/{sse,wire,chat,deck}.ts` —
+tests included — stops matching `web/src/lib/assistant/`. Both sides fold the same server
+stream through the same reducer, so a drifted port is a silent behaviour gap: the server's
+`queued` event, attachments and `system` notes reached the web and not the panel, with every
+test green on both sides. Only the import specifier may differ (`#lib/assistant/x.js` on the
+web, `./x` in the extension) and the check rewrites that before comparing. A pair that is not
+a port (`tool-formatters`) is listed with its reason, and fails once that reason stops being
+true. No glob in the hook, like `check:links`: what breaks a port is editing either side.
+
 ## Secrets: Betterleaks
 
 Install the pinned Betterleaks version with `mise install`. Lefthook scans the staged
