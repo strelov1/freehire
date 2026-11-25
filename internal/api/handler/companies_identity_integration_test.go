@@ -137,7 +137,7 @@ func TestListCompaniesIdentityAndHQ(t *testing.T) {
 			if err != nil {
 				t.Fatalf("request %q: %v", url, err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("%s: status = %d, want 400", url, resp.StatusCode)
 			}
