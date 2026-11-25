@@ -183,6 +183,9 @@ var blocks = map[string][]string{
 		// broadcast, cvlifecycle and prowelcome. Each still owns its copy.
 		// Standard library only, and only engage imports them.
 		"maildaily", "cvlifecycle", "deliverywindow", "mailtpl", "foundermail",
+		// digest is the snapshot → render → claim → send → record loop the inbox and application
+		// digests share; each keeps its own query and mail.
+		"digest",
 		"linkedinauth", "mailpreview", "mentorship", "messaging",
 		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
 		// reaches into application (gmailsync) as mentorship does for calendar-write consent.

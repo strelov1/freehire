@@ -175,6 +175,26 @@ func TestEmptyFirstPageDoesNotStarveLaterRecipients(t *testing.T) {
 		t.Fatalf("stats=%+v after=%v err=%v", stats, store.after, err)
 	}
 }
+
+// pausedPagedStore keeps pages of accounts due behind the paused send.
+type pausedPagedStore struct {
+	pagedStore
+}
+
+func (s *pausedPagedStore) Snapshot(context.Context, Candidate, time.Time) (Snapshot, error) {
+	return Snapshot{AppliedCount: 1}, nil
+}
+
+// A pause is account-wide, so the pass must end there instead of paging on and
+// releasing every remaining account one by one.
+func TestPausedSendEndsThePass(t *testing.T) {
+	store := &pausedPagedStore{}
+	stats, err := New(store, NewMailer("freehire@example.test", "https://freehire.test", strings.Repeat("x", 32)), &capturingSender{err: emailnotify.ErrSendingPaused}).Run(context.Background(), time.Now())
+	if err != nil || stats.Skipped != 1 || stats.Failed != 0 || len(store.after) != 1 || store.released != 1 {
+		t.Fatalf("stats=%+v selections=%v released=%d err=%v", stats, store.after, store.released, err)
+	}
+}
+
 func TestMailerUsesBoardReferencesAndStageLabels(t *testing.T) {
 	mailer := NewMailer("freehire@example.test", "https://freehire.test", strings.Repeat("x", 32))
 	m, err := mailer.Render(Candidate{UserID: 7}, Snapshot{AppliedCount: 1, StageCounts: map[string]int64{"applied": 2}, Followups: []Followup{{ID: 11, JobSlug: "engineer-acme", Stage: "applied"}, {ID: 12, Stage: "interview"}}})
