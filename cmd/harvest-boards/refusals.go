@@ -63,6 +63,14 @@ func (c *countingClient) answered() int {
 	return c.answeredN
 }
 
+// reset forgets what has been counted so far. A seedless run discovers through the same client
+// (Common Crawl answers by the hundred), and those answers would outvote the platform's refusals.
+func (c *countingClient) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.refusedN, c.answeredN = 0, 0
+}
+
 // refusalsDominated reports whether a run was mostly turned away rather than answered. Such a run
 // did not happen, and reporting it as a harvest that found little gets a truncated board file committed.
 func refusalsDominated(refused, answered int) bool {

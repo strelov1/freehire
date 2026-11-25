@@ -49,6 +49,7 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	for i, hit := range res.Hits {
 		views[i] = hit.Job
 	}
+	hideOrigins(c.Context(), views)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(queryValues(c), searchParams), ignoredJobValues(queryValues(c)))
 }
 

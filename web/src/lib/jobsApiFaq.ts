@@ -38,7 +38,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'What are the rate limits, and do I need an account?',
     answer:
-      "Per 60 seconds: no key, 300 requests per IP (agent search has its own 300); any account's key, 300; API plan, 1,200; Data plan, 6,000. Search and agent search share the account budget. Every tier returns up to 100 results per page. Commercial use and the paid limits need an API or Data plan on a free freehire account.",
+      "Per 60 seconds: no key, 300 requests per IP (agent search has its own 300); any account's key, 300; API plan, 1,200; Data plan, 6,000 on its own Data endpoints and 1,200 elsewhere. Search and agent search share the account budget. Every tier returns up to 100 results per page. Commercial use and the paid limits need an API or Data plan on a free freehire account.",
   },
   {
     question: 'How do I authenticate?',

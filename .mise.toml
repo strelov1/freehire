@@ -13,7 +13,7 @@ golangci-lint = "2.15.0"
 sqlc = "1.31.1"
 typst = "0.15.0"
 lefthook = "1.13.6"
-gitleaks = "8.30.1"
+"github:betterleaks/betterleaks" = { version = "2.0.0-rc.12", prerelease = true }
 actionlint = "1.7.12"
 zizmor = "1.31.1"
 hadolint = "2.15.1"

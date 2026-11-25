@@ -45,11 +45,11 @@ Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth acce
 | Guest | none | none | no | 300 per IP for ordinary reads (`/jobs/search`, `/jobs/{slug}` and the rest), plus a separate 300 per IP for `/agent/jobs/search` | 100 | free |
 | Free account | optional | free sign-up | no | 300 per account, shared by ordinary reads and agent search | 100 | free |
 | API plan | full-access key or OAuth | any freehire account | yes, under the data licence | 1,200 per account, shared by ordinary reads and agent search | 100 | $29 / month |
-| Data plan | full-access key or OAuth | any freehire account | yes, under the data licence | 6,000 per account, shared by ordinary reads and agent search | 100 | $99 / month |
+| Data plan | full-access key or OAuth | any freehire account | yes, under the data licence | 6,000 per account on the Data endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart; the API plan's 1,200 everywhere else | 100 | $99 / month |
 
-Pro and Ultra accounts (the AI job-search plans, which do not license the data) read at 800 and 1,000 requests per 60 seconds. Every tier gets the same fields and filters, and no paid or free tier has a daily request cap. Prices are the current monthly prices; [freehire.me/pricing](https://freehire.me/pricing) shows what is charged today.
+Pro and Ultra accounts (the AI job-search plans, which do not license the data) read at 800 and 1,000 requests per 60 seconds. Every tier gets the same filters, and no paid or free tier has a daily request cap. Prices are the current monthly prices; [freehire.me/pricing](https://freehire.me/pricing) shows what is charged today.
 
-The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 

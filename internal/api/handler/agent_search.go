@@ -45,6 +45,7 @@ func (h *searchHandlers) AgentSearchJobs(ctx context.Context, _ apigen.AgentSear
 		hit.Description = formatDescription(hit.Description, format)
 		views[i] = hit.Job
 	}
+	hideOrigins(ctx, views)
 
 	data, err := marshalRaws(views)
 	if err != nil {

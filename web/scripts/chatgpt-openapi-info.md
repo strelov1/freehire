@@ -1,8 +1,8 @@
 Public, read-only freehire API: search IT jobs, read the live filter
 vocabulary, inspect job and company details, and find similar jobs. Every
 operation here answers without a key (300 requests per minute per IP); a
-full-access key raises that to 300 per account on a free account, 1,200 on the
-API plan and 6,000 on the Data plan, with up to 100 results per page. Keyless use is for personal and non-commercial use — showing the
+full-access key raises that to 300 per account on a free account and 1,200 on the
+API or Data plan, with up to 100 results per page. Keyless use is for personal and non-commercial use — showing the
 postings in a product you offer to others needs an API plan (see the
 [data licence](https://freehire.me/terms#data-licence)). The authenticated tracking surface
 (saved jobs, application stages, CV tooling) is deliberately excluded — this

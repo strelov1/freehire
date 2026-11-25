@@ -521,9 +521,9 @@ export interface paths {
         };
         /**
          * List companies with job counts and denormalized facets; optional filters.
-         * @description Most active first. Facet params are repeatable and filter by array overlap (OR within a
-         *     facet, AND across facets), composably with `q`. `meta.total` reports the count matching
-         *     the full filter.
+         * @description Most active first. Facet params repeat and filter by array overlap (OR within a facet,
+         *     AND across), composable with `q`; `meta.total` counts the full filter. `countries` is
+         *     where open jobs are, `hq_country` the headquarters (ISO alpha-2).
          */
         get: operations["listCompanies"];
         put?: never;
@@ -846,6 +846,50 @@ export interface paths {
          * @description The registered CV templates and their display metadata.
          */
         get: operations["listCVTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data/jobs/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search open jobs with their original links (Data plan).
+         * @description The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
+         *     each job's `url` (the employer's own posting) and `source_url` where it differs. The public
+         *     job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
+         *     account gets `403`. Never cached: the answer is private to the plan holder.
+         */
+        get: operations["searchDataJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data/jobs/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A single job with its original links (Data plan).
+         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
+         *     Data plan: any other account gets `403`.
+         */
+        get: operations["getDataJob"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7808,6 +7852,10 @@ export interface components {
             tagline: string | null;
             industries: string[];
             hq_country: string | null;
+            /** @description The company's own site as recorded (its website, else its homepage); null when unknown. */
+            website: string | null;
+            /** @description The company's LinkedIn page; null when unknown. */
+            linkedin: string | null;
             /** @description Curated company tags; the catalogue card renders the backer marks from these. */
             collections: string[];
             /** Format: int64 */
@@ -9104,15 +9152,15 @@ export interface components {
             company: string;
             company_slug?: string;
             /**
-             * @description The employer's own application URL, as published. Match pages and deduplicate on this;
-             *     do not send people to it. Empty when `direct_apply` is true: that vacancy has no page
-             *     elsewhere.
+             * @description The employer's own application URL, as published. Served only by the Data plan's
+             *     `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
+             *     Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
              */
             url?: string;
             /**
              * @description Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)
-             *     that counts the click and forwards to `url`. Set `src` to the surface handing the link out:
-             *     `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is.
+             *     that counts the click and forwards to the employer's page. Set `src` to the surface handing the link out:
+             *     `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent for a vacancy taking applications on freehire.
              */
             apply_url?: string;
             /**
@@ -9128,7 +9176,8 @@ export interface components {
             external_id?: string;
             /**
              * @description The original posting when `url` points at a separately verified application
-             *     destination. Absent when both links are the same.
+             *     destination. Absent when both links are the same, and outside the Data plan's
+             *     `/data/jobs` endpoints.
              */
             source_url?: string;
             /**
@@ -9137,8 +9186,8 @@ export interface components {
              */
             application_deadline?: string;
             /**
-             * @description The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
-             *     Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+             * @description The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever,
+             *     Ashby, Gem, Recruitee and Employment Hero state one). Absent when the source states none; not a taxonomy, so values differ
              *     between employers.
              */
             team?: string;
@@ -9233,6 +9282,20 @@ export interface components {
              *     ends at the job. `url` stays the organic link.
              */
             sponsored_url?: string;
+            /**
+             * @description The employment type, the same value as `enrichment.employment_type`, lifted to the top
+             *     level. Served by `getJob` only; absent when not known.
+             */
+            employment_type?: string;
+            /** @description The pay range, the same values as `enrichment.salary_*`. Served by `getJob` only; absent when no bound is stated. */
+            salary?: components["schemas"]["JobSalary"];
+            /** @description The employer's own site as its company record states it. Served by `getJob` only; absent when none is on record. */
+            company_website?: string;
+            /**
+             * @description The employer's logo through freehire's logo proxy, resolved by the site's domain. The
+             *     proxy answers 404 when it has no mark. Served by `getJob` only, beside `company_website`.
+             */
+            company_logo?: string;
             posted_at?: string | null;
             /** @description When freehire first saw the posting. */
             created_at?: string | null;
@@ -9565,6 +9628,14 @@ export interface components {
             text: string;
             /** @enum {string} */
             priority: "required" | "preferred";
+        };
+        /** @description A posting's pay range: either bound may be absent, never both. */
+        JobSalary: {
+            min?: number;
+            max?: number;
+            /** @description ISO 4217 (e.g. `USD`). */
+            currency?: string;
+            period?: string;
         };
         JobSearchMeta: {
             /** Format: int64 */
@@ -12704,6 +12775,8 @@ export interface operations {
                      *             "payments"
                      *           ],
                      *           "hq_country": "DE",
+                     *           "website": "https://acme.example",
+                     *           "linkedin": "https://www.linkedin.com/company/acme",
                      *           "collections": [
                      *             "yc"
                      *           ],
@@ -13562,6 +13635,85 @@ export interface operations {
                      */
                     "application/json": {
                         data: unknown;
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchDataJobs: {
+        parameters: {
+            query?: {
+                /** @description Full-text query, as on `/jobs/search`. (e.g. `golang`) */
+                q?: string;
+                /** @description As on `/jobs/search`. (e.g. `title`) */
+                q_fields?: string;
+                /** @description As on `/jobs/search`. (e.g. `true`) */
+                q_prefix?: string;
+                /** @description As on `/jobs/search`. (e.g. `posted_at`) */
+                sort?: string;
+                /** @description `asc` or `desc` (default `desc`). (e.g. `desc`) */
+                order?: string;
+                /** @description Page size, 1–100. (e.g. `100`) */
+                limit?: string;
+                /** @description Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) */
+                offset?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSearchPage"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDataJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Job"];
                     };
                 };
             };

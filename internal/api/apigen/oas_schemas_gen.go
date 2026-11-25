@@ -6354,6 +6354,10 @@ type CompanyListItem struct {
 	Tagline    NilString `json:"tagline"`
 	Industries []string  `json:"industries"`
 	HqCountry  NilString `json:"hq_country"`
+	// The company's own site as recorded (its website, else its homepage); null when unknown.
+	Website NilString `json:"website"`
+	// The company's LinkedIn page; null when unknown.
+	Linkedin NilString `json:"linkedin"`
 	// Curated company tags; the catalogue card renders the backer marks from these.
 	Collections   []string `json:"collections"`
 	FeedbackCount int64    `json:"feedback_count"`
@@ -6391,6 +6395,16 @@ func (s *CompanyListItem) GetIndustries() []string {
 // GetHqCountry returns the value of HqCountry.
 func (s *CompanyListItem) GetHqCountry() NilString {
 	return s.HqCountry
+}
+
+// GetWebsite returns the value of Website.
+func (s *CompanyListItem) GetWebsite() NilString {
+	return s.Website
+}
+
+// GetLinkedin returns the value of Linkedin.
+func (s *CompanyListItem) GetLinkedin() NilString {
+	return s.Linkedin
 }
 
 // GetCollections returns the value of Collections.
@@ -6441,6 +6455,16 @@ func (s *CompanyListItem) SetIndustries(val []string) {
 // SetHqCountry sets the value of HqCountry.
 func (s *CompanyListItem) SetHqCountry(val NilString) {
 	s.HqCountry = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *CompanyListItem) SetWebsite(val NilString) {
+	s.Website = val
+}
+
+// SetLinkedin sets the value of Linkedin.
+func (s *CompanyListItem) SetLinkedin(val NilString) {
+	s.Linkedin = val
 }
 
 // SetCollections sets the value of Collections.
@@ -13532,6 +13556,21 @@ func (s *GetCVTailorContextOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetCVTailorContextOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetDataJobOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetDataJobOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetDataJobOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
