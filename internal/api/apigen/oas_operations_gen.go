@@ -298,6 +298,7 @@ const (
 	PostAutoApplyReviewOperation                OperationName = "PostAutoApplyReview"
 	PostJobAutoApplyOperation                   OperationName = "PostJobAutoApply"
 	PostJobAutoApplyRetryOperation              OperationName = "PostJobAutoApplyRetry"
+	PrefillEmployerVacancyOperation             OperationName = "PrefillEmployerVacancy"
 	PrefillSubmissionOperation                  OperationName = "PrefillSubmission"
 	PreviewEmployerTeamInvitationOperation      OperationName = "PreviewEmployerTeamInvitation"
 	PreviewPromoCodeOperation                   OperationName = "PreviewPromoCode"

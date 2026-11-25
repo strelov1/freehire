@@ -4644,6 +4644,60 @@
         }
       }
     },
+    "/employer/jobs/prefill": {
+      "post": {
+        "operationId": "prefillEmployerVacancy",
+        "description": "Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in the catalogue returns its stored fields.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SubmissionPrefill"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrefillRequest"
+              },
+              "example": {
+                "url": "https://example.com/jobs/123"
+              }
+            }
+          }
+        }
+      }
+    },
     "/employer/jobs/{slug}": {
       "patch": {
         "operationId": "updateEmployerVacancy",
@@ -39085,7 +39139,7 @@
           },
           "existing_job_slug": {
             "type": "string",
-            "description": "Set, with every other field empty, when the catalogue already carries the vacancy."
+            "description": "Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is then empty; on `/employer/jobs/prefill` they hold the stored vacancy."
           }
         },
         "description": "What could be parsed from the URL. Empty when it is not recognised."

@@ -14,6 +14,7 @@ import type {
   EmployerVacancyInput,
   EmployerVacancyPatch,
   Job,
+  PrefillResult,
 } from '../types';
 import type { Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
@@ -98,6 +99,13 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
       '/api/v1/employer/jobs',
       jsonBody('POST', input satisfies components['schemas']['EmployerVacancyCreate']),
     );
+  }
+
+  /** Read a vacancy link into draft field values for the publish form; nothing is saved.
+   *  A vacancy the catalogue already carries comes back with its stored fields and
+   *  `existing_job_slug` set; an unrecognized URL comes back empty, not an error. */
+  async function prefillEmployerVacancy(url: string): Promise<PrefillResult> {
+    return requestData<PrefillResult>('/api/v1/employer/jobs/prefill', jsonBody('POST', { url }));
   }
 
   /** Edit a vacancy the caller's own account owns, addressed by public slug. Any other
@@ -272,6 +280,7 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     updateEmployerCompany,
     listEmployerVacancies,
     createEmployerVacancy,
+    prefillEmployerVacancy,
     updateEmployerVacancy,
     closeEmployerVacancy,
     deleteEmployerVacancy,
