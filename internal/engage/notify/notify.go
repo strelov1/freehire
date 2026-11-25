@@ -186,10 +186,13 @@ func (m Message) Total() int {
 // fields are projected from the job's enrichment; a zero SalaryMin/SalaryMax (or
 // empty Currency) means the compensation is unknown and the renderer omits it.
 type DigestJob struct {
-	Title          string
-	Company        string
-	Slug           string
-	URL            string
+	Title   string
+	Company string
+	Slug    string
+	URL     string
+	// StaysOnSite marks a job with no employer destination to redirect to (it takes applications
+	// on freehire itself, or is a user's private job): its link stays the freehire page.
+	StaysOnSite    bool `json:"-"`
 	SalaryMin      int
 	SalaryMax      int
 	SalaryCurrency string
