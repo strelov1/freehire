@@ -762,7 +762,6 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("book: %v", err)
 		}
-		var reviews int
 		for _, rating := range []int16{5, 2} {
 			if _, err := q.UpsertMentorReview(ctx, UpsertMentorReviewParams{
 				BookingID: booking.ID, MentorID: mentor.ID, SeekerUserID: seeker,
@@ -772,12 +771,20 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 			}
 		}
 
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM mentor_reviews WHERE booking_id = $1`,
-			booking.ID).Scan(&reviews); err != nil {
-			t.Fatalf("count reviews: %v", err)
+		// count(*) over the booking proves one row; min() is its rating only because there
+		// is one — a second submission that inserted instead would read 2 here and 1 above.
+		var reviews int
+		var rating int16
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*), min(rating) FROM mentor_reviews WHERE booking_id = $1`,
+			booking.ID).Scan(&reviews, &rating); err != nil {
+			t.Fatalf("read reviews: %v", err)
 		}
 		if reviews != 1 {
 			t.Errorf("review rows = %d after two submissions, want 1", reviews)
+		}
+		if rating != 2 {
+			t.Errorf("rating = %d after a resubmission with 2, want 2 — the second submission was not stored", rating)
 		}
 	})
 }
