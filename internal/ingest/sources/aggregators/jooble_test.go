@@ -156,8 +156,8 @@ func TestJoobleFetchStopsAtThePageBudget(t *testing.T) {
 // 100: the shared client retries failures, so the rest is headroom for them.
 func TestJooblePageBudgetStaysWithinTheDailyCeiling(t *testing.T) {
 	const (
-		boards       = 4   // keyword boards on the one US key
-		runsPerDay   = 4   // freehire-ops' provision/host2/systemd/freehire-ingest@jooble.timer
+		boards       = 4  // keyword boards on the one US key
+		runsPerDay   = 4  // freehire-ops' provision/host2/systemd/freehire-ingest@jooble.timer
 		dailyCeiling = 70 // 100/day per key (free plan, reset at midnight UTC) less retry headroom
 	)
 	if perDay := boards * joobleMaxPages * runsPerDay; perDay > dailyCeiling {
