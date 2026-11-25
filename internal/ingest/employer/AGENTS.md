@@ -21,11 +21,16 @@ for the full design record.
   outlive the row that motivated it, so it lives in its own table (migration 0174) with its
   own `UNIQUE(company_slug)` — which is also the whole race guard for two concurrent claims
   on the same company (one wins the insert, the other gets a mapped conflict).
-- **`Account.CompanyName` is fixed at claim time and never re-typed.** Every vacancy this
-  account creates or edits passes this exact string into derivation
-  (`normalize.CompanySlug`), which is what keeps `company_slug` from drifting between two
-  postings from the same employer. The company name in a create/update HTTP request is
-  never read for this reason — see `job.go`'s `CreateVacancy`/`UpdateVacancy`.
+- **A claim names its company by slug when the catalogue lists it.** The "I'm the employer"
+  link in the company page header opens `/my/employer?company=<slug>`; `ClaimBySlug` reserves
+  exactly that company (via the alias registry), so a typed name that normalises differently
+  cannot land on a new one. `Claim` (a typed name) stays for unlisted companies.
+  `company_claimed` on the company read is any account row on the slug, in any status.
+- **`Account.CompanyName` is fixed at claim time and never re-typed.** A vacancy is created
+  with it and with `company_slug` pinned to `Account.CompanySlug` (`CanonicalCompanySlug`),
+  so a name that slugs differently cannot move it to another company. An edit keeps the
+  posting's own stored company and slug. A company name in a create/update HTTP request is
+  never read — see `job.go`'s `CreateVacancy`/`UpdateVacancy`.
 - **The website-seed side effect belongs to moderator *approval*, never to the automatic
   domain-match path.** `ConfirmClaim` activates on a match but never writes — by
   construction, a match can only happen when the website was already known and equal to

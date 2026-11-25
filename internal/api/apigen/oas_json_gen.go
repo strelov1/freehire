@@ -34075,6 +34075,12 @@ func (s *EmployerClaim) encodeFields(e *jx.Encoder) {
 		}
 	}
 	{
+		if s.CompanySlug.Set {
+			e.FieldStart("company_slug")
+			s.CompanySlug.Encode(e)
+		}
+	}
+	{
 		if s.WorkEmail.Set {
 			e.FieldStart("work_email")
 			s.WorkEmail.Encode(e)
@@ -34082,9 +34088,10 @@ func (s *EmployerClaim) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfEmployerClaim = [2]string{
+var jsonFieldsNameOfEmployerClaim = [3]string{
 	0: "company_name",
-	1: "work_email",
+	1: "company_slug",
+	2: "work_email",
 }
 
 // Decode decodes EmployerClaim from json.
@@ -34104,6 +34111,16 @@ func (s *EmployerClaim) Decode(d *jx.Decoder) error {
 				return nil
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"company_name\"")
+			}
+		case "company_slug":
+			if err := func() error {
+				s.CompanySlug.Reset()
+				if err := s.CompanySlug.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"company_slug\"")
 			}
 		case "work_email":
 			if err := func() error {

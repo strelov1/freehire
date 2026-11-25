@@ -1,8 +1,10 @@
 <script lang="ts">
   import AccountPageHeading from '#lib/components/AccountPageHeading.svelte';
   import { Building2, Mail, ShieldAlert } from '@lucide/svelte';
+  import { page } from '$app/state';
   import { api, ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { markEmployerAccount } from '#lib/employerAccount.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
   import { messages } from './EmployerView.messages';
@@ -37,17 +39,47 @@
 
   // ── Claim form ─────────────────────────────────────────────────────────
   let companyName = $state('');
+  // `?company=<slug>` (the "I'm the employer" link on a company page) names a
+  // company the catalogue lists: claim that exact one by slug instead of a typed name, so
+  // the claim lands on the company the crawled vacancies belong to. A slug that does not
+  // resolve falls back to the typed form.
+  const claimSlug = $derived(page.url.searchParams.get('company') ?? '');
+  let claimTarget = $state<{ slug: string; name: string } | null>(null);
+  // True while the slug is being looked up: submitting then would send the typed name and
+  // could reserve a different company than the one the link named.
+  let lookingUp = $state(false);
+  $effect(() => {
+    const slug = claimSlug;
+    claimTarget = null;
+    lookingUp = !!slug;
+    if (!slug) return;
+    api
+      .getCompany(slug, 1, 0)
+      .then((d) => {
+        if (slug === claimSlug) claimTarget = { slug, name: d.company.name };
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (slug === claimSlug) lookingUp = false;
+      });
+  });
   let workEmail = $state('');
   let claiming = $state(false);
   let claimError = $state<string | null>(null);
 
+  const canClaim = $derived(!claiming && !lookingUp && (!!claimTarget || !!companyName.trim()) && !!workEmail.trim());
+
   async function submitClaim(e: SubmitEvent) {
     e.preventDefault();
-    if (claiming || !companyName.trim() || !workEmail.trim()) return;
+    if (!canClaim) return;
     claiming = true;
     claimError = null;
     try {
-      company = await api.claimCompany(companyName.trim(), workEmail.trim());
+      company = await api.claimCompany(
+        claimTarget ? { slug: claimTarget.slug } : { name: companyName.trim() },
+        workEmail.trim(),
+      );
+      markEmployerAccount();
     } catch (err) {
       claimError = err instanceof ApiError ? err.message : s.loadError;
     } finally {
@@ -132,10 +164,17 @@
     </header>
 
     <form onsubmit={submitClaim} class="flex max-w-sm flex-col gap-4">
-      <label class="flex flex-col gap-1">
-        <span class="text-sm font-medium">{s.companyNameLabel}</span>
-        <Input bind:value={companyName} placeholder={s.companyNamePlaceholder} class="w-full" />
-      </label>
+      {#if claimTarget}
+        <p class="flex flex-col gap-1">
+          <span class="text-sm font-medium">{s.companyNameLabel}</span>
+          <span class="text-sm">{claimTarget.name}</span>
+        </p>
+      {:else}
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium">{s.companyNameLabel}</span>
+          <Input bind:value={companyName} placeholder={s.companyNamePlaceholder} class="w-full" />
+        </label>
+      {/if}
       <label class="flex flex-col gap-1">
         <span class="flex items-center gap-1.5 text-sm font-medium">
           <Mail class="size-3.5 text-muted-foreground" />
@@ -147,7 +186,7 @@
       {#if claimError}
         <p class="text-sm text-destructive">{claimError}</p>
       {/if}
-      <Button type="submit" disabled={claiming || !companyName.trim() || !workEmail.trim()}>
+      <Button type="submit" disabled={!canClaim}>
         {claiming ? s.claiming : s.claimSubmit}
       </Button>
     </form>

@@ -29187,6 +29187,10 @@
             "type": "boolean",
             "description": "Whether an employee referral offer exists for this company."
           },
+          "company_claimed": {
+            "type": "boolean",
+            "description": "Whether an employer account holds this company."
+          },
           "parent": {
             "$ref": "#/components/schemas/CompanyRef"
           },
@@ -31042,7 +31046,12 @@
         "type": "object",
         "properties": {
           "company_name": {
-            "type": "string"
+            "type": "string",
+            "description": "The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set."
+          },
+          "company_slug": {
+            "type": "string",
+            "description": "The slug of a company the catalogue lists (`company_slug` of a job or company page)."
           },
           "work_email": {
             "type": "string"

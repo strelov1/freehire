@@ -430,6 +430,9 @@ model CompanyPage {
   /** Whether an employee referral offer exists for this company. */
   referral_available?: boolean;
 
+  /** Whether an employer account holds this company. */
+  company_claimed?: boolean;
+
   parent?: CompanyRef;
 
   /** Companies this one owns. Each is a separate employer with its own jobs. Omitted when there are none. */
