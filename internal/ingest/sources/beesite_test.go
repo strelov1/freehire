@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -34,7 +35,9 @@ func bsFixture(t *testing.T, name string) string {
 type bsFake struct {
 	search string
 	pages  map[string]string
-	gets   []string
+	// mu guards gets, which the detail workers append to concurrently.
+	mu   sync.Mutex
+	gets []string
 }
 
 func (f *bsFake) GetJSON(_ context.Context, u string, v any) error {
@@ -45,7 +48,9 @@ func (f *bsFake) GetJSON(_ context.Context, u string, v any) error {
 }
 
 func (f *bsFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 500, URL: u}

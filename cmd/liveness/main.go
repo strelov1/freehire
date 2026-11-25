@@ -144,8 +144,9 @@ const staleCutoff = sources.DefaultSweepGrace
 // read. whatjobs' jobs.url is the ad network's billing landing page (see whatjobs.go);
 // adzuna's stored `/land/ad/<id>` tracking redirect answers 403 to a bot, which classifies
 // uncertain, so this worker can never close an adzuna posting (cmd/adzuna-liveness reads
-// the hosted page, and this age rule is the backstop). Both also lose postings from a
-// date-ordered, bounded crawl that never revisits an ageing one.
+// the hosted page, and this age rule is the backstop); careerjet's jobs.url is a
+// jobviewtrack.com click-tracking link with no page to read. All three also lose postings
+// from a date-ordered, bounded crawl that never revisits an ageing one.
 //
 // Unlike unsignalledSources, these are re-crawled, so the age guess must agree with what
 // the crawl last saw before it may close anything (CloseStaleUnseenUnprobeableJobs and
@@ -154,7 +155,19 @@ const staleCutoff = sources.DefaultSweepGrace
 //
 // A prefix, not a list: whatjobs runs one registered provider per country ("whatjobs" for
 // the US, "whatjobs-<cc>" otherwise), so a new market is covered automatically.
-var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna"}
+var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna", "careerjet"}
+
+// optionalExpirePrefixes are expireDespiteRegisteredPrefixes members a host may crawl without:
+// careerjet is new and optional, and registeredAgeFallback reads membership from taxonomy, so a
+// host without its credential still age-expires it. Only the crawl-registry guard skips them.
+var optionalExpirePrefixes = []string{"careerjet"}
+
+// guardedExpirePrefixes are the prefixes whose absence from the crawl registry stops the run.
+func guardedExpirePrefixes() []string {
+	return slices.DeleteFunc(slices.Clone(expireDespiteRegisteredPrefixes), func(p string) bool {
+		return slices.Contains(optionalExpirePrefixes, p)
+	})
+}
 
 func main() {
 	worker.Main(run)
@@ -246,7 +259,7 @@ func run() int {
 	// Keep the credential guard on the live crawl registry. The fallback's membership
 	// and grace come from taxonomy, so a market missing this host's credentials still
 	// has an age-based closure path instead of being excluded from every path.
-	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+	if missing := unmatchedPrefixes(crawlProviders, guardedExpirePrefixes()); len(missing) > 0 {
 		log.Printf("liveness: %q matches no registered ATS provider — refusing to run (a source that cannot be age-expired would silently fall to the URL probe instead)",
 			strings.Join(missing, ", "))
 		return 1

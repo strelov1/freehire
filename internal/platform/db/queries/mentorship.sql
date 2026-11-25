@@ -380,15 +380,3 @@ VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (booking_id) DO UPDATE
 SET rating = EXCLUDED.rating, comment = EXCLUDED.comment, updated_at = now()
 RETURNING *;
-
--- name: GetMentorReviewSummary :one
--- The aggregate the public profile shows. Returns zeroes rather than NULLs for a mentor
--- nobody has reviewed, so the caller renders "no reviews yet" from a count of 0 instead
--- of from a null it has to remember to check.
-SELECT COALESCE(count(*), 0)::bigint AS rating_count,
-       COALESCE(avg(rating), 0)::numeric AS rating_avg
-FROM mentor_reviews WHERE mentor_id = $1;
-
--- name: GetMentorReviewForBooking :one
--- The seeker's own review of one session, for rendering the edit form.
-SELECT * FROM mentor_reviews WHERE booking_id = $1;

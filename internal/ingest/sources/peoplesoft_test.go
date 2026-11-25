@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -50,11 +51,15 @@ type psFake struct {
 	pages map[string]string
 	posts []string
 	sent  []url.Values
-	gets  []string
+	// mu guards gets, which the detail workers append to concurrently.
+	mu   sync.Mutex
+	gets []string
 }
 
 func (f *psFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 500, URL: u}

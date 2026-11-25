@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -359,5 +361,40 @@ func TestEmailNotifier_PausedTransportSoftSkips(t *testing.T) {
 	err := n.Send(context.Background(), "email", "u@x.com", batchOf(KindFollowUp, 1))
 	if !errors.Is(err, ErrChannelNotConfigured) {
 		t.Errorf("Send = %v, want a soft-skip (ErrChannelNotConfigured)", err)
+	}
+}
+
+// A body that failed to render must not be mailed: the single-nudge and the
+// batch template each report the error instead of sending what was written.
+func TestEmailNotifier_RenderErrorSendsNothing(t *testing.T) {
+	for name, swap := range map[string]func(){
+		"single": func() {
+			previous := bodies
+			t.Cleanup(func() { bodies = previous })
+			bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`{{define "followup"}}{{template "no-such-partial" .}}{{end}}`))
+		},
+		"batch": func() {
+			previous := batchTemplate
+			t.Cleanup(func() { batchTemplate = previous })
+			batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`{{template "no-such-partial" .}}`))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			swap()
+			sender := &captureSender{}
+			n := NewEmailNotifier(sender, "jobs@freehire.me", "https://freehire.me", testLinks())
+			ms := batchOf(KindFollowUp, 1)
+			if name == "batch" {
+				ms = batchOf(KindFollowUp, 2)
+			}
+
+			err := n.Send(context.Background(), "email", "u@x.com", ms)
+			if err == nil || !strings.Contains(err.Error(), "no-such-partial") {
+				t.Fatalf("Send = %v, want the template error", err)
+			}
+			if sender.subject != "" || sender.html != "" {
+				t.Errorf("a mail was rendered for sending after the template failed: subject %q", sender.subject)
+			}
+		})
 	}
 }
