@@ -1,6 +1,6 @@
 // Package deliverywindow decides whether "now" is the right moment to send a
-// notification, for an account's own local time. It is a leaf package shared by
-// internal/engage/notify, reminder and nudge, so the timing math lives in one place.
+// notification, for an account's own local time. It is a leaf package shared by the
+// notify, reminder and nudge engines, so the timing math lives in one place.
 package deliverywindow
 
 import "time"

@@ -30,7 +30,7 @@ WHERE lower(email) = lower($1);
 -- client whether to surface moderator-only UI. The password hash itself never leaves
 -- the database — only whether one exists, which is what lets the SPA offer a password
 -- change to password accounts and explain itself to OAuth-only ones. timezone is NULL
--- until the user sets one on their profile (internal/application/deliverywindow reads NULL as UTC).
+-- until the user sets one on their profile (internal/engage/deliverywindow reads NULL as UTC).
 -- language is never NULL — it has a NOT NULL DEFAULT, so every account has one from
 -- creation. onboarding_completed_at is NULL until the account has been through the
 -- wizard, and it rides along here rather than on its own endpoint because the root

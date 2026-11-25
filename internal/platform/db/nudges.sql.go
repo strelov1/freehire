@@ -168,7 +168,7 @@ type GetNudgeForDeliveryRow struct {
 // snapshotted, so a change between MATCH and DELIVER takes effect immediately),
 // live destinations, the account's live quiet-hours window (timezone +
 // notification_settings' quiet_hours_start/end, checked by
-// internal/application/deliverywindow before send), and the application's CURRENT
+// internal/engage/deliverywindow before send), and the application's CURRENT
 // stage/last-activity/pending-suggestion so the worker can recompute the
 // triggering condition rather than trust what MATCH saw. job_open lets the
 // worker cancel a nudge for a job that has since closed. application_exists

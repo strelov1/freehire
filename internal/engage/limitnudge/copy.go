@@ -3,7 +3,7 @@ package limitnudge
 import (
 	"html/template"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
 
 // body is the letter's markup. It never names which feature hit the ceiling: pricing

@@ -273,11 +273,10 @@ be satisfied and the code impossible.
 
 ## What is deliberately absent
 
-`credit_ledger` / `credit_balances` still exist, written by nobody, read only by account
-deletion. They are dropped in a later change, once the new path has run long enough that
-nobody wants the old numbers back. Migrating their rows was rejected: calling a month's
-balance "day one of that month" writes a fact that never happened into an append-only
-ledger.
+`credit_ledger` / `credit_balances` (0031) were the monthly credit balance this package
+replaced. Written by nobody since 0121, they were dropped in 0309. Migrating their rows was
+rejected: calling a month's balance "day one of that month" writes a fact that never happened
+into an append-only ledger.
 
 Contributing a board earns nothing here. A one-off act cannot top up a daily allowance, and
 banking one for later is the shape the withdrawn balance had. The reward returns in

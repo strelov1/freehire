@@ -71,9 +71,9 @@ const deleteUsageForUser = `-- name: DeleteUsageForUser :exec
 DELETE FROM usage_ledger WHERE user_id = $1
 `
 
-// Erase one user's consumption ledger. Account deletion calls this alongside the counter
-// delete; the foreign keys cascade, but deletion states what it erases explicitly rather
-// than relying on a constraint to mean it.
+// Erase one user's consumption ledger. Account deletion does NOT call this: usage_ledger
+// cascades on users (0121), so DeleteUser already erases it, and me_delete's integration
+// test asserts that. These two exist so the plan's own tests can prove the tables empty.
 func (q *Queries) DeleteUsageForUser(ctx context.Context, userID int64) error {
 	_, err := q.db.Exec(ctx, deleteUsageForUser, userID)
 	return err

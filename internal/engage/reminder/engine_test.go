@@ -503,7 +503,7 @@ func TestRecipient_Push(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info := db.GetReminderForDeliveryRow{UserID: 42, HasPushDevice: tt.hasPushDevice}
-			dest, ok := recipient("push", info)
+			dest, ok := notify.Recipient(notify.ChannelPush, recipientInfo(info))
 			if dest != tt.wantDest || ok != tt.wantOK {
 				t.Errorf("recipient(push, HasPushDevice=%v) = (%q, %v), want (%q, %v)",
 					tt.hasPushDevice, dest, ok, tt.wantDest, tt.wantOK)

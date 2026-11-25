@@ -2,13 +2,9 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/MoeForge/moego/regexp"
@@ -102,68 +98,12 @@ func (s optius) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(cards))
-		for _, c := range cards {
-			companies = append(companies, c.company)
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []optiusCard
-	deferred := 0
-	for _, c := range cards {
-		base := optiusBaseJob(c)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[c.company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, c)
-	}
-	var answered, outOfTime atomic.Int64
-	// One worker: the site refuses concurrent requests (see the type comment).
-	read := fetchDetails(unseen, 1, func(c optiusCard) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, c)
-		if err != nil {
-			log.Printf("optius: posting %s failed; deferring: %v", c.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" includes a posting the
-	// site reported gone; postings left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("optius: requested %d posting pages and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("optius: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("optius: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns.
-func (s optius) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "optius", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: 1, Deadline: s.deadlineMargin}, cards, seen, gate,
+		nil,
+		optiusBaseJob,
+		func(c optiusCard) any { return c.id },
+		s.detail)
 }
 
 // list walks the abroad slice, then the whole listing, returning its postings in listing order
@@ -349,8 +289,7 @@ type optiusLD struct {
 func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

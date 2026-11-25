@@ -143,7 +143,7 @@ func (s jobbankca) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 	picked := hydrationLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(picked, 1, func(id string) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -169,13 +169,6 @@ func (s jobbankca) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exter
 	return append(jobs, read...), nil
 }
 
-// nearDeadline reports whether the run's deadline is closer than the margin the crawl leaves to
-// the pipeline's own writes.
-func (s jobbankca) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
-}
-
 func jobbankcaPostingLink(id string) string { return fmt.Sprintf(jobbankcaPostingURL, id) }
 
 // sortJobBankIDsNewestFirst orders posting ids so the hydration bound spends itself on the
@@ -196,7 +189,7 @@ func (s jobbankca) list(ctx context.Context) ([]string, error) {
 	var out []string
 	listed := map[string]bool{}
 	for page := 1; page <= s.listingPages; page++ {
-		if page > 1 && s.nearDeadline(ctx) {
+		if page > 1 && nearDeadline(ctx, s.deadlineMargin) {
 			log.Printf("jobbankca: listing stopped at page %d as the run neared its deadline", page)
 			break
 		}
@@ -280,8 +273,7 @@ func jobbankcaRefused(err error) bool {
 func (s jobbankca) detail(ctx context.Context, id string) (Job, bool, error) {
 	root, err := s.get(ctx, jobbankcaPostingLink(id))
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

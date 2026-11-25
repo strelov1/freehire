@@ -3,10 +3,8 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"slices"
 	"strings"
@@ -185,11 +183,6 @@ type taleezLD struct {
 	} `json:"hiringOrganization"`
 }
 
-// errTaleezNoPosting marks a page that answered 200 without a JobPosting. The site answers a
-// removed posting with a 404, so this is not a "gone" answer — an interstitial looks the same —
-// and counts as no answer.
-var errTaleezNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410); an error is the absence of an answer.
 func (s taleez) detail(ctx context.Context, p taleezPosting) (Job, bool, error) {
@@ -198,15 +191,16 @@ func (s taleez) detail(ctx context.Context, p taleezPosting) (Job, bool, error) 
 	}
 	root, err := s.pages.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	var ld taleezLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errTaleezNoPosting
+		// Not a gone answer: the site answers a removed posting with a 404 — an interstitial looks the
+		// same.
+		return Job{}, false, errNoPosting
 	}
 	job, ok := taleezJob(ld, p)
 	return job, ok, nil

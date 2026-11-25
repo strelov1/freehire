@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/application/maillink"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/outbox"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
@@ -167,10 +168,10 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 
 // Fail records the attempt and reports whether the entry dead-lettered (the statement stamps
 // failed_at). Which of the policy's bounds decides is the statement's business.
-func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, policy maillink.FailurePolicy) (bool, error) {
+func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, policy outbox.FailurePolicy) (bool, error) {
 	row, err := s.q.FailEmailClassification(ctx, db.FailEmailClassificationParams{
 		LastError:         cause,
-		MessageAtFault:    policy.MessageAtFault,
+		MessageAtFault:    policy.AtFault,
 		MaxAttempts:       int32(policy.MaxAttempts),
 		UpstreamGraceDays: int32(policy.UpstreamGraceDays),
 		ID:                outboxID,

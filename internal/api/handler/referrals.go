@@ -99,13 +99,6 @@ func referralOffersOut(rows []referral.Offer) []apigen.ReferralOffer {
 	return out
 }
 
-func nilInt64(p *int64) apigen.NilInt64 {
-	if p == nil {
-		return apigen.NilInt64{Null: true}
-	}
-	return apigen.NewNilInt64(*p)
-}
-
 // seekerRequestOut is what a seeker sees of their own request: no referrer identity
 // (there is none to show — the request targets a pool), just the target and status.
 func seekerRequestOut(r referral.Request) apigen.ReferralSeekerRequest {

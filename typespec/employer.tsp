@@ -8,8 +8,8 @@ namespace Freehire;
 
 // The verified-employer surface (session cookie only): claiming a company, editing its
 // curated profile, publishing and closing its own vacancies, and the moderator/admin
-// review of a claim. A vacancy is the shared job view (internal/job/jobview), whose wide
-// shape belongs to search too, so it travels as an opaque value.
+// review of a claim. A vacancy is the `Job` model (job-wire.tsp, the jobview wire shape
+// shared with search).
 
 enum EmployerAccountStatus {
   pending,
@@ -173,7 +173,7 @@ op updateEmployerCompany(@body body: EmployerCompanyPatch): Data<EmployerCompany
 @tag("Employer")
 @route("/employer/jobs")
 @get
-op listEmployerVacancies(): Data<unknown[]> | Problem;
+op listEmployerVacancies(): Data<Job[]> | Problem;
 
 /** Publishes, or idempotently updates the caller's own vacancy at the same URL. */
 @tag("Employer")
@@ -181,13 +181,13 @@ op listEmployerVacancies(): Data<unknown[]> | Problem;
 @post
 op createEmployerVacancy(@body body: EmployerVacancyCreate): {
   @statusCode _: 201;
-  @body body: Data<unknown>;
+  @body body: Data<Job>;
 } | Problem;
 
 @tag("Employer")
 @route("/employer/jobs/{slug}")
 @patch
-op updateEmployerVacancy(@path slug: string, @body body: EmployerVacancyPatch): Data<unknown> | Problem;
+op updateEmployerVacancy(@path slug: string, @body body: EmployerVacancyPatch): Data<Job> | Problem;
 
 @tag("Employer")
 @route("/employer/jobs/{slug}/close")
@@ -592,6 +592,67 @@ op getEmployerVacancyAnalytics(
   /** The employer-authored vacancy's public slug. */
   @path slug: string,
 ): Data<EmployerVacancyAnalytics> | Problem;
+
+model EmployerOutboundDay {
+  /** UTC day, `YYYY-MM-DD`. */
+  day: string;
+
+  /** Human clicks through the freehire redirect to the employer's site that day. */
+  clicks: int64;
+
+  /** Distinct visitors that day. */
+  visitors: int64;
+}
+
+model EmployerOutboundCount {
+  /** The country code (`CF-IPCountry`) or the surface (`web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram`, `api`, `other`). Empty when unknown. */
+  key: string;
+
+  clicks: int64;
+}
+
+model EmployerOutboundClicks {
+  /** Days with at least one click, oldest first. */
+  days: EmployerOutboundDay[];
+
+  /** Most clicks first. */
+  countries: EmployerOutboundCount[];
+
+  /** Most clicks first. */
+  sources: EmployerOutboundCount[];
+
+  /** Clicks in the range. */
+  clicks: int64;
+
+  /** Visitors in the range, one per visitor per day. */
+  visitors: int64;
+}
+
+/** Human clicks that freehire sent to the employer's site for the team's own vacancy; bots are excluded. */
+@summary("Read a vacancy's outbound clicks by day, country and source.")
+@opExample(#{
+  parameters: #{ slug: "platform-engineer-acme-9f3c", from: "2026-11-01", to: "2026-11-30" },
+  returnType: #{
+    data: #{
+      days: #[#{ day: "2026-11-20", clicks: 12, visitors: 9 }],
+      countries: #[#{ key: "DE", clicks: 12 }],
+      sources: #[#{ key: "web", clicks: 12 }],
+      clicks: 12,
+      visitors: 9,
+    },
+  },
+})
+@tag("Employer")
+@route("/employer/jobs/{slug}/outbound-clicks")
+@get
+op getEmployerVacancyOutboundClicks(
+  /** The employer-authored vacancy's public slug. */
+  @path slug: string,
+  /** First UTC day, inclusive. Defaults to 29 days before `to`. (e.g. `2026-11-01`) */
+  @query from?: string,
+  /** Last UTC day, inclusive. Defaults to today. At most 366 days after `from`. (e.g. `2026-11-30`) */
+  @query to?: string,
+): Data<EmployerOutboundClicks> | Problem;
 
 /** Records an Apply button click on an open, public employer vacancy. */
 @summary("Record a vacancy Apply click.")

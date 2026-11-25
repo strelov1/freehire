@@ -37,8 +37,7 @@ type employmentRow struct {
 
 // PeriodToColumns splits d into the two nullable columns experience_employments stores a
 // period boundary as — both invalid (NULL) for a nil date, month additionally invalid for
-// a year-only date. Exported so cmd/backfill-experience-dates, which fills these same
-// columns from parsed free text, shares this mapping instead of re-deriving it.
+// a year-only date.
 func PeriodToColumns(d *perioddate.PeriodDate) (year pgtype.Int4, month pgtype.Int2) {
 	if d == nil {
 		return year, month

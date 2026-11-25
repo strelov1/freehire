@@ -654,24 +654,6 @@ type CoverLetterEvidence struct {
 	AtomIds  []pgtype.UUID `json:"atom_ids"`
 }
 
-type CreditBalance struct {
-	UserID    int64              `json:"user_id"`
-	Period    string             `json:"period"`
-	Remaining int32              `json:"remaining"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-}
-
-type CreditLedger struct {
-	ID        int64              `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Period    string             `json:"period"`
-	Kind      string             `json:"kind"`
-	Feature   pgtype.Text        `json:"feature"`
-	Delta     int32              `json:"delta"`
-	Ref       pgtype.Text        `json:"ref"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
 type Cv struct {
 	UserID             int64              `json:"user_id"`
 	Title              string             `json:"title"`
@@ -772,12 +754,6 @@ type DictionaryGap struct {
 	SubmittedBy      int64              `json:"submitted_by"`
 	Status           string             `json:"status"`
 	ResolutionNote   string             `json:"resolution_note"`
-}
-
-type DictionaryGapDaily struct {
-	UserID int64       `json:"user_id"`
-	Day    pgtype.Date `json:"day"`
-	Writes int32       `json:"writes"`
 }
 
 type DirectApplication struct {
@@ -925,8 +901,6 @@ type ExperienceEmployment struct {
 	Company          string             `json:"company"`
 	Role             string             `json:"role"`
 	Location         string             `json:"location"`
-	PeriodStart      string             `json:"period_start"`
-	PeriodEnd        string             `json:"period_end"`
 	IsCurrent        bool               `json:"is_current"`
 	Summary          string             `json:"summary"`
 	Stack            []string           `json:"stack"`
@@ -1323,6 +1297,20 @@ type JobDailyView struct {
 	AgentUniques int32 `json:"agent_uniques"`
 }
 
+type JobOutboundClick struct {
+	ID           int64              `json:"id"`
+	JobID        int64              `json:"job_id"`
+	ClickedAt    pgtype.Timestamptz `json:"clicked_at"`
+	Src          string             `json:"src"`
+	IsLikelyBot  bool               `json:"is_likely_bot"`
+	DeviceType   string             `json:"device_type"`
+	OsFamily     string             `json:"os_family"`
+	UaFamily     string             `json:"ua_family"`
+	ReferrerHost string             `json:"referrer_host"`
+	Country      string             `json:"country"`
+	VisitorHash  string             `json:"visitor_hash"`
+}
+
 type JobRecruiterContact struct {
 	JobID    int64              `json:"job_id"`
 	Contacts []byte             `json:"contacts"`
@@ -1700,6 +1688,8 @@ type OauthExchangeCode struct {
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
 	ConsumedAt           pgtype.Timestamptz `json:"consumed_at"`
+	LinkProvider         pgtype.Text        `json:"link_provider"`
+	LinkProviderUserID   pgtype.Text        `json:"link_provider_user_id"`
 }
 
 type OauthGrant struct {
@@ -1757,12 +1747,6 @@ type ProblemReport struct {
 	FirstReportedAt pgtype.Timestamptz `json:"first_reported_at"`
 	LastReportedAt  pgtype.Timestamptz `json:"last_reported_at"`
 	ResolutionNote  string             `json:"resolution_note"`
-}
-
-type ProblemReportDaily struct {
-	UserID int64       `json:"user_id"`
-	Day    pgtype.Date `json:"day"`
-	Writes int32       `json:"writes"`
 }
 
 type ProcessedViewLog struct {
@@ -2140,8 +2124,6 @@ type User struct {
 	ResumeObjectKey            pgtype.Text        `json:"resume_object_key"`
 	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
 	ResumeAtsAnalysis          []byte             `json:"resume_ats_analysis"`
-	ResumeEmbedding            []float64          `json:"resume_embedding"`
-	ResumeEmbeddingModel       pgtype.Text        `json:"resume_embedding_model"`
 	ResumeStructured           []byte             `json:"resume_structured"`
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`

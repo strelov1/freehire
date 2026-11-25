@@ -18,14 +18,13 @@ package nudge
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
-	"github.com/strelov1/freehire/internal/application/deliverywindow"
+	"github.com/strelov1/freehire/internal/engage/batchnotify"
+	"github.com/strelov1/freehire/internal/engage/deliverywindow"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/job/silence"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -68,15 +67,18 @@ type Message struct {
 }
 
 // Notifier delivers one account's due nudges OF ONE KIND over a channel to a
-// destination, as a single message. The kind travels beside the slice because it
-// is a property of the group, and the renderer switches on it before any job.
-type Notifier interface {
-	Send(ctx context.Context, channel, dest, kind string, ms []Message) error
-}
+// destination, as a single message. Every message in the slice carries the group's
+// Kind, so the renderer switches on it before any job. The Router, the channel
+// wrappers and the sentinels are the ones internal/engage/notify shares with the
+// reminder engine.
+type Notifier = notify.Notifier[[]Message]
+
+// Router is notify.Router over nudge batches.
+type Router = notify.Router[[]Message]
 
 // ErrChannelNotConfigured is returned by Router.Send for a channel with no
 // registered notifier. The engine treats it as a soft-skip, not a delivery failure.
-var ErrChannelNotConfigured = errors.New("nudge: channel not configured")
+var ErrChannelNotConfigured = notify.ErrChannelNotConfigured
 
 // ErrRecipientGone is returned by a Notifier whose channel learned from the send
 // that this recipient is permanently closed (e.g. the Telegram bot was blocked).
@@ -84,20 +86,6 @@ var ErrChannelNotConfigured = errors.New("nudge: channel not configured")
 // link. It is the same sentinel as notify.ErrRecipientGone, so one errors.Is covers
 // every engine.
 var ErrRecipientGone = notify.ErrRecipientGone
-
-// Router dispatches a nudge to the notifier registered for its channel.
-type Router map[string]Notifier
-
-var _ Notifier = (Router)(nil)
-
-// Send routes to the registered notifier, or ErrChannelNotConfigured when none is.
-func (r Router) Send(ctx context.Context, channel, dest, kind string, ms []Message) error {
-	n, ok := r[channel]
-	if !ok {
-		return fmt.Errorf("%w: %q", ErrChannelNotConfigured, channel)
-	}
-	return n.Send(ctx, channel, dest, kind, ms)
-}
 
 var _ Store = (*db.Queries)(nil)
 
@@ -467,18 +455,18 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 // makes the batch delivered.
 func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msgs []Message) (sent int, failedErr error) {
 	for _, ch := range info.Channels {
-		dest, ok := recipient(ch, info)
+		dest, ok := notify.Recipient(ch, recipientInfo(info))
 		if !ok {
 			continue
 		}
-		err := r.notifier.Send(ctx, ch, dest, info.Kind, msgs)
+		err := r.notifier.Send(ctx, ch, dest, msgs)
 		if errors.Is(err, ErrChannelNotConfigured) {
 			continue
 		}
 		// Closed for good: forget it and skip this channel without recording a
 		// failure; a nudge whose other channel worked is still delivered.
 		if errors.Is(err, ErrRecipientGone) {
-			r.unlinkTelegram(ctx, info.UserID, err)
+			batchnotify.UnlinkTelegram(ctx, r.store, "nudge", info.UserID, err)
 			continue
 		}
 		if err != nil {
@@ -490,42 +478,14 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 	return sent, failedErr
 }
 
-// unlinkTelegram forgets a user's Telegram chat after a send reported it
-// permanently closed, logging it because it changes the user's settings unasked. A
-// failure is only logged: the next nudge meets the same 403 and retries.
-func (r *Runner) unlinkTelegram(ctx context.Context, userID int64, cause error) {
-	rows, err := r.store.DeleteTelegramLink(ctx, userID)
-	if err != nil {
-		log.Printf("nudge: unlink telegram for user %d: %v", userID, err)
-		return
+// recipientInfo is the account-and-channel state the shared Recipient decides on.
+func recipientInfo(info db.GetNudgeForDeliveryRow) notify.RecipientInfo {
+	return notify.RecipientInfo{
+		UserID:         info.UserID,
+		TelegramChatID: info.TelegramChatID,
+		AccountEmail:   info.AccountEmail,
+		HasPushDevice:  info.HasPushDevice,
 	}
-	if rows > 0 {
-		log.Printf("nudge: unlinked telegram for user %d: %v", userID, cause)
-	}
-}
-
-// recipient resolves the destination for a channel, and whether the nudge is
-// deliverable over it right now: telegram needs a linked chat, email the account
-// email; anything else is undeliverable.
-func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
-	switch channel {
-	case notify.ChannelTelegram:
-		if !info.TelegramChatID.Valid {
-			return "", false
-		}
-		return strconv.FormatInt(info.TelegramChatID.Int64, 10), true
-	case notify.ChannelEmail:
-		if info.AccountEmail == "" {
-			return "", false
-		}
-		return info.AccountEmail, true
-	case notify.ChannelPush:
-		if !info.HasPushDevice {
-			return "", false
-		}
-		return strconv.FormatInt(info.UserID, 10), true
-	}
-	return "", false
 }
 
 // recordNotification writes the in-app notification-center row for a delivered
@@ -549,27 +509,16 @@ func (r *Runner) recordNotification(ctx context.Context, b *batch) {
 	if len(b.msgs) == 1 {
 		arg.PublicSlug = pgconv.TextValid(b.msgs[0].Slug)
 	} else {
-		arg.Jobs = jobsSnapshot(b.msgs)
+		arg.Jobs = notify.JobsSnapshotOf(b.msgs, func(m Message) notify.SnapshotJob {
+			return notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
+		})
 	}
 	if _, err := r.store.RecordNotification(ctx, arg); err != nil {
 		log.Printf("nudge: record notification for user %d (%s): %v", b.info.UserID, b.info.Kind, err)
 	}
 }
 
-// jobsSnapshot is the job list a multi-job batch records, in the shape notify owns.
-func jobsSnapshot(ms []Message) json.RawMessage {
-	jobs := make([]notify.SnapshotJob, len(ms))
-	for i, m := range ms {
-		jobs[i] = notify.SnapshotJob{Title: m.JobTitle, Company: m.Company, Slug: m.Slug}
-	}
-	return notify.JobsSnapshot(jobs)
-}
-
 // release drops the lease on a nudge so it is retried promptly on a later pass.
 func (r *Runner) release(ctx context.Context, id int64) {
-	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	if err := r.store.ReleaseNudgeClaim(releaseCtx, id); err != nil {
-		log.Printf("nudge: release claim %d: %v", id, err)
-	}
+	notify.Release(ctx, "nudge", id, r.store.ReleaseNudgeClaim)
 }

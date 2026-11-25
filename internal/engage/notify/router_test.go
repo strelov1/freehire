@@ -22,7 +22,7 @@ func (n *recordingNotifier) Send(_ context.Context, channel, dest string, m Mess
 func TestRouter_DispatchesByChannel(t *testing.T) {
 	tg := &recordingNotifier{}
 	em := &recordingNotifier{}
-	r := Router{ChannelTelegram: tg, ChannelEmail: em}
+	r := Router[Message]{ChannelTelegram: tg, ChannelEmail: em}
 
 	if err := r.Send(context.Background(), ChannelEmail, "a@b.com", msgOf(Digest{})); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestRouter_DispatchesByChannel(t *testing.T) {
 }
 
 func TestRouter_UnregisteredChannelReturnsSentinel(t *testing.T) {
-	r := Router{ChannelTelegram: &recordingNotifier{}}
+	r := Router[Message]{ChannelTelegram: &recordingNotifier{}}
 
 	err := r.Send(context.Background(), ChannelEmail, "x", msgOf(Digest{}))
 	if !errors.Is(err, ErrChannelNotConfigured) {

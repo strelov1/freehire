@@ -157,7 +157,7 @@ func (s cadremploi) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exte
 	picked := hydrationLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(picked, cadremploiDetailWorkers, func(p cadremploiPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -181,13 +181,6 @@ func (s cadremploi) FetchNew(ctx context.Context, _ CompanyEntry, seen func(exte
 		log.Printf("cadremploi: %d new postings past this run's bound of %d, deferred to later runs", deferred, len(picked))
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s cadremploi) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list reads the sitemap's pages until one answers 404 and returns their postings, most recently
@@ -282,11 +275,6 @@ type cadremploiLD struct {
 // JobPosting. The sitemap still names such postings for a while.
 const cadremploiExpired = "cette offre est expirée"
 
-// errCadremploiNoPosting marks a page that answered without a JobPosting. It is not the site's
-// answer that the posting is gone — an unknown id answers 404, and a challenge page answers
-// without one too — so it counts as no answer.
-var errCadremploiNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410, or the expired notice) or carries no usable posting; an error is the absence of an answer.
 func (s cadremploi) detail(ctx context.Context, p cadremploiPosting) (Job, bool, error) {
@@ -302,8 +290,7 @@ func (s cadremploi) detail(ctx context.Context, p cadremploiPosting) (Job, bool,
 		return nil
 	})
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
@@ -312,7 +299,8 @@ func (s cadremploi) detail(ctx context.Context, p cadremploiPosting) (Job, bool,
 		return Job{}, false, nil
 	}
 	if !found {
-		return Job{}, false, errCadremploiNoPosting
+		// Not a gone answer: an unknown id answers 404, and a challenge page answers without one too.
+		return Job{}, false, errNoPosting
 	}
 	job, ok := cadremploiJob(ld, p)
 	return job, ok, nil

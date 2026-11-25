@@ -2,8 +2,8 @@ package emailnotify
 
 import "net/mail"
 
-// productName is the sender every automated mail shows; the founder sequence
-// overrides it with a human name (see internal/engage/onboarding).
+// productName is the sender every automated mail shows; the founder letters
+// override it with a human name (see internal/engage/foundermail).
 const productName = "freehire"
 
 // From builds the From header value, `Name <address@example.com>`, so a message

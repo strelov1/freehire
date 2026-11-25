@@ -3,9 +3,12 @@ package kit
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -76,6 +79,114 @@ func HydrationLanes[P any](unseen []P, fresh, backlog int, now time.Time) []P {
 	return picked
 }
 
+// Hydration is what one bounded, per-posting-detail aggregator tells the shared walk about
+// itself: its log prefix, how its logs name a page (noun "posting", plural "postings", unit
+// "posting pages" in the none-answered failure), the per-run page budget and fan-out, and the
+// margin it leaves the run's deadline for the pipeline's own writes.
+type Hydration struct {
+	Provider     string
+	Noun         string
+	Plural       string
+	Unit         string
+	MaxNewPerRun int
+	Workers      int
+	Deadline     time.Duration
+}
+
+// NearDeadline reports that the run is inside the margin a hydrating adapter leaves to the
+// pipeline's own writes. A zero margin leaves everything to the run and stops nothing early.
+// Adapters that keep their own walk (see AGENT-REFERENCE.md, "A crawl that reads nothing of
+// what it listed must fail") call it instead of carrying a copy of the comparison.
+func NearDeadline(ctx context.Context, margin time.Duration) bool {
+	if margin == 0 {
+		return false
+	}
+	d, ok := ctx.Deadline()
+	return ok && time.Until(d) < margin
+}
+
+func (h Hydration) nearDeadline(ctx context.Context) bool { return NearDeadline(ctx, h.Deadline) }
+
+// HydrateNew is the walk every such adapter shares: list, refresh the postings the catalogue
+// already holds, yield body-less the ones the coverage gate condemns, and read up to
+// maxNewPerRun of the rest in listing order through FetchDetails. It fails when it asked for at
+// least one page and none answered (see AGENT-REFERENCE.md, "A crawl that reads nothing of what
+// it listed must fail"); a page left unread for want of time or of budget is logged and deferred
+// to a later run, never counted as a failure.
+//
+// order, when given, sorts the unseen postings before the budget is taken from their head (an
+// adapter whose listing is not newest first); the budget otherwise follows the listing's order.
+//
+// base builds a posting's body-less Job; its Company is both the key the gate is asked about and
+// the key a covered posting is recognised by, so an adapter whose listing names no employer
+// (turijobs, hzz) passes a zero DetailGate and nothing is condemned. label is the posting's id as
+// its adapter logs it (an int or a string), printed with %v.
+func HydrateNew[P any](ctx context.Context, h Hydration, postings []P, seen func(externalID string) bool, gate DetailGate, order func([]P), base func(P) Job, label func(P) any, detail func(context.Context, P) (Job, bool, error)) ([]Job, error) {
+	var covered map[string]bool
+	if gate.Covered != nil {
+		companies := make([]string, 0, len(postings))
+		for _, p := range postings {
+			companies = append(companies, base(p).Company)
+		}
+		covered = gate.Covered(companies)
+	}
+
+	var kept []Job
+	var unseen []P
+	deferred := 0
+	for _, p := range postings {
+		b := base(p)
+		switch {
+		case seen(b.ExternalID):
+			b.SeenRefresh = true
+			kept = append(kept, b)
+		case covered[b.Company]:
+			kept = append(kept, b)
+		case order != nil || len(unseen) < h.MaxNewPerRun:
+			unseen = append(unseen, p)
+		default:
+			deferred++
+		}
+	}
+	// order is the adapter's own idea of which unseen pages the budget buys first, so it must see
+	// every candidate before the budget is taken from the head; without one the listing's order
+	// stands and the loop never holds more than the budget.
+	if order != nil {
+		order(unseen)
+		if n := len(unseen) - h.MaxNewPerRun; n > 0 {
+			deferred = n
+			unseen = unseen[:h.MaxNewPerRun]
+		}
+	}
+
+	var answered, outOfTime atomic.Int64
+	read := FetchDetails(unseen, h.Workers, func(p P) (Job, bool) {
+		if h.nearDeadline(ctx) {
+			outOfTime.Add(1)
+			return Job{}, false
+		}
+		job, ok, err := detail(ctx, p)
+		if err != nil {
+			log.Printf("%s: %s %v failed; deferring: %v", h.Provider, h.Noun, label(p), err)
+			return Job{}, false
+		}
+		answered.Add(1)
+		return job, ok
+	})
+	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
+	// site reported gone; postings left for want of time are not failures.
+	if asked := int64(len(unseen)) - outOfTime.Load(); asked > 0 && answered.Load() == 0 {
+		return nil, fmt.Errorf("%s: requested %d %s and none answered", h.Provider, asked, h.Unit)
+	}
+	if n := outOfTime.Load(); n > 0 {
+		log.Printf("%s: %d new %s left unread as the run neared its deadline, deferred to later runs", h.Provider, n, h.Plural)
+	}
+	if deferred > 0 {
+		log.Printf("%s: %d new %s past this run's bound of %d, deferred to later runs", h.Provider, deferred, h.Plural, h.MaxNewPerRun)
+	}
+	return append(kept, read...), nil
+}
+
 // FetchDetailsStream maps each posting to a Job via fetch, concurrently with a bounded worker
 // pool, emitting each successful Job to emit as soon as its detail completes (a posting whose
 // fetch returns ok=false is dropped). Unlike FetchDetails it does not buffer or preserve order,
@@ -115,6 +226,19 @@ func DetailUnreadable(err error) bool {
 	}
 	return se.Code != http.StatusNotFound && se.Code != http.StatusGone
 }
+
+// IsGone reports whether a failed request is the platform's own answer that the page no
+// longer exists (404 or 410) — the one failure DetailUnreadable does not count as unreadable.
+// An adapter's detail read answers it by yielding the posting as gone, not as an error.
+func IsGone(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone)
+}
+
+// ErrNoPosting marks a page that answered without a JobPosting. It is never the platform's
+// answer that the posting is gone — a taken-down posting answers 404 or 410 (IsGone) — and
+// counts as no answer rather than a removal, so the posting is deferred, never closed.
+var ErrNoPosting = errors.New("page carries no JobPosting")
 
 // UnreadableDetail is the marker a link-only adapter yields in place of a posting whose detail
 // it could not read (see Job.Unreadable). It carries the identity the adapter holds without the

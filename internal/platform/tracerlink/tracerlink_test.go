@@ -205,11 +205,26 @@ func TestClassifyFlagsAutomatedTraffic(t *testing.T) {
 		"facebookexternalhit/1.1",
 		"curl/8.4.0",
 		"Mozilla/5.0 HeadlessChrome/120.0.0.0",
+		// Page-view counting used to carry its own, shorter list; these were on it only.
+		"Mozilla/5.0 (compatible; Yahoo! Slurp)",
+		"Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+		"Twitterbot/1.0",
+		"Embedly/0.2",
+		"Prerender (+https://github.com/prerender/prerender)",
 		"",
 	} {
 		if got := Classify("GET", ua); !got.IsBot {
 			t.Errorf("Classify(GET, %q).IsBot = false, want true", ua)
 		}
+	}
+}
+
+func TestIsBotUserAgentTakesNoMethodAndAnEmptyAgentIsNoBot(t *testing.T) {
+	if IsBotUserAgent("") {
+		t.Error("an empty agent is unknown, not a bot: the log has none for some real readers")
+	}
+	if !IsBotUserAgent("GOOGLEBOT/2.1") {
+		t.Error("matching is case-insensitive")
 	}
 }
 

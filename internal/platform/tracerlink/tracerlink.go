@@ -192,7 +192,7 @@ func sanitizePrefix(prefix string) string {
 // Every entry is a name no browser carries. The generic "bot" is deliberately absent: it appears
 // inside "CUBOT", a phone brand. Generic bots are caught by botSuffixes.
 var botMarkers = []string{
-	"crawler", "spider", "scanner", "headless", "curl/", "wget",
+	"crawl", "spider", "slurp", "scanner", "headless", "prerender", "embedly", "curl/", "wget",
 	"python-requests", "go-http-client", "java/", "okhttp",
 	"facebookexternalhit", "whatsapp", "skypeuripreview", "googleimageproxy",
 }
@@ -222,12 +222,14 @@ func Classify(method, userAgent string) Client {
 // ordinary browser user agents. Counts are therefore evidence a link was opened, never proof a
 // person read the CV.
 func isAutomated(method, lowerUA string) bool {
-	if !strings.EqualFold(method, "GET") {
-		return true
-	}
-	if lowerUA == "" {
-		return true
-	}
+	return !strings.EqualFold(method, "GET") || lowerUA == "" || IsBotUserAgent(lowerUA)
+}
+
+// IsBotUserAgent reports whether a user agent names a known crawler, link-preview fetcher or
+// HTTP library. It is the one bot list of the site: page-view counting (viewlog) and every
+// click counter use it. The agent is matched case-insensitively.
+func IsBotUserAgent(userAgent string) bool {
+	lowerUA := strings.ToLower(userAgent)
 	for _, marker := range botMarkers {
 		if strings.Contains(lowerUA, marker) {
 			return true

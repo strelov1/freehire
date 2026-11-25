@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/sources/kit"
@@ -73,6 +74,9 @@ var (
 	collapseSpace            = kit.CollapseSpace
 	countriesFromCodes       = kit.CountriesFromCodes
 	countryFromCode          = kit.CountryFromCode
+	isGone                   = kit.IsGone
+	nearDeadline             = kit.NearDeadline
+	errNoPosting             = kit.ErrNoPosting
 	detailUnreadable         = kit.DetailUnreadable
 	firstNonEmpty            = kit.FirstNonEmpty
 	firstSubmatch            = kit.FirstSubmatch
@@ -103,6 +107,12 @@ func fetchDetails[P any](postings []P, workers int, fetch func(P) (Job, bool)) [
 func hydrationLanes[P any](unseen []P, fresh, backlog int, now time.Time) []P {
 	return kit.HydrationLanes(unseen, fresh, backlog, now)
 }
+func hydrateNew[P any](ctx context.Context, h hydration, postings []P, seen func(externalID string) bool, gate DetailGate, order func([]P), base func(P) Job, label func(P) any, detail func(context.Context, P) (Job, bool, error)) ([]Job, error) {
+	return kit.HydrateNew(ctx, h, postings, seen, gate, order, base, label, detail)
+}
+
+type hydration = kit.Hydration
+
 func fetchDetailsStream[P any](postings []P, workers int, fetch func(P) (Job, bool), emit func(Job)) {
 	kit.FetchDetailsStream(postings, workers, fetch, emit)
 }

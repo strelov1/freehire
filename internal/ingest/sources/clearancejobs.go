@@ -311,8 +311,7 @@ func (s clearancejobs) read(ctx context.Context, p clearancejobsPosting) (cleara
 		return err
 	})
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return clearancejobsLD{}, false, nil
 		}
 		return clearancejobsLD{}, false, err

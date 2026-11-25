@@ -6,18 +6,20 @@ import (
 	"encoding/hex"
 	"sync"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/tracerlink"
 )
 
 // VisitorHash identifies one visitor for a day without storing anything: the salt is derived
 // from the click key and the UTC date, so it rotates daily and hashes cannot be linked across
 // days.
+//
+// The hash itself is tracerlink.VisitorHash, the one every click counter uses; only the salt
+// differs, so the duplicate window and the daily unlinkability stay sponsored's own.
 func VisitorHash(key []byte, ip, userAgent string, now time.Time) string {
 	m := hmac.New(sha256.New, key)
 	m.Write([]byte("visitor-salt:" + now.UTC().Format("2006-01-02")))
-	h := sha256.New()
-	h.Write([]byte(ip + "\x00" + userAgent + "\x00"))
-	h.Write(m.Sum(nil))
-	return hex.EncodeToString(h.Sum(nil))
+	return tracerlink.VisitorHash(hex.EncodeToString(m.Sum(nil)), ip, userAgent)
 }
 
 // IPLimiter admits at most limit hits per window per IP (fixed window). It lives in one

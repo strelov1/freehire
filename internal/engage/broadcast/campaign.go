@@ -13,13 +13,11 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/foundermail"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 )
-
-// senderName is the display name in the recipient's message list.
-const senderName = "Ilya from freehire"
 
 // Campaign is one letter: what the inbox shows, what the card says, and the
 // plain-text alternative.
@@ -44,12 +42,9 @@ type Campaign struct {
 
 // Mailer renders and sends campaigns.
 type Mailer struct {
-	sender  emailnotify.Sender
-	from    string
-	replyTo string
+	*foundermail.Mailer
 	baseURL string
 	layout  *mailtpl.Layout
-	links   *emailprefs.Links
 }
 
 // NewMailer builds a Mailer. replyTo is the human inbox that answers; a campaign signed by a person
@@ -57,12 +52,9 @@ type Mailer struct {
 func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
-		sender:  sender,
-		from:    emailnotify.From(senderName, from),
-		replyTo: replyTo,
+		Mailer:  foundermail.New(sender, from, replyTo, links),
 		baseURL: base,
 		layout:  mailtpl.New(base),
-		links:   links,
 	}
 }
 
@@ -72,7 +64,7 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 	if err := c.body.Execute(&body, m.assets()); err != nil {
 		return fmt.Errorf("broadcast: rendering %s: %w", c.Name, err)
 	}
-	unsubscribe, err := m.links.For(userID, emailprefs.GroupNews)
+	unsubscribe, err := m.Unsubscribe(userID)
 	if err != nil {
 		return fmt.Errorf("broadcast: unsubscribe link for user %d: %w", userID, err)
 	}
@@ -83,10 +75,8 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 		Footer:         "You’re getting this because you signed up for freehire.",
 		UnsubscribeURL: unsubscribe,
 	})
-	return m.sender.Send(ctx, emailnotify.Message{
-		From: m.from, To: to, ReplyTo: m.replyTo, Subject: c.Subject,
-		HTML: html, Text: c.text(m.baseURL) + emailprefs.TextFooter(unsubscribe),
-		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+	return m.Mailer.Send(ctx, to, unsubscribe, emailnotify.Message{
+		Subject: c.Subject, HTML: html, Text: c.text(m.baseURL) + emailprefs.TextFooter(unsubscribe),
 		Campaign: c.Name, Variant: c.Half,
 	})
 }

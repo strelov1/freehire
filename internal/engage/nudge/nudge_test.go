@@ -125,7 +125,12 @@ type sentGroup struct {
 	msgs []Message
 }
 
-func (n *fakeNotifier) Send(_ context.Context, channel, dest, kind string, ms []Message) error {
+func (n *fakeNotifier) Send(_ context.Context, channel, dest string, ms []Message) error {
+	// A batch is one kind; the group's kind rides on every message.
+	kind := ""
+	if len(ms) > 0 {
+		kind = ms[0].Kind
+	}
 	if err, ok := n.errByChannel[channel]; ok {
 		return err
 	}
@@ -456,7 +461,7 @@ func TestNew_ZeroSnapshotCapDoesNotStallDelivery(t *testing.T) {
 func TestRecipient_Push_ResolvesUserIDWhenDeviceRegistered(t *testing.T) {
 	info := db.GetNudgeForDeliveryRow{UserID: 42, HasPushDevice: true}
 
-	dest, ok := recipient(notify.ChannelPush, info)
+	dest, ok := notify.Recipient(notify.ChannelPush, recipientInfo(info))
 	if !ok {
 		t.Fatal("ok = false, want true (a registered device is deliverable)")
 	}

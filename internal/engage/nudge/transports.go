@@ -2,58 +2,49 @@ package nudge
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"html"
 	"html/template"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/application/mailtpl"
+	"github.com/strelov1/freehire/internal/engage/batchnotify"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
 
-// senderName is the display name on these mails: the product, not a person.
-const senderName = "freehire"
-
-var (
-	_ Notifier = (*TelegramNotifier)(nil)
-	_ Notifier = (*EmailNotifier)(nil)
-)
-
 // TelegramNotifier delivers a nudge as a Telegram HTML message. Every link stays
 // on-platform: the tracking board for application kinds, the job's own page for
-// job-closed (nothing is left to track for a closed listing).
-type TelegramNotifier struct {
-	client *telegramnotify.Client
-	origin string
-}
+// job-closed (nothing is left to track for a closed listing). The send itself is
+// the shared batchnotify.Telegram; this package owns only the copy.
+type TelegramNotifier = batchnotify.Telegram[Message]
 
 // NewTelegramNotifier builds a TelegramNotifier sending through client, with links
-// rooted at origin (the frontend origin).
+// rooted at origin (the frontend origin). A 403 is translated to ErrRecipientGone
+// (telegramnotify.SendToChat) so the runner unlinks the chat instead of retrying a
+// send that cannot land.
 func NewTelegramNotifier(client *telegramnotify.Client, origin string) *TelegramNotifier {
-	return &TelegramNotifier{client: client, origin: strings.TrimRight(origin, "/")}
+	return batchnotify.NewTelegram(client, newTelegramCopy(origin).render)
 }
 
-// Send renders the nudge and posts it to the chat encoded in dest. The channel
-// argument is ignored. A 403 is translated to ErrRecipientGone so the runner unlinks
-// the chat instead of retrying a send that cannot land.
-func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
-	if len(ms) == 0 {
-		return nil
-	}
-	return n.client.SendToChat(ctx, dest, n.render(kind, ms))
+// telegramCopy is the nudge copy for the Telegram channel.
+type telegramCopy struct{ origin string }
+
+func newTelegramCopy(origin string) telegramCopy {
+	return telegramCopy{origin: strings.TrimRight(origin, "/")}
 }
 
 // render builds the HTML body: one nudge is a sentence, several are a headline and
 // a list bounded by notify.ListLimit and by Telegram's MaxMessageLen (an oversized
-// body is rejected deterministically, so every retry would re-fail).
-func (n *TelegramNotifier) render(kind string, ms []Message) string {
+// body is rejected deterministically, so every retry would re-fail). Every message
+// of a batch carries the group's kind, so the first one names it.
+func (n telegramCopy) render(ms []Message) string {
 	if len(ms) == 1 {
 		return n.renderOne(ms[0])
 	}
+	kind := ms[0].Kind
 
 	var b strings.Builder
 	b.WriteString(n.batchHeadline(kind, len(ms)) + "\n\n")
@@ -80,7 +71,7 @@ func (n *TelegramNotifier) render(kind string, ms []Message) string {
 
 // batchHeadline is the one line saying what this batch is about. It holds only a
 // count, so nothing is escaped.
-func (n *TelegramNotifier) batchHeadline(kind string, count int) string {
+func (n telegramCopy) batchHeadline(kind string, count int) string {
 	switch kind {
 	case KindFollowUp:
 		return fmt.Sprintf("👋 <b>%d</b> of your applications have gone quiet. Worth a follow-up?", count)
@@ -102,7 +93,7 @@ func (n *TelegramNotifier) batchHeadline(kind string, count int) string {
 }
 
 // jobLine renders one nudged job as a bullet linking to its freehire page.
-func (n *TelegramNotifier) jobLine(m Message) string {
+func (n telegramCopy) jobLine(m Message) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "• <a href=%q>%s</a>", n.origin+"/jobs/"+m.Slug, html.EscapeString(m.JobTitle))
 	if m.Company != "" {
@@ -114,7 +105,7 @@ func (n *TelegramNotifier) jobLine(m Message) string {
 
 // moreLine is the overflow tail, or "" when nothing is omitted. It leads where the
 // batch's own call to action leads.
-func (n *TelegramNotifier) moreLine(more int, kind string) string {
+func (n telegramCopy) moreLine(more int, kind string) string {
 	if more <= 0 {
 		return ""
 	}
@@ -122,7 +113,7 @@ func (n *TelegramNotifier) moreLine(more int, kind string) string {
 }
 
 // batchURL is where a batch sends the reader, per batchDestination.
-func (n *TelegramNotifier) batchURL(kind string) string {
+func (n telegramCopy) batchURL(kind string) string {
 	path, _ := batchDestination(kind)
 	return n.origin + path
 }
@@ -139,7 +130,7 @@ func batchDestination(kind string) (path, label string) {
 
 // renderOne is the single-nudge body; a batch of one must render as a real single
 // message, never as a one-item batch headline.
-func (n *TelegramNotifier) renderOne(m Message) string {
+func (n telegramCopy) renderOne(m Message) string {
 	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL, jobURL := n.origin+"/my/tracking", n.origin+"/jobs/"+m.Slug
 	applicationURL := n.origin + "/my/tracking/" + m.Slug
@@ -178,49 +169,38 @@ func (n *TelegramNotifier) renderOne(m Message) string {
 }
 
 // EmailNotifier delivers a nudge as an email. Like the Telegram notifier, its links
-// stay on-platform.
-type EmailNotifier struct {
-	sender emailnotify.Sender
-	from   string
-	origin string
-	layout *mailtpl.Layout
-	links  *emailprefs.Links
-}
+// stay on-platform. The send itself is the shared batchnotify.Email; this package owns
+// only the copy.
+type EmailNotifier = batchnotify.Email[Message]
 
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
 // links rooted at origin and unsubscribe links signed by links.
 func NewEmailNotifier(sender emailnotify.Sender, from, origin string, links *emailprefs.Links) *EmailNotifier {
-	base := strings.TrimRight(origin, "/")
-	return &EmailNotifier{
-		sender: sender,
-		from:   emailnotify.From(senderName, from),
-		origin: base,
-		layout: mailtpl.New(base),
-		links:  links,
-	}
+	return batchnotify.NewEmail(sender, from, links, "nudge", func(ms []Message) int64 { return ms[0].UserID },
+		newEmailCopy(origin).render)
 }
 
-// Send renders the batch as one mail and delivers it to the address in dest.
-func (n *EmailNotifier) Send(ctx context.Context, _ string, dest, kind string, ms []Message) error {
-	if len(ms) == 0 {
-		return nil
-	}
-	// A batch is one (account, kind), so the first message names the recipient.
-	unsubscribe, err := n.links.For(ms[0].UserID, emailprefs.GroupActivity)
-	if err != nil {
-		return fmt.Errorf("nudge: unsubscribe link for user %d: %w", ms[0].UserID, err)
-	}
-	var subject, htmlBody, textBody string
+// emailCopy is the nudge copy for the email channel.
+type emailCopy struct {
+	origin string
+	layout *mailtpl.Layout
+}
+
+func newEmailCopy(origin string) emailCopy {
+	base := strings.TrimRight(origin, "/")
+	return emailCopy{origin: base, layout: mailtpl.New(base)}
+}
+
+// render renders the batch as one mail: a single nudge keeps its own wording, a
+// batch shares one list template. Every message of a batch carries the group's
+// kind, so the first one names it.
+func (n emailCopy) render(ms []Message, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	if len(ms) == 1 {
-		subject, htmlBody, textBody = n.render(ms[0], unsubscribe)
-	} else {
-		subject, htmlBody, textBody = n.renderBatch(kind, ms, unsubscribe)
+		subject, htmlBody, textBody = n.renderOne(ms[0], unsubscribe)
+		return subject, htmlBody, textBody, nil
 	}
-	return emailnotify.SoftSkipIfPaused(n.sender.Send(ctx, emailnotify.Message{
-		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
-		Text:  textBody + emailprefs.TextFooter(unsubscribe),
-		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
-	}), ErrChannelNotConfigured)
+	subject, htmlBody, textBody = n.renderBatch(ms[0].Kind, ms, unsubscribe)
+	return subject, htmlBody, textBody, nil
 }
 
 // batchBody is what the batch template renders from. Jobs carries the source data,
@@ -247,7 +227,7 @@ var batchTemplate = template.Must(mailtpl.Partials().New("nudge-batch").Parse(`
 {{template "button" (mailLink .URL .CTA)}}`))
 
 // renderBatch builds the multi-nudge mail for one kind.
-func (n *EmailNotifier) renderBatch(kind string, ms []Message, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) renderBatch(kind string, ms []Message, unsubscribe string) (subject, htmlBody, textBody string) {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
@@ -287,7 +267,7 @@ func (n *EmailNotifier) renderBatch(kind string, ms []Message, unsubscribe strin
 }
 
 // batchCopy is the per-kind wording for a batch of `count` nudges.
-func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, lead string) {
+func (n emailCopy) batchCopy(kind string, count int) (subject, head, pre, lead string) {
 	switch kind {
 	case KindFollowUp:
 		return fmt.Sprintf("Time to follow up on %d applications", count),
@@ -334,13 +314,13 @@ func (n *EmailNotifier) batchCopy(kind string, count int) (subject, head, pre, l
 
 // batchCTA is the mail's single action, per batchDestination, tagged with an email
 // UTM source.
-func (n *EmailNotifier) batchCTA(kind string) (url, label string) {
+func (n emailCopy) batchCTA(kind string) (url, label string) {
 	path, label := batchDestination(kind)
 	return n.origin + path + "?utm_source=email", label
 }
 
 // jobURL is the on-platform freehire job page, tagged with an email UTM source.
-func (n *EmailNotifier) jobURL(m Message) string {
+func (n emailCopy) jobURL(m Message) string {
 	return n.origin + "/jobs/" + m.Slug + "?utm_source=email"
 }
 
@@ -397,7 +377,7 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 {{template "button" (mailLink .URL .CTA)}}{{end}}
 `))
 
-func (n *EmailNotifier) render(m Message, unsubscribe string) (subject, htmlBody, textBody string) {
+func (n emailCopy) renderOne(m Message, unsubscribe string) (subject, htmlBody, textBody string) {
 	trackingURL := n.origin + "/my/tracking?utm_source=email"
 	jobURL := n.origin + "/jobs/" + m.Slug + "?utm_source=email"
 	applicationURL := n.origin + "/my/tracking/" + m.Slug + "?utm_source=email"

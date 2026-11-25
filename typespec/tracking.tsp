@@ -121,8 +121,8 @@ model TrackedJob {
   company_slug: string;
   role_title: string;
 
-  /** The job in the shared wire shape; null once the catalogue has removed the posting. */
-  job: unknown;
+  /** The listing card of the posting (`JobCard`); null once the catalogue has removed the posting. */
+  job: JobCard | null;
 
   viewed_at: utcDateTime | null;
   saved_at: utcDateTime | null;
@@ -540,6 +540,10 @@ op clearApplicationStage(/** The tracking row id. (e.g. `42`) */ @path id: strin
           job: #{
             public_slug: "senior-go-engineer-acme-1a2b",
             title: "Senior Go Engineer",
+            company: "Acme",
+            closed_at: null,
+            seniority: "senior",
+            blurb: "Own the ingestion pipeline behind a catalogue of 400k postings.",
           },
           viewed_at: utcDateTime.fromISO("2026-06-19T10:00:00Z"),
           saved_at: null,

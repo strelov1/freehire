@@ -148,7 +148,7 @@ type GetSubscriptionForDeliveryRow struct {
 // delivery the same way; its secret signs the delivery), and the delivery-timing context
 // (live, not snapshotted, same as the channel checks above) — the account's
 // timezone and its saved-search digest frequency settings, read via
-// internal/application/deliverywindow before a digest is sent.
+// internal/engage/deliverywindow before a digest is sent.
 func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error) {
 	row := q.db.QueryRow(ctx, getSubscriptionForDelivery, id)
 	var i GetSubscriptionForDeliveryRow
@@ -295,7 +295,7 @@ WHERE id = $1
 `
 
 // Stamp the subscription's last digest send instant. A `daily` subscription reads it
-// through internal/application/deliverywindow.DigestDue ("already sent today"); an
+// through internal/engage/deliverywindow.DigestDue ("already sent today"); an
 // `interval` one through ClaimSubscriptionMatches' elapsed-interval gate. Called after
 // every successful delivery in either mode — `instant`-mode subscriptions never touch
 // this column.

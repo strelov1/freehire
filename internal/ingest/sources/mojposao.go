@@ -3,14 +3,10 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -210,72 +206,16 @@ func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(e
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(cards))
-		for _, c := range cards {
-			companies = append(companies, collapseSpace(c.Organization.Name))
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []mojposaoCard
-	for _, c := range cards {
-		base := mojposaoBaseJob(c, m)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		// Only coverage is judged before the body is bought.
-		if covered[base.Company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		unseen = append(unseen, c)
-	}
-	// The search orders by ad type, not by date; the newest postings are bought first so a
-	// budget-bounded run keeps the freshest part of the catalogue current.
-	slices.SortStableFunc(unseen, func(a, b mojposaoCard) int { return strings.Compare(b.PublishedAt, a.PublishedAt) })
-	deferred := 0
-	if len(unseen) > s.maxNewPerRun {
-		deferred = len(unseen) - s.maxNewPerRun
-		unseen = unseen[:s.maxNewPerRun]
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, mojposaoDetailWorkers, func(c mojposaoCard) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, m, c)
-		if err != nil {
-			log.Printf("mojposao: posting %s failed; deferring: %v", c.ID, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no posting at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone; postings left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("mojposao: requested %d postings and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("mojposao: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("mojposao: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns, so one
-// that runs into its deadline stores nothing at all.
-func (s mojposao) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "mojposao", Noun: "posting", Plural: "postings", Unit: "postings",
+		MaxNewPerRun: s.maxNewPerRun, Workers: mojposaoDetailWorkers, Deadline: s.deadlineMargin}, cards, seen, gate,
+		// The search orders by ad type, not by date; the newest postings are bought first so a
+		// budget-bounded run keeps the freshest part of the catalogue current.
+		func(unseen []mojposaoCard) {
+			slices.SortStableFunc(unseen, func(a, b mojposaoCard) int { return strings.Compare(b.PublishedAt, a.PublishedAt) })
+		},
+		func(c mojposaoCard) Job { return mojposaoBaseJob(c, m) },
+		func(c mojposaoCard) any { return c.ID },
+		func(ctx context.Context, c mojposaoCard) (Job, bool, error) { return s.detail(ctx, m, c) })
 }
 
 // list walks the search to the last page its own totalPages names and returns every named
@@ -361,8 +301,7 @@ func (s mojposao) detail(ctx context.Context, m mojposaoMarket, c mojposaoCard) 
 	}
 	var d mojposaoDetail
 	if err := s.getter(m).GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoDetailPath, c.ID), m.headers(), &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

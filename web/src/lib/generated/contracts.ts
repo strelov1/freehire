@@ -72,8 +72,10 @@ export interface Requirement {
 /**
  * Card is the list-row projection of a job: what a card draws, and nothing else.
  * It lives beside Job because both answer what of a posting is public, and two places
- * answering it is how wire shapes drift. Card is a strict subset of Job's fields with
- * the same names and derivations.
+ * answering it is how wire shapes drift. Its shared fields keep Job's names and
+ * derivations, but it is not a subset of Job's shape: seniority and employment_type sit
+ * at the top level (Job nests them under enrichment) and blurb is Card's own. The
+ * contract models it separately as JobCard (typespec/job-wire.tsp).
  * It has no description: the tracking listing's query does not read one, and the text
  * dominated the response size for something no list row renders.
  */
@@ -167,7 +169,17 @@ export interface Job {
    */
   manually_added: boolean;
   external_id: string;
+  /**
+   * URL is the employer's own application URL, as stored: the canonical address the
+   * extension matches pages against and API consumers deduplicate on.
+   */
   url: string;
+  /**
+   * ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts
+   * the click. Every link a person is sent out by uses it; URL is for matching, not clicking.
+   * Another surface rewrites src with outboundurl.ApplyURL(PublicSlug, src). Empty with URL.
+   */
+  apply_url?: string;
   /**
    * SourceURL is the original posting when URL points to a separately verified
    * application destination. Omitted when both links are the same.
@@ -354,10 +366,10 @@ export interface Job {
    */
   recruiter_contacts_available?: boolean;
   /**
-   * AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
-   * "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
-   * caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
-   * (caller_id, job_id), so the shared job query stays free of it.
+   * AutoApplyStatus is the caller's own auto-apply status for this job: "queued", "failed"
+   * or "declined" (see autoApplyEntryStatus in internal/api/handler), nil for no attempt or
+   * an anonymous caller. Caller-scoped like MyVote: only the detail handler overlays it,
+   * keyed by (caller_id, job_id), so the shared job query stays free of it.
    */
   auto_apply_status?: string;
 }

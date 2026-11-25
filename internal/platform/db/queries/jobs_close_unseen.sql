@@ -23,8 +23,8 @@
 -- changes.
 -- Observation state lives in job_activity (release A of the job_activity split), so the candidates
 -- are chosen by a locking SELECT over jobs JOIN job_activity: FOR NO KEY UPDATE OF j, a locks the
--- jobs tuple first and the activity row second (the one global lock order, which the bridge trigger
--- and every writer share) and RE-EVALUATES `a.last_seen_at < cutoff` on the LATEST version of each
+-- jobs tuple first and the activity row second (the one global lock order every writer
+-- keeps) and RE-EVALUATES `a.last_seen_at < cutoff` on the LATEST version of each
 -- row after waiting for a concurrent writer. A plain UPDATE jobs ... FROM job_activity would not: the
 -- activity row is not the UPDATE's target, so Postgres would keep the snapshot version and close a
 -- posting a crawl had just freshened. NO KEY UPDATE, never FOR UPDATE: a foreign-key child insert

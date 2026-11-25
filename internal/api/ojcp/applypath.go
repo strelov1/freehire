@@ -1,11 +1,13 @@
 package ojcp
 
 import (
+	"cmp"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 )
 
 // Projector holds the facts about THIS DEPLOYMENT that a projection needs: the site's own
@@ -85,7 +87,8 @@ func (p Projector) applyPaths(j jobview.Job, form *applyform.Form, pageURL strin
 	if form == nil {
 		return []ApplyPath{{
 			Type: pathExternalRedirect,
-			URL:  j.URL,
+			// The direct link where there is no redirect (a private job, an index document older than apply_url).
+			URL: cmp.Or(j.ApplyURLFor(outboundurl.SrcOJCP), j.URL),
 			// Never true here: with no captured form there is nothing for an agent to fill,
 			// whatever this deployment can otherwise drive.
 			SupportsAgentSubmission: false,
@@ -120,7 +123,7 @@ func applyEntryPoint(j jobview.Job) string {
 		return j.URL
 	}
 
-	// The tag jobview appends is a query parameter, so the suffix belongs before it.
+	// The suffix belongs on the path, before any query.
 	base, query, hasQuery := strings.Cut(j.URL, "?")
 	base = strings.TrimSuffix(base, "/")
 	if strings.HasSuffix(base, suffix) {

@@ -3,16 +3,12 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"net/url"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
@@ -127,46 +123,12 @@ func (s turijobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if err != nil {
 		return nil, err
 	}
-	var jobs []Job
-	var unseen []turijobsPosting
-	deferred := 0
-	for _, p := range postings {
-		base := Job{ExternalID: p.externalID(), URL: p.url, Title: p.title}
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, p)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, turijobsDetailWorkers, func(p turijobsPosting) (Job, bool) {
-		if d, ok := ctx.Deadline(); ok && time.Until(d) < s.deadlineMargin {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, p)
-		if err != nil {
-			log.Printf("turijobs: posting %d failed; deferring: %v", p.id, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	if asked := int64(len(unseen)) - outOfTime.Load(); asked > 0 && answered.Load() == 0 {
-		return nil, fmt.Errorf("turijobs: requested %d posting pages and none answered", asked)
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("turijobs: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("turijobs: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
+	return hydrateNew(ctx, hydration{Provider: "turijobs", Noun: "posting", Plural: "postings", Unit: "posting pages",
+		MaxNewPerRun: s.maxNewPerRun, Workers: turijobsDetailWorkers, Deadline: s.deadlineMargin}, postings, seen, DetailGate{},
+		nil,
+		func(p turijobsPosting) Job { return Job{ExternalID: p.externalID(), URL: p.url, Title: p.title} },
+		func(p turijobsPosting) any { return p.id },
+		s.detail)
 }
 
 // list reads the active-offers sitemap, newest id first. It failing fails the crawl.
@@ -232,11 +194,6 @@ func turijobsOneOrMany[T any](raw json.RawMessage) []T {
 	return many
 }
 
-// errTurijobsNoPosting marks a page that answered without a JobPosting. It is not the site's
-// answer that the posting is gone — a bot-management interstitial answers the same way — so it
-// counts as no answer.
-var errTurijobsNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410); an error is the absence of an answer.
 func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, error) {
@@ -245,8 +202,7 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 	}
 	root, err := s.pages.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
@@ -256,7 +212,8 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 		// Some pages carry no JobPosting; the page's own Next.js state always holds the offer.
 		next, found, blind := turijobsFromNextData(root)
 		if !found {
-			return Job{}, false, errTurijobsNoPosting
+			// Not a gone answer: a bot-management interstitial answers the same way.
+			return Job{}, false, errNoPosting
 		}
 		if blind {
 			// The employer chose to stay hidden: a posting under no company is not stored.

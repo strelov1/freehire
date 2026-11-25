@@ -15,7 +15,6 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/job"
-	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/job/salaryextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -33,7 +32,13 @@ type Job struct {
 	// decoupled from Source. The authoring user id is never exposed.
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
-	URL           string `json:"url"`
+	// URL is the employer's own application URL, as stored: the canonical address the
+	// extension matches pages against and API consumers deduplicate on.
+	URL string `json:"url"`
+	// ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts
+	// the click. Every link a person is sent out by uses it; URL is for matching, not clicking.
+	// Another surface rewrites src with outboundurl.ApplyURL(PublicSlug, src). Empty with URL.
+	ApplyURL string `json:"apply_url,omitempty"`
 	// SourceURL is the original posting when URL points to a separately verified
 	// application destination. Omitted when both links are the same.
 	SourceURL   string `json:"source_url,omitempty"`
@@ -167,10 +172,10 @@ type Job struct {
 	// RecruiterContactsAvailable is true when recruiter contacts can be looked up for the job:
 	// the feature is configured and its company has a website on record. Detail handler only.
 	RecruiterContactsAvailable bool `json:"recruiter_contacts_available,omitempty"`
-	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued" or
-	// "declined" (the candidate's permanent decision), nil for no attempt or an anonymous
-	// caller. Caller-scoped like MyVote: only the detail handler overlays it, keyed by
-	// (caller_id, job_id), so the shared job query stays free of it.
+	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued", "failed"
+	// or "declined" (see autoApplyEntryStatus in internal/api/handler), nil for no attempt or
+	// an anonymous caller. Caller-scoped like MyVote: only the detail handler overlays it,
+	// keyed by (caller_id, job_id), so the shared job query stays free of it.
 	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`
 }
 
@@ -279,7 +284,8 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Source:              f.Source,
 		ManuallyAdded:       f.ManuallyAdded,
 		ExternalID:          f.ExternalID,
-		URL:                 outboundurl.Tag(applicationDestination(f)),
+		URL:                 applicationDestination(f),
+		ApplyURL:            applyURL(f),
 		SourceURL:           originalPosting(f),
 		DirectApply:         job.IsDirectApply(f.Source, f.ExternalID),
 		Title:               f.Title,

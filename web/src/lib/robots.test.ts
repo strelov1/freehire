@@ -89,3 +89,9 @@ describe('robots.txt', () => {
     expect(BODY).toContain('https://freehire.me/llms.txt');
   });
 });
+
+describe('robots.txt outbound redirect', () => {
+  it.each(['*', ...SEARCH_CRAWLERS])('keeps %s off /api/v1/go/', (agent) => {
+    expect(groups(BODY).get(agent)).toContain('/api/v1/go/');
+  });
+});

@@ -121,13 +121,11 @@ func TestPostingWithNoCapturedFormStillOffersAWayToApply(t *testing.T) {
 	if path.Type != "external_redirect" {
 		t.Errorf("type = %q, want external_redirect", path.Type)
 	}
-	// Unlike official_job_url, an apply path's URL is a link a candidate CLICKS, so it keeps
-	// the attribution tag jobview stamps on every outbound link.
-	if !strings.HasPrefix(path.URL, sourceJobURL) {
-		t.Errorf("url = %q, want the source's own link", path.URL)
+	if want := "https://freehire.me/api/v1/go/senior-go-engineer-at-acme?src=ojcp"; path.URL != want {
+		t.Errorf("url = %q, want the click redirect %q", path.URL, want)
 	}
-	if !strings.Contains(path.URL, "utm_source") {
-		t.Errorf("url = %q, want the outbound attribution kept on a clicked link", path.URL)
+	if posting.OfficialJobURL != sourceJobURL {
+		t.Errorf("official_job_url = %q, want it canonical: agents domain-verify on it", posting.OfficialJobURL)
 	}
 	if path.SupportsAgentSubmission {
 		t.Error("supports_agent_submission = true for a path we never captured a form for")

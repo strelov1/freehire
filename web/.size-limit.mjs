@@ -27,7 +27,11 @@ const ENTRY_LIMIT = 73_200;
 const ROUTE_LIMITS = {
   '/': 366_500,
   '/jobs': 258_700,
-  '/jobs/[slug]': 354_100,
+  // 2026-11-24: main raised this to 354.3 kB for its own growth; the provider-link change
+  // then adds ~220 B through the confirmation transport this page already loads
+  // (recentAuth.ts, the auth API client); the link flow itself lives in providerLink.ts,
+  // which this page does not load. 355.5 kB: the measured 354.48 kB plus ~1 kB of room.
+  '/jobs/[slug]': 355_500,
   '/companies/[slug]': 275_900,
   // The CV-first flow replaced the seven-step tour on 2026-11-12: 180.9 kB measured, plus ~10%.
   '/onboarding': 199_000,

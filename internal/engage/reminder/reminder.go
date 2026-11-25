@@ -57,7 +57,7 @@ var (
 // (see notification_settings). An absent stored row reads as the default: enabled,
 // channel email, a daily digest. DigestFrequency/DigestTime/DigestIntervalHours
 // govern only notify's saved-search digests; QuietHoursStart/End defer delivery
-// across all three engines (internal/application/deliverywindow).
+// across all three engines (internal/engage/deliverywindow).
 type Settings struct {
 	Enabled                  bool
 	InboxDigestEnabled       bool
@@ -89,7 +89,7 @@ func (c ScheduleContext) hour() time.Duration {
 }
 
 // location is the account's timezone, or UTC when unset, matching
-// internal/application/deliverywindow.
+// internal/engage/deliverywindow.
 func (c ScheduleContext) location() *time.Location {
 	if c.Location == nil {
 		return time.UTC

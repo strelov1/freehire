@@ -119,6 +119,7 @@ export const STATIC_PATHS = [
   '/talent',
   '/for-companies',
   '/recruiters',
+  '/recruiters/job-promotion',
   '/features/extension',
   '/features/inbox',
   '/features/interview-scheduling',

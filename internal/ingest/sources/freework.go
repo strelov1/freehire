@@ -2,13 +2,9 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -129,68 +125,12 @@ func (s freework) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if err != nil {
 		return nil, err
 	}
-	var covered map[string]bool
-	if gate.Covered != nil {
-		companies := make([]string, 0, len(cards))
-		for _, c := range cards {
-			companies = append(companies, collapseSpace(c.Company.Name))
-		}
-		covered = gate.Covered(companies)
-	}
-	var jobs []Job
-	var unseen []freeworkCard
-	deferred := 0
-	for _, c := range cards {
-		base := freeworkBaseJob(c)
-		if seen(base.ExternalID) {
-			base.SeenRefresh = true
-			jobs = append(jobs, base)
-			continue
-		}
-		if covered[base.Company] {
-			jobs = append(jobs, base)
-			continue
-		}
-		if len(unseen) >= s.maxNewPerRun {
-			deferred++
-			continue
-		}
-		unseen = append(unseen, c)
-	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, freeworkDetailWorkers, func(c freeworkCard) (Job, bool) {
-		if s.nearDeadline(ctx) {
-			outOfTime.Add(1)
-			return Job{}, false
-		}
-		job, ok, err := s.detail(ctx, c)
-		if err != nil {
-			log.Printf("freework: posting %d failed; deferring: %v", c.ID, err)
-			return Job{}, false
-		}
-		answered.Add(1)
-		return job, ok
-	})
-	// A crawl that read no posting at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone; postings left for want of time are not failures.
-	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("freework: requested %d postings and none answered", int64(len(unseen))-outOfTime.Load())
-	}
-	if n := outOfTime.Load(); n > 0 {
-		log.Printf("freework: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
-	}
-	if deferred > 0 {
-		log.Printf("freework: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
-	}
-	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes: a hydrating crawl writes nothing until FetchNewGated returns, so one
-// that runs into its deadline stores nothing at all.
-func (s freework) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
+	return hydrateNew(ctx, hydration{Provider: "freework", Noun: "posting", Plural: "postings", Unit: "postings",
+		MaxNewPerRun: s.maxNewPerRun, Workers: freeworkDetailWorkers, Deadline: s.deadlineMargin}, cards, seen, gate,
+		nil,
+		freeworkBaseJob,
+		func(c freeworkCard) any { return c.ID },
+		s.detail)
 }
 
 // list walks the listing page by page and returns every posting with a title and an employer,
@@ -272,8 +212,7 @@ func freeworkBaseJob(c freeworkCard) Job {
 func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error) {
 	var d freeworkDetail
 	if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkDetailURL, c.Slug), &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
