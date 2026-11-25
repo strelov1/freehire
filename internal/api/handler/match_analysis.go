@@ -91,10 +91,6 @@ func (h *matchHandlers) register(api fiber.Router, mw middleware, contract fiber
 	api.Get("/jobs/:slug/match-analysis", mw.key, contract)
 	api.Post("/jobs/:slug/match-analysis", mw.key, mw.paidAI(plan.FeatureFit), contract)
 	api.Get("/jobs/:slug/match-analysis/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
-	// Deprecated pre-rename aliases (was "fit"), kept for existing API-key and CLI clients.
-	api.Get("/jobs/:slug/fit", mw.key, contract)
-	api.Post("/jobs/:slug/fit", mw.key, mw.paidAI(plan.FeatureFit), contract)
-	api.Get("/jobs/:slug/fit/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 	// analyses lists the jobs the caller has run the AI fit analysis on.
 	api.Get("/me/tracking/analyses", mw.key, contract)
 }
@@ -259,23 +255,6 @@ func (h *matchHandlers) RunMatchAnalysis(ctx context.Context, params apigen.RunM
 		return refusal, nil
 	}
 	return ok, nil
-}
-
-// RunJobFit is the pre-rename alias of RunMatchAnalysis.
-func (h *matchHandlers) RunJobFit(ctx context.Context, params apigen.RunJobFitParams) (apigen.RunJobFitRes, error) {
-	ok, refusal, err := h.runMatchAnalysis(ctx, params.Slug)
-	switch {
-	case err != nil:
-		return nil, err
-	case refusal != nil:
-		return refusal, nil
-	}
-	return ok, nil
-}
-
-// GetJobFit is the pre-rename alias of GetMatchAnalysis.
-func (h *matchHandlers) GetJobFit(ctx context.Context, params apigen.GetJobFitParams) (*apigen.FitAnalysisResponse, error) {
-	return h.GetMatchAnalysis(ctx, apigen.GetMatchAnalysisParams(params))
 }
 
 // runMatchAnalysis answers either the analysis or the 402 refusal, never both.

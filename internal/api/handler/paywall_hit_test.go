@@ -135,7 +135,7 @@ func TestPaidCallersAndUnreadablePlansRecordNothing(t *testing.T) {
 }
 
 func TestAMissingPlanStoreRecordsNothing(t *testing.T) {
-	status, _, _ := send(t, gatedApp(t, nil), fiber.MethodPost, "/api/v1/jobs/some-job/fit")
+	status, _, _ := send(t, gatedApp(t, nil), fiber.MethodPost, "/api/v1/jobs/some-job/match-analysis")
 	if status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status %d, want 503", status)
 	}
@@ -143,7 +143,7 @@ func TestAMissingPlanStoreRecordsNothing(t *testing.T) {
 
 // The 402 is the same whether the record lands, fails or panics, and a failure is logged.
 func TestAFailedRecordLeavesTheRefusalUnchanged(t *testing.T) {
-	const route = "/api/v1/jobs/some-job/fit"
+	const route = "/api/v1/jobs/some-job/match-analysis"
 	_, _, wantBody := send(t, gatedApp(t, &fakeEntitlement{tier: plan.TierFree}), fiber.MethodPost, route)
 
 	var logged bytes.Buffer
@@ -169,7 +169,7 @@ func TestAPanickingRecordDoesNotCrashTheRefusal(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(prev) })
 
 	plans := &fakeEntitlement{tier: plan.TierFree, recordPanic: true}
-	status, _, _ := send(t, gatedApp(t, plans), fiber.MethodPost, "/api/v1/jobs/some-job/fit")
+	status, _, _ := send(t, gatedApp(t, plans), fiber.MethodPost, "/api/v1/jobs/some-job/match-analysis")
 	paywallWrites.Wait()
 	if status != fiber.StatusPaymentRequired {
 		t.Errorf("status %d, want 402", status)

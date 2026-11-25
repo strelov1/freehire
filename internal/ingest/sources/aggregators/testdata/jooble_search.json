@@ -1,0 +1,29 @@
+{
+  "totalCount": 3,
+  "jobs": [
+    {
+      "id": 1234567890,
+      "title": "Backend Engineer",
+      "location": "Kyiv",
+      "snippet": "Join our platform team to build &nbsp;services in Go...",
+      "salary": "17,600 UAH",
+      "source": "jooble",
+      "type": "Full-time",
+      "link": "https://ua.jooble.org/jdp/1234567890",
+      "company": "Acme",
+      "updated": "2026-11-24T12:55:35.3870000"
+    },
+    {
+      "id": "9876543210",
+      "title": "Data Analyst",
+      "location": "Lviv",
+      "snippet": "Analyse...",
+      "salary": "",
+      "source": "example.com",
+      "type": "",
+      "link": "https://ua.jooble.org/desc/9876543210",
+      "company": "",
+      "updated": ""
+    }
+  ]
+}

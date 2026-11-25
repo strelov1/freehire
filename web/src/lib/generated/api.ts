@@ -2028,24 +2028,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/jobs/{slug}/fit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Alias of `getMatchAnalysis`. */
-        get: operations["getJobFit"];
-        put?: never;
-        /** @description Alias of `runMatchAnalysis`. */
-        post: operations["runJobFit"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/jobs/{slug}/ghost-report": {
         parameters: {
             query?: never;
@@ -16729,77 +16711,6 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["Interaction"];
                     };
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    getJobFit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The request has succeeded. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FitAnalysisResponse"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    runJobFit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The request has succeeded. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FitAnalysisResponse"];
-                };
-            };
-            /** @description Client error */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FitRefusal"];
                 };
             };
             /** @description An unexpected error response. */

@@ -3,7 +3,7 @@
 ## Scope
 
 The multi-employer feeds: job boards and public employment services that list postings from
-many companies, so each posting names its own employer. Today: `adzuna` and `careerjet` (keyed search APIs),
+many companies, so each posting names its own employer. Today: `adzuna`, `careerjet` and `jooble` (keyed search APIs),
 `eures` (the EU network, board = country), `jobnet` (Denmark), `jobtech` (Sweden's JobSearch
 stream) and `nofluffjobs` (Poland). The rest of the family (the SEEK network, the Russian, BR
 and PL boards) still lives in `sources` and moves here one PR at a time (#4586).
@@ -17,8 +17,8 @@ and PL boards) still lives in `sources` and moves here one PR at a time (#4586).
   family**: `jobnet` lists its whole catalogue (`FullCatalog`), `eures` reads each country
   board to its stated total (`FullBoardListing`), `jobtech` closes its own postings from its
   stream (`SelfClosing`), `adzuna` reads only the newest slice and leaves removals to
-  `cmd/adzuna-liveness` (`LivenessProbed`, a 14-day `SweepGrace`), and `nofluffjobs` relies
-  on the default sweep. Read the marker's doc comment in `sources/markers.go` before granting
+  `cmd/adzuna-liveness` (`LivenessProbed`, a 14-day `SweepGrace`), and `jooble` is bounded like adzuna but has no probe, so it takes no marker (only the 14-day
+  `SweepGrace` and `cmd/liveness`'s age rule), and `nofluffjobs` relies on the default sweep. Read the marker's doc comment in `sources/markers.go` before granting
   one to a new member.
 - **Import `sources/kit` (and `applyform`) and nothing else of ingest**, the same rule as
   every family (`.golangci.yml`, rule `sources-families`).
@@ -29,4 +29,5 @@ and PL boards) still lives in `sources` and moves here one PR at a time (#4586).
   public egress IP, its required `user_ip`). Its urls are click-tracking links, so like `adzuna` it
   cannot be probed: a 14-day `SweepGrace`, and `cmd/liveness` age-expires it
   (`expireDespiteRegisteredPrefixes`; optional there, so a liveness host needs no credential).
-- Provider notes: [adzuna](../providers/adzuna.md), [careerjet](../providers/careerjet.md), [jobnet](../providers/jobnet.md).
+- **`jooble` is credential-gated** on `JOOBLE_API_KEY`. Its `link` is a tracking URL with no probe: a 14-day `SweepGrace`, and `cmd/liveness` age-expires it (optional there, so a liveness host needs no key).
+- Provider notes: [adzuna](../providers/adzuna.md), [careerjet](../providers/careerjet.md), [jooble](../providers/jooble.md), [jobnet](../providers/jobnet.md).
