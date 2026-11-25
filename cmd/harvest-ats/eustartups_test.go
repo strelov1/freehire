@@ -158,6 +158,7 @@ func TestWalkEUSResumes(t *testing.T) {
 }
 
 func TestEUSFetcher(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	if _, err := eusFetcher(); err == nil {
 		t.Error("no SCRAPLING_FETCH_URL: want an error")
 	}
