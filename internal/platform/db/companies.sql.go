@@ -274,6 +274,28 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 	return i, err
 }
 
+const getCompanySite = `-- name: GetCompanySite :one
+SELECT COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(company_site_host(company_info), '')::text AS host
+FROM companies
+WHERE slug = $1
+`
+
+type GetCompanySiteRow struct {
+	Website string `json:"website"`
+	Host    string `json:"host"`
+}
+
+// A company's site as recorded (company_info website, else homepage, trimmed the way
+// ListCompaniesBySiteHost trims it) and that site's bare host; ” for either when none.
+// The job detail names the employer's site and logo from it.
+func (q *Queries) GetCompanySite(ctx context.Context, slug string) (GetCompanySiteRow, error) {
+	row := q.db.QueryRow(ctx, getCompanySite, slug)
+	var i GetCompanySiteRow
+	err := row.Scan(&i.Website, &i.Host)
+	return i, err
+}
+
 const insertMissingCompaniesForSlugs = `-- name: InsertMissingCompaniesForSlugs :execrows
 INSERT INTO companies (slug, name)
 SELECT DISTINCT ON (j.company_slug) j.company_slug, j.company

@@ -62,8 +62,8 @@ model Job {
   application_deadline?: plainDate;
 
   /**
-   * The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
-   * Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+   * The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever,
+   * Ashby, Gem, Recruitee and Employment Hero state one). Absent when the source states none; not a taxonomy, so values differ
    * between employers.
    */
   team?: string;
@@ -171,6 +171,24 @@ model Job {
    * ends at the job. `url` stays the organic link.
    */
   sponsored_url?: string;
+
+  /**
+   * The employment type, the same value as `enrichment.employment_type`, lifted to the top
+   * level. Served by `getJob` only; absent when not known.
+   */
+  employment_type?: string;
+
+  /** The pay range, the same values as `enrichment.salary_*`. Served by `getJob` only; absent when no bound is stated. */
+  salary?: JobSalary;
+
+  /** The employer's own site as its company record states it. Served by `getJob` only; absent when none is on record. */
+  company_website?: string;
+
+  /**
+   * The employer's logo through freehire's logo proxy, resolved by the site's domain. The
+   * proxy answers 404 when it has no mark. Served by `getJob` only, beside `company_website`.
+   */
+  company_logo?: string;
 
   posted_at?: utcDateTime | null;
 
@@ -374,6 +392,17 @@ model JobFacetCounts {
    */
   @maxItems(50)
   top_companies?: TopCompany[];
+}
+
+/** A posting's pay range: either bound may be absent, never both. */
+model JobSalary {
+  min?: integer;
+  max?: integer;
+
+  /** ISO 4217 (e.g. `USD`). */
+  currency?: string;
+
+  period?: string;
 }
 
 /** The smallest and largest value of one continuous facet among the matching postings. */

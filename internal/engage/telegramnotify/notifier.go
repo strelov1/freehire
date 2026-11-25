@@ -10,6 +10,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 )
 
 // MaxMessageLen is Telegram's sendMessage text limit, in UTF-16 code units. Exported for every
@@ -162,9 +163,13 @@ func (n *Notifier) jobLine(j notify.DigestJob) string {
 	return b.String()
 }
 
-// applyURL is the freehire job page for a digest job, tagged with a telegram UTM source. Slugs
-// are our own normalized values, so no escaping.
+// applyURL is the job's click redirect to the employer, counted as a telegram click. A job that
+// has no employer destination (direct-apply or private) keeps its page, tagged with a telegram UTM source. Slugs are
+// our own normalized values, so no escaping.
 func (n *Notifier) applyURL(j notify.DigestJob) string {
+	if !j.StaysOnSite {
+		return outboundurl.ApplyURL(j.Slug, outboundurl.SrcTelegram)
+	}
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=telegram-bot"
 }
 

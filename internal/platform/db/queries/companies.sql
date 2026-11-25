@@ -143,6 +143,15 @@ WHERE slug > sqlc.arg(after_slug) AND job_count > 0
 ORDER BY slug
 LIMIT sqlc.arg(batch_size);
 
+-- name: GetCompanySite :one
+-- A company's site as recorded (company_info website, else homepage, trimmed the way
+-- ListCompaniesBySiteHost trims it) and that site's bare host; '' for either when none.
+-- The job detail names the employer's site and logo from it.
+SELECT COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(company_site_host(company_info), '')::text AS host
+FROM companies
+WHERE slug = $1;
+
 -- name: GetCompany :one
 -- SELECT * (not an explicit column list) so the generated row stays db.Company as
 -- the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
