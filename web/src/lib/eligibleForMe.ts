@@ -1,6 +1,6 @@
 // The "Eligible for me" location filter: resolves what geography a visitor is
 // plausibly eligible for, and what that resolves to in terms of the existing
-// `countries`/`regions` facet values (see openspec/changes/eligible-for-me-location-filter).
+// `countries`/`regions` facet values (see openspec/changes/archive/2026-09-09-eligible-for-me-location-filter).
 //
 // Pure and free of any store shape, like geoScope.ts: callers pass in what they
 // already hold (a profile country, an edge-derived region, the currently-included

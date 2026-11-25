@@ -11,15 +11,16 @@ complete description without a per-result follow-up fetch — while the SPA-faci
 
 The system SHALL expose `GET /api/v1/agent/jobs/search` as a public
 (unauthenticated) endpoint that runs the same job search as `GET /api/v1/jobs/search`:
-it SHALL accept the same free-text query `q`, the same facet filters, sort,
-semantic ratio, and `limit`/`offset` pagination, and SHALL apply the same
-pagination-window guard. Ranking, faceting, pagination, and the estimated total
-SHALL be produced by the search index exactly as the public search endpoint
-produces them. The response SHALL use the standard list envelope
-`{"data": [...], "meta": {...}}`, where `data` is the matched jobs and `meta`
-carries at least the estimated total hit count and the applied `limit`/`offset`.
-Each result SHALL identify its job by `public_slug` and SHALL NOT include the
-internal numeric `id`.
+it SHALL accept the same free-text query `q` (with the same OR-of-tokens /
+order-independent-AND-of-tokens matching semantics and the same `q_fields`
+field-scoping parameter), the same facet filters, sort, semantic ratio, and
+`limit`/`offset` pagination, and SHALL apply the same pagination-window guard.
+Ranking, faceting, pagination, and the estimated total SHALL be produced by the
+search index exactly as the public search endpoint produces them. The response
+SHALL use the standard list envelope `{"data": [...], "meta": {...}}`, where
+`data` is the matched jobs and `meta` carries at least the estimated total hit
+count and the applied `limit`/`offset`. Each result SHALL identify its job by
+`public_slug` and SHALL NOT include the internal numeric `id`.
 
 Unlike the public search endpoint, each result's `description` SHALL be the job's
 **full** description, read verbatim from Postgres and keyed by the result's
@@ -35,6 +36,13 @@ index served and SHALL NOT be dropped from the response.
 - **THEN** the matched, ranked, paginated results and the `meta` totals are those
   the search index produces for the same query and filters, in the standard
   `{"data": [...], "meta": {...}}` envelope
+
+#### Scenario: q_fields restricts matching identically to the public endpoint
+
+- **WHEN** a client requests
+  `GET /api/v1/agent/jobs/search?q=systems&q_fields=title`
+- **THEN** only jobs whose `title` matches "systems" are returned, the same
+  restriction `GET /api/v1/jobs/search?q=systems&q_fields=title` applies
 
 #### Scenario: Results carry the full description, not the preview
 

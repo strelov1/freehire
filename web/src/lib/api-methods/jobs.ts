@@ -131,7 +131,7 @@ export function jobsApi({ call, request, requestData, baseUrl }: Http) {
   }
 
   /** The same-origin URL for the homepage's live "recently added jobs" SSE feed
-   *  (public, no cookie needed — see openspec/changes/add-homepage-recent-jobs-feed). */
+   *  (public, no cookie needed — see openspec/changes/archive/2026-09-07-add-homepage-recent-jobs-feed). */
   function recentJobsFeedUrl(): string {
     return `${baseUrl}/api/v1/feed/recent`;
   }

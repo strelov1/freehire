@@ -10,7 +10,7 @@ vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 // The block reports; it does not act. `Tailor my CV` moved to the page's CTA row, so
 // anything this component still fetched or still said about the tailoring allowance would
 // be describing a button a screen above it — see
-// openspec/changes/move-tailor-cv-to-job-cta. `api` is mocked to a getter that throws
+// openspec/changes/archive/2026-09-23-move-tailor-cv-to-job-cta. `api` is mocked to a getter that throws
 // rather than to a vi.fn(): a spy would let a surviving call pass this file and fail
 // somewhere else, while this names the component that made it.
 vi.mock('#lib/api.js', () => ({

@@ -3,17 +3,23 @@
 ## Purpose
 TBD - created by archiving change email-notification-channel. Update Purpose after archive.
 ## Requirements
-
 ### Requirement: Render a subscription digest to an email
 
 The system SHALL render a filter-subscription digest into an email with a subject
 naming the saved search and its new-match count, an HTML body, and a plain-text
 alternative. Each listed job SHALL link to its on-platform freehire job page
-(`<origin>/jobs/<slug>`), never to a source URL. The listed jobs SHALL be capped
-to a configured maximum with the remainder summarized as an "and N more" tail, so
-a large digest cannot produce an unbounded message. All job-, company-, salary-,
-and saved-search-name text SHALL be HTML-escaped in the HTML body because it is
-user- or source-derived.
+(`<origin>/jobs/<slug>`), never to a source URL. The body SHALL list at most ten
+jobs with the remainder summarized as an "and N more" tail, so a large digest reads
+as a notification rather than as a page. The subject's count SHALL remain the true
+match count, not the number listed. All job-, company-, salary-, and
+saved-search-name text SHALL be HTML-escaped in the HTML body because it is user- or
+source-derived.
+
+The "and N more" tail SHALL link to the digest's own matched-jobs page,
+`<origin>/my/notifications/<id>/jobs`, where the full match set is recorded — not to
+the notification section's landing page. When the digest carries no notification id
+(its in-app recording failed), the tail SHALL fall back to `<origin>/my/notifications`
+so the mail is never sent without a destination.
 
 #### Scenario: Digest renders subject, HTML, and text
 
@@ -22,8 +28,18 @@ user- or source-derived.
 
 #### Scenario: Oversized digest is capped with a summary tail
 
-- **WHEN** a digest lists more jobs than the configured cap
-- **THEN** the body shows the capped number of jobs followed by an "and N more" summary rather than every job
+- **WHEN** a digest of 67 matched jobs is rendered for email
+- **THEN** the HTML and text bodies each list 10 jobs followed by an "and 57 more" summary rather than every job, and the subject still names 67
+
+#### Scenario: The tail links to the digest's matched-jobs page
+
+- **WHEN** a digest carrying notification id 42 is rendered with jobs omitted from the listing
+- **THEN** the tail in both the HTML and text bodies links to `<origin>/my/notifications/42/jobs`
+
+#### Scenario: A digest with no notification id still renders a tail
+
+- **WHEN** a digest whose in-app recording failed is rendered with jobs omitted from the listing
+- **THEN** the tail links to `<origin>/my/notifications` and the email is otherwise unchanged
 
 #### Scenario: User and source text is escaped
 
@@ -106,3 +122,4 @@ that URL itself; it renders what it is handed.
 
 - **WHEN** a mail is rendered as essential
 - **THEN** the footer shows no unsubscribe link and no settings link
+

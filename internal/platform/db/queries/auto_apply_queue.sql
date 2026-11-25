@@ -40,7 +40,7 @@ RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, 
 
 -- name: ClaimAutoApplyPreviewBatch :many
 -- Claim a batch of tailored entries that have no resolved answer preview yet, for
--- cmd/auto-apply's own second claim pass (openspec/changes/auto-apply-review-tracking).
+-- cmd/auto-apply's own second claim pass (openspec/changes/archive/2026-09-05-auto-apply-review-tracking).
 -- Mirrors ClaimAutoApplyBatch in every mechanical respect (FOR UPDATE OF q SKIP LOCKED, the
 -- same lease predicate on claimed_at) but a disjoint predicate: review_decision IS NULL here
 -- (vs. = 'approved' there), so an entry is never claimable by both queries at once and the
@@ -170,7 +170,7 @@ WHERE id = sqlc.arg(id);
 
 -- name: SetAutoApplyResolvedPreview :one
 -- Persists the answer-preview snapshot cmd/auto-apply's second claim pass computes once
--- tailoring is done (openspec/changes/auto-apply-review-tracking), so the candidate's review
+-- tailoring is done (openspec/changes/archive/2026-09-05-auto-apply-review-tracking), so the candidate's review
 -- reads an exact, previously-computed snapshot rather than a value approximated or
 -- recomputed when they open the drawer. Guarded by review_decision IS NULL, mirroring
 -- SetAutoApplyTailoredCV's own guard: a stale or retried pass for an already-decided entry
@@ -216,7 +216,7 @@ WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
 
 -- name: EnqueueAutoApply :one
 -- Creates the candidate-facing entry that starts the tailor-then-review sequence
--- (openspec/changes/auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
+-- (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger). ON CONFLICT DO NOTHING against the
 -- existing UNIQUE (user_id, job_id) (migration 0116) rather than a SELECT-then-INSERT: a
 -- double-click or a page reload racing this same request is expected, common traffic here,
 -- not a fault, and the constraint is the only thing that closes the window between a
@@ -231,7 +231,7 @@ RETURNING id;
 -- name: GetAutoApplyQueueEntryForJob :one
 -- The caller's own existing auto-apply entry for one job, if any — the conflict-read path
 -- for EnqueueAutoApply, and the read behind the job detail response's own auto-apply
--- status field (openspec/changes/auto-apply-submit-trigger). review_decision distinguishes
+-- status field (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger). review_decision distinguishes
 -- a live, undecided entry from a permanently declined one; pgx.ErrNoRows means no attempt
 -- exists yet for this (user, job) pair.
 --
@@ -241,7 +241,7 @@ RETURNING id;
 -- these two columns, both call sites would read a permanently stuck submission as
 -- indistinguishable from a healthy one still in flight.
 --
--- tailored_cv_id, unmapped, and resolved_preview (openspec/changes/auto-apply-review-tracking)
+-- tailored_cv_id, unmapped, and resolved_preview (openspec/changes/archive/2026-09-05-auto-apply-review-tracking)
 -- ride along on the same row read rather than a second query: they are exactly what the
 -- tracker drawer's own auto-apply banner needs (the seven-value status, the answer preview, the
 -- unmapped question list), and this is already "the caller's own existing auto-apply entry

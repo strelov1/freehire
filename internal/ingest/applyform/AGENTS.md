@@ -24,7 +24,7 @@ on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue dra
 - **The store now has the consumer it was built for**: `internal/api/atsapply`'s auto-apply
   submission path reads a captured form to resolve and fill it, and — for a provider with no
   live schema fetcher (Recruitee) — `Client.fetchSchema`'s stored-form fallback reads it as
-  the ONLY source (`openspec/changes/atsapply-recruitee-stored-schema`). display.go remains a
+  the ONLY source (`openspec/changes/archive/2026-11-25-atsapply-recruitee-stored-schema`). display.go remains a
   second, display-only reader wanting almost none of the row: the question text plus one word
   about the answer. It drops hidden/info/demographic/consent controls and folds the standard
   fields (name, email, CV) into one `basics` line, keyed on the identifiers our own mappers

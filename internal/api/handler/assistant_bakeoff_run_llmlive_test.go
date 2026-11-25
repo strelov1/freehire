@@ -17,7 +17,7 @@
 //
 // The report lands in .cache/ (not in git) and carries every run's tailored CV, because
 // whether a CV is any good is a judgement no number here makes. See
-// openspec/changes/assistant-model-bakeoff/design.md.
+// openspec/changes/archive/2026-09-08-assistant-model-bakeoff/design.md.
 package handler
 
 import (

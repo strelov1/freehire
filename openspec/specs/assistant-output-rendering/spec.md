@@ -10,17 +10,18 @@ the sanitizer applied to model markdown before `{@html}`, and the CSP image allo
 ## Requirements
 ### Requirement: Assistant model output renders as inert markup
 
-The assistant SHALL render model output through a sanitizer policy that strips every element and
-URI scheme capable of triggering a network request or executing code, because model output is
-untrusted: the model reads job descriptions, arbitrary browsed pages, and other text an attacker
-controls end to end, so anything it writes may be an attacker's words in the model's mouth.
+Every SPA surface that renders untrusted model prose as markup — the assistant's answer body and
+thinking block, and the fit-analysis verdict card — SHALL run that text through a sanitizer policy
+that strips every element and URI scheme capable of triggering a network request or executing
+code. Model output is untrusted: the model reads job descriptions, arbitrary browsed pages, and
+other text an attacker controls end to end, so anything it writes may be an attacker's words in the
+model's mouth.
 
 The policy MUST drop `img`, `picture`, `source`, `video`, `audio`, `iframe`, `object`, `embed`,
 `form`, `svg`, and `use`, and MUST admit only the `http`, `https`, and `mailto` URI schemes plus
-relative URLs. It applies to every sink that renders model output as markup — the answer body and
-the thinking block alike — and to partial output during streaming, not only to the settled turn.
-This mirrors the ban the ingest sanitizer already applies to job description HTML, and for the
-same reason: a rendered image is a request the viewer never asked to make.
+relative URLs. It applies to every such sink and to partial output during streaming, not only to
+settled content. This mirrors the ban the ingest sanitizer already applies to job description HTML,
+and for the same reason: a rendered image is a request the viewer never asked to make.
 
 Ordinary prose formatting is unaffected: headings, lists, tables, emphasis, code, and links still
 render, and links the model writes still open in a new tab.
@@ -60,6 +61,11 @@ render, and links the model writes still open in a new tab.
 - **WHEN** the model writes headings, a bullet list, bold text, a code block, and an `https` link
 - **THEN** all of them render, and the link carries `target="_blank"` and `rel="noopener noreferrer"`
 
+#### Scenario: The fit verdict uses the same policy
+
+- **WHEN** a fit-analysis recommendation containing a markdown image is rendered on the analysis page
+- **THEN** the verdict card contains no `img` element and the browser issues no request to that host
+
 ### Requirement: The frontend CSP restricts image loads to known hosts
 
 The frontend Content-Security-Policy SHALL declare an `img-src` allowlist, so that an image the
@@ -86,3 +92,4 @@ introducing it without enumerating all three would silently break error reportin
 
 - **WHEN** the CSP is served
 - **THEN** it declares no `connect-src` and no `default-src`, leaving Sentry, GA, and PostHog delivery unrestricted
+

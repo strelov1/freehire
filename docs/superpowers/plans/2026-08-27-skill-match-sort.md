@@ -8,7 +8,7 @@
 > existed, drawing on five alias tiers rather than two); the SPA had no sort control at
 > all to extend, so one was restored; and the weights are anchored on the commonest
 > skill rather than on a catalogue total, because the sum of per-skill counts inflates
-> with catalogue breadth and flattens the rarity contrast. `openspec/changes/skill-match-sort/`
+> with catalogue breadth and flattens the rarity contrast. `openspec/changes/archive/2026-08-28-skill-match-sort/`
 > carries the current specification.
 >
 > The generator also ended up stricter than sketched here: it takes its path as an

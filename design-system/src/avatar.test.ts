@@ -103,7 +103,7 @@ describe('Avatar', () => {
     expect(must(container.querySelector('img')).getAttribute('alt')).toBe('');
   });
 
-  // Promoted from CompanyLogo (see openspec/changes/promote-shared-components-to-design-system).
+  // Promoted from CompanyLogo (see openspec/changes/archive/2026-08-13-promote-shared-components-to-design-system).
   describe('shape', () => {
     it('is a circle by default', () => {
       const el = circle('Ada Lovelace');

@@ -107,7 +107,7 @@ Superseded during implementation, after code review: `ProductHuntBanner.svelte` 
 changes, and `web/src/lib/phBanner.svelte.ts` is added. A dismissal snapshot taken at the
 toast's mount would not fire in the session where the visitor closed the strip — which,
 before the launch day, is the only path to the toast. The authoritative record is
-`openspec/changes/github-star-support-toast/design.md`.
+`openspec/changes/archive/2026-08-02-github-star-support-toast/design.md`.
 
 ## Copy
 
