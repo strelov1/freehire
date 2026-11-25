@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources/kit"
@@ -57,6 +58,10 @@ func (r recruitee) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, er
 			Description  string          `json:"description"`
 			Requirements string          `json:"requirements"`
 			Salary       recruiteeSalary `json:"salary"`
+			// EmploymentTypeCode and Department are what the board states about the role;
+			// see recruiteeEmploymentType for the codes.
+			EmploymentTypeCode string `json:"employment_type_code"`
+			Department         string `json:"department"`
 			// The same listing also describes the application form, which is why
 			// Recruitee is the one provider whose form costs nothing to capture.
 			applyform.RecruiteeOffer
@@ -84,6 +89,9 @@ func (r recruitee) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, er
 			Remote:      o.Remote,
 			WorkMode:    kit.WorkModeFromRemoteHybrid(o.Remote, o.Hybrid),
 			PostedAt:    kit.ParseSpaceTime(o.CreatedAt),
+			// The department the board files the offer under, verbatim.
+			Team:           strings.TrimSpace(o.Department),
+			EmploymentType: recruiteeEmploymentType(o.EmploymentTypeCode),
 		}
 		if o.Salary.Period != nil && kit.IsSalaryPeriod(*o.Salary.Period) {
 			min, max := recruiteeSalaryPart(o.Salary.Min), recruiteeSalaryPart(o.Salary.Max)
@@ -98,6 +106,29 @@ func (r recruitee) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, er
 		jobs = append(jobs, job)
 	}
 	return jobs, nil
+}
+
+// recruiteeEmploymentType maps Recruitee's employment_type_code onto the freehire
+// vocabulary. The codes seen across 60 boards (2026-11-24) fold a schedule and a term into
+// one value — fulltime_permanent, parttime_fixed_term, parttime_minijob — so the schedule
+// prefix decides. "temporary" says how long, not on what terms, so it states nothing, as in
+// the sources package's schemaFixedTermEmploymentType; an apprenticeship files as an internship
+// as freework's does.
+func recruiteeEmploymentType(code string) string {
+	code = strings.ToLower(strings.TrimSpace(code))
+	switch {
+	case strings.HasPrefix(code, "fulltime"):
+		return "full_time"
+	case strings.HasPrefix(code, "parttime"):
+		return "part_time"
+	}
+	switch code {
+	case "internship", "apprenticeship":
+		return "internship"
+	case "contract", "freelance":
+		return "contract"
+	}
+	return ""
 }
 
 // recruiteeSalaryPart parses one salary bound — a JSON string, not a number, on
