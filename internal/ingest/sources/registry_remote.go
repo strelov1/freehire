@@ -24,5 +24,7 @@ func remoteBoardSources(c HTTPClient) []Source {
 		NewRemotive(c),
 		NewRemotedotcom(c),
 		NewRemotli(c),
+		// RemoteJobsFinder: US remote/hybrid board; flat sitemap + posting-page JobPosting. See remotejobsfinder.go.
+		NewRemoteJobsFinder(c),
 	}
 }
