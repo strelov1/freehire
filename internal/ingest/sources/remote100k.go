@@ -24,6 +24,10 @@ const (
 	// 0.3 s drew no refusal).
 	remote100kRequestInterval = time.Second
 	remote100kMaxNewPerRun    = 1500
+	// remote100kMaxAge: the site never retires a posting (every page answers 200 and stays in the
+	// sitemap), and of the 357 open ones past 90 days on 2026-11-25 the employer's ATS had closed
+	// 183 and kept 104.
+	remote100kMaxAge = 90 * 24 * time.Hour
 )
 
 var remote100kPostingPath = regexp.MustCompile(`^https://remote100k\.com/remote-job/([a-z0-9][a-z0-9-]*)/?$`)
@@ -60,7 +64,7 @@ func remote100kApplyURL(root *xhtml.Node) string {
 // NewRemote100k builds the adapter over the given client.
 func NewRemote100k(c sitemapBoardHTTP) Source {
 	b := newSitemapBoard(c, "remote100k", remote100kSitemapURL, "", remote100kID, remote100kRequestInterval, remote100kMaxNewPerRun)
-	b.applyURL, b.applicantCountries = remote100kApplyURL, true
+	b.applyURL, b.applicantCountries, b.maxAge = remote100kApplyURL, true, remote100kMaxAge
 	return remote100k{b}
 }
 

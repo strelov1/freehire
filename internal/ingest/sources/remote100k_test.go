@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 )
 
 // The fixtures are trimmed from live remote100k.com responses fetched 2026-11-24: the sitemap cut
@@ -28,6 +29,8 @@ func newRemote100kFake(t *testing.T) *sitemapBoardFake {
 func fastRemote100k(f *sitemapBoardFake) remote100k {
 	s := NewRemote100k(f).(remote100k)
 	s.limiter = noWait{}
+	// The CA fixture is dated 2026-06-18: inside the age bound only before mid-September.
+	s.now = func() time.Time { return time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC) }
 	return s
 }
 
@@ -89,29 +92,34 @@ func TestRemote100kMapsPostingsAndDropsAGonePage(t *testing.T) {
 	}
 }
 
-func TestRemote100kRefreshesStoredPostingsAndBoundsNewPages(t *testing.T) {
+func TestRemote100kRereadsStoredPostingsAndBoundsOnlyNewPages(t *testing.T) {
 	f := newRemote100kFake(t)
 	s := fastRemote100k(f)
-	s.maxNew = 1
+	s.maxNew = 0
 	seen := func(id string) bool { return id == remote100kID(remote100kHumanaURL) }
 	jobs, err := s.FetchNew(context.Background(), CompanyEntry{}, seen)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.fetched(remote100kHumanaURL) {
-		t.Error("a stored posting's page was requested")
+	if f.fetched(remote100kCAURL) {
+		t.Error("a new page past the bound of 0 was requested")
 	}
-	pages := 0
-	for _, u := range f.got {
-		if remote100kID(u) != "" {
-			pages++
-		}
+	if len(jobs) != 1 || jobs[0].SeenRefresh || jobs[0].ExternalID != remote100kID(remote100kHumanaURL) || jobs[0].PostedAt == nil {
+		t.Errorf("the stored posting was not re-read in full: %+v", jobs)
 	}
-	if pages != 1 {
-		t.Errorf("fetched %d posting pages, want the bound of 1", pages)
+}
+
+func TestRemote100kDropsPostingsPastTheAgeBound(t *testing.T) {
+	f := newRemote100kFake(t)
+	s := fastRemote100k(f)
+	s.now = func() time.Time { return time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC) }
+	// Both stored: the 160-day-old one must be left out so the stale sweep closes it.
+	jobs, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(jobs) == 0 || !jobs[0].SeenRefresh {
-		t.Errorf("stored posting not refreshed: %+v", jobs)
+	if len(jobs) != 1 || jobs[0].URL != remote100kHumanaURL {
+		t.Errorf("got %+v, want only the fresh Humana posting", jobs)
 	}
 }
 

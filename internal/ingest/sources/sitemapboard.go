@@ -43,9 +43,15 @@ type sitemapBoard struct {
 	// applicantCountries reads the countries from applicantLocationRequirements when jobLocation
 	// names none, for a remote board that states where the work may be done from.
 	applicantCountries bool
-	http               sitemapBoardHTTP
-	limiter            waiter
-	maxNew             int
+	// maxAge drops a posting whose datePosted is older, for a board that keeps every posting in
+	// its sitemap long after the employer closed it. It also re-reads the stored postings each
+	// run instead of refreshing them by identity, since a stored posting ages too and only its
+	// page states its date; one dropped there is left out of the run, so the stale sweep closes it.
+	maxAge  time.Duration
+	now     func() time.Time
+	http    sitemapBoardHTTP
+	limiter waiter
+	maxNew  int
 }
 
 type sitemapBoardHTTP interface {
@@ -62,6 +68,7 @@ func newSitemapBoard(c sitemapBoardHTTP, provider, sitemapURL, country string, i
 		id:         id,
 		country:    country,
 		http:       c,
+		now:        time.Now,
 		limiter:    rate.NewLimiter(rate.Every(every), 1),
 		maxNew:     maxNew,
 	}
@@ -87,15 +94,18 @@ func (b sitemapBoard) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 	if len(locs) == 0 {
 		return nil, fmt.Errorf("%s: sitemap names no posting", b.provider)
 	}
-	var unseen []string
+	var unseen, stored []string
 	var jobs []Job
 	for _, loc := range locs {
 		id := b.id(loc)
-		if seen(id) {
+		switch {
+		case seen(id) && b.maxAge > 0:
+			stored = append(stored, loc)
+		case seen(id):
 			jobs = append(jobs, Job{ExternalID: id, URL: loc, SeenRefresh: true})
-			continue
+		default:
+			unseen = append(unseen, loc)
 		}
-		unseen = append(unseen, loc)
 	}
 	// A random slice, not the sitemap's first: a page that stays unreadable or is rejected stays
 	// unseen, and a fixed prefix would hand it the same slot every run while later pages starve.
@@ -104,6 +114,8 @@ func (b sitemapBoard) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 		log.Printf("%s: %d new postings past this run's bound of %d, deferred to later runs", b.provider, deferred, b.maxNew)
 		unseen = unseen[:b.maxNew]
 	}
+	// Stored postings are outside the bound: one left unread would be closed as gone.
+	unseen = append(unseen, stored...)
 	var answered atomic.Int64
 	read := fetchDetails(unseen, sitemapBoardDetailWorkers, func(loc string) (Job, bool) {
 		job, ok, err := b.detail(ctx, loc)
@@ -156,6 +168,9 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error)
 		EmploymentType: schemaEmploymentRaw(p.EmploymentType),
 		PostedAt:       NotFuture(parseRFC3339OrDate(p.DatePosted)),
 		IsTechHint:     b.techHint,
+	}
+	if b.maxAge > 0 && job.PostedAt != nil && b.now().Sub(*job.PostedAt) > b.maxAge {
+		return Job{}, false, nil
 	}
 	if b.parseDeadline != nil {
 		job.ApplicationDeadline = b.parseDeadline(p.ValidThrough)
