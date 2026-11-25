@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/batchnotify"
 	"github.com/strelov1/freehire/internal/engage/deliverywindow"
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -22,7 +23,9 @@ type ReminderMessage struct {
 	JobTitle string
 	Company  string
 	Slug     string
-	URL      string
+	// StaysOnSite: the job has no employer destination (direct-apply or private), so its link
+	// stays the freehire page rather than the click redirect.
+	StaysOnSite bool
 	// UserID is whose reminder this is. It rides on the message because changing the Notifier
 	// interface (shared with nudge's and notify's four channels) for a per-batch value would be
 	// invasive; every message in a call carries the same value and the email transport reads it
@@ -206,7 +209,7 @@ func (r *Runner) collect(ctx context.Context, due []int64, stats *Stats) []*batc
 		}
 		b.ids = append(b.ids, id)
 		b.msgs = append(b.msgs, ReminderMessage{
-			JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, URL: info.URL,
+			JobTitle: info.Title, Company: info.Company, Slug: info.PublicSlug, StaysOnSite: info.IsPrivate || job.IsDirectApply(info.Source, info.ExternalID),
 			UserID: info.UserID,
 		})
 	}
