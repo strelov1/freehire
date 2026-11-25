@@ -49,7 +49,7 @@
 - [x] 4.2 Found on review (CodeRabbit): `AGENTS.md`'s `fullBoardListing` bar sentence read as
       prohibiting a page/offset cap outright ("no artificial page/offset cap"), when the actual
       rule — already correctly stated elsewhere in the same file's per-adapter notes, and in
-      `openspec/changes/teamtailor-listing-cap-fix`'s own spec delta — is that a cap is fine as
+      `openspec/changes/archive/2026-11-25-teamtailor-listing-cap-fix`'s own spec delta — is that a cap is fine as
       long as reaching it fails the crawl rather than succeeding partially. Tightened the
       wording so the general rule matches what every marked adapter (including `bayt`) actually
       does.

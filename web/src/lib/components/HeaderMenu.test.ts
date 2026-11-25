@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 // infrastructure at all (see jobActionStrip.test.ts's own comment: no Svelte
 // plugin, no DOM in vitest.config.ts).
 //
-// openspec/changes/split-header-profile-menu split the desktop profile/account
+// openspec/changes/archive/2026-09-16-split-header-profile-menu split the desktop profile/account
 // items and Log out off into HeaderProfileMenu.svelte, leaving this component's
 // own dropdown as site nav + theme toggle on desktop. The mobile drawer is
 // unchanged — same markup, now scoped with `sm:hidden` rather than removed.

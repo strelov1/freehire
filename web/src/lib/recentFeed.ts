@@ -41,7 +41,7 @@ export function pushFeedEntry(
 
 /** The card copy for an aggregated entry — explicit that the sample company shown
  *  is one of several, never a claim that all `count` postings came from it (see
- *  openspec/changes/add-homepage-recent-jobs-feed/design.md, "Aggregated entries do
+ *  openspec/changes/archive/2026-09-07-add-homepage-recent-jobs-feed/design.md, "Aggregated entries do
  *  not attribute a single company"). */
 export function aggregateLabel(entry: Pick<RecentFeedEvent, 'count'>): string {
   return `+${entry.count} more at other companies`;

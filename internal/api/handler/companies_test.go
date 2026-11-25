@@ -79,8 +79,8 @@ func TestCompanyListItemFromDocNormalizesAbsentCollections(t *testing.T) {
 // caller receives. Any change here is an API change and must be argued for, not merged as a
 // refactor.
 const (
-	goldenCompanyFull  = `{"slug":"euro-lab","name":"Euro Lab","job_count":12,"tagline":"We ship fridges","industries":["fintech"],"hq_country":"de","website":"https://eurolab.example","linkedin":"https://www.linkedin.com/company/euro-lab","collections":["yc"],"feedback_count":0,"feedback_rating_avg":null}`
-	goldenCompanyEmpty = `{"slug":"x","name":"X","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"collections":[],"feedback_count":0,"feedback_rating_avg":null}`
+	goldenCompanyFull  = `{"slug":"euro-lab","name":"Euro Lab","job_count":12,"tagline":"We ship fridges","industries":["fintech"],"hq_country":"de","website":"https://eurolab.example","linkedin":"https://www.linkedin.com/company/euro-lab","employee_count":null,"collections":["yc"],"feedback_count":0,"feedback_rating_avg":null}`
+	goldenCompanyEmpty = `{"slug":"x","name":"X","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"employee_count":null,"collections":[],"feedback_count":0,"feedback_rating_avg":null}`
 )
 
 // The endpoint has two backends and one response, so the assertion that matters is that they
@@ -124,7 +124,7 @@ func TestCompanyListItemJSONKeepsAbsenceShapes(t *testing.T) {
 // absent convention (see its doc comment) is only safe if a real, non-zero average
 // actually survives the round trip on both paths.
 func TestCompanyListItemJSONCarriesRating(t *testing.T) {
-	const golden = `{"slug":"euro-lab","name":"Euro Lab","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"collections":[],"feedback_count":3,"feedback_rating_avg":4.5}`
+	const golden = `{"slug":"euro-lab","name":"Euro Lab","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"employee_count":null,"collections":[],"feedback_count":3,"feedback_rating_avg":4.5}`
 	fromPostgres := companyListItemFromRow(db.ListCompaniesRow{
 		Slug: "euro-lab", Name: "Euro Lab", Industries: []string{}, Collections: []string{},
 		FeedbackCount: 3, FeedbackRatingAvg: pgtype.Float4{Float32: 4.5, Valid: true},
@@ -133,6 +133,19 @@ func TestCompanyListItemJSONCarriesRating(t *testing.T) {
 		Slug: "euro-lab", Name: "Euro Lab", FeedbackCount: 3, FeedbackRatingAvg: 4.5,
 	})
 
+	assertJSON(t, "postgres", &fromPostgres, golden)
+	assertJSON(t, "search", &fromSearch, golden)
+}
+
+// The headcount must agree between backends as well: a pgtype.Int4 on one, a *int32 on the other.
+func TestCompanyListItemJSONCarriesEmployeeCount(t *testing.T) {
+	const golden = `{"slug":"x","name":"X","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"employee_count":40,"collections":[],"feedback_count":0,"feedback_rating_avg":null}`
+	n := int32(40)
+	fromPostgres := companyListItemFromRow(db.ListCompaniesRow{
+		Slug: "x", Name: "X", Industries: []string{}, Collections: []string{},
+		EmployeeCount: pgtype.Int4{Int32: n, Valid: true},
+	})
+	fromSearch := companyListItemFromDoc(search.CompanyDocument{Slug: "x", Name: "X", EmployeeCount: &n})
 	assertJSON(t, "postgres", &fromPostgres, golden)
 	assertJSON(t, "search", &fromSearch, golden)
 }

@@ -41,12 +41,17 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     });
   }
 
-  /** Claim a company: resolves the name to a slug, refuses a public-webmail work email,
-   *  reserves the slug, and mails a verification code. Returns the pending account. */
-  async function claimCompany(companyName: string, workEmail: string): Promise<EmployerAccount> {
+  /** Claim a company, by the slug of one the catalogue lists or by a typed name: refuses a
+   *  public-webmail work email, reserves the company, and mails a verification code.
+   *  Returns the pending account. */
+  async function claimCompany(
+    company: { slug: string } | { name: string },
+    workEmail: string,
+  ): Promise<EmployerAccount> {
+    const target = 'slug' in company ? { company_slug: company.slug } : { company_name: company.name };
     return requestData<EmployerAccount>(
       '/api/v1/employer/claim',
-      jsonBody('POST', { company_name: companyName, work_email: workEmail }),
+      jsonBody('POST', { ...target, work_email: workEmail } satisfies components['schemas']['EmployerClaim']),
     );
   }
 

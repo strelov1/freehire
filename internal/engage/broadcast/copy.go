@@ -160,6 +160,44 @@ var campaigns = map[string]Campaign{
 				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
+	// The API plan letter: the same change as data-plan-endpoints, for the API plan, which got the
+	// /data/jobs endpoints a release later. Send it after the release that opens them to the API plan:
+	// before it, the endpoints it names answer 403 to these keys.
+	"api-plan-endpoints": {
+		// Name is the ledger key: renaming it would mail the audience a second time.
+		Name:        "api-plan-endpoints",
+		Subject:     "Original job links on your API plan moved to /data/jobs",
+		Preheader:   "If you read url from a job, switch to /data/jobs.",
+		Heading:     "Original job links moved to /data/jobs",
+		APIPlanOnly: true,
+		body: body("api-plan-endpoints", `
+{{template "p" "Hi — a change to the freehire API that touches your integration."}}
+{{template "p" "Job reads on the public API (/jobs, /jobs/search, /jobs/{slug}, company jobs and the MCP server) no longer carry the employer’s own link: url is empty and source_url is gone wherever apply_url, the freehire redirect to the same page, is set. Adzuna postings keep url, since it is Adzuna’s own page."}}
+{{template "lead" "Your API plan keeps both, on two new endpoints."}}
+{{template "p" "GET /api/v1/data/jobs/search and GET /api/v1/data/jobs/{slug} take the same parameters and return the same shape as /jobs/search and /jobs/{slug}, with url and source_url filled in. Call them with the same API key."}}
+{{template "p" "They are counted on their own: 1,200 requests a minute there, apart from the 1,200 your key gets everywhere else."}}
+{{template "p" "If your code reads url from a job, point it at /data/jobs. If you only use apply_url, nothing changes for you."}}
+{{template "button" (mailLink .DataDocsURL "Read the reference")}}
+{{template "muted" "Something breaks or you need more time? Reply to this — I read every one."}}`),
+		text: func(base string) string {
+			return "Hi — a change to the freehire API that touches your integration.\n\n" +
+				"Job reads on the public API (/jobs, /jobs/search, /jobs/{slug}, company jobs and the MCP\n" +
+				"server) no longer carry the employer's own link: url is empty and source_url is gone wherever\n" +
+				"apply_url, the freehire redirect to the same page, is set. Adzuna postings keep url, since it\n" +
+				"is Adzuna's own page.\n\n" +
+				"Your API plan keeps both, on two new endpoints.\n\n" +
+				"GET /api/v1/data/jobs/search and GET /api/v1/data/jobs/{slug} take the same parameters and\n" +
+				"return the same shape as /jobs/search and /jobs/{slug}, with url and source_url filled in.\n" +
+				"Call them with the same API key.\n\n" +
+				"They are counted on their own: 1,200 requests a minute there, apart from the 1,200 your key\n" +
+				"gets everywhere else.\n\n" +
+				"If your code reads url from a job, point it at /data/jobs. If you only use apply_url, nothing\n" +
+				"changes for you.\n\n" +
+				"Read the reference: " + base + "/docs/api/data\n\n" +
+				"Something breaks or you need more time? Reply to this — I read every one.\n\n" +
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
+		},
+	},
 }
 
 // brazilTimezones are the IANA zones of Brazil, including the legacy Brazil/* aliases a

@@ -88,9 +88,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+The API plan allows 1,200 requests per 60-second window. On the original-link endpoints (`/data/jobs/search`, `/data/jobs/{slug}`) each plan is counted apart: 1,200 for the API plan, 6,000 for the Data plan, which holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
 
-Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The `/data/jobs` endpoints serve both to either paid API plan. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -4840,7 +4840,8 @@ Starts a claim: reserves the company and mails a code to the work email.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `company_name` | string | no |  |
+| `company_name` | string | no | The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set. |
+| `company_slug` | string | no | The slug of a company the catalogue lists (`company_slug` of a job or company page). |
 | `work_email` | string | no |  |
 
 ```bash

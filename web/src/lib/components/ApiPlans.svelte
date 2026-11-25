@@ -64,6 +64,7 @@
         blurb: 'For a job board, a bot or an agent that reads the catalogue.',
         perks: [
           'Every search filter and company data',
+          'The original employer link of every job',
           'Store and show the postings in your product, under the data licence',
         ],
       },
@@ -71,7 +72,7 @@
         price: dataPrice,
         name: 'Data',
         blurb: 'For mirroring the catalogue at volume.',
-        perks: ['Everything in API', 'The original employer link of every job', 'Daily bulk catalogue files'],
+        perks: ['Everything in API', 'Daily bulk catalogue files'],
       },
     ].filter((c) => !!c);
   });

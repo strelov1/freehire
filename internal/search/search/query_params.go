@@ -175,6 +175,9 @@ func UnknownCompanyParams(v url.Values, alsoKnown []string) []UnknownParam {
 	for _, param := range alsoKnown {
 		known[param] = true
 	}
+	for _, r := range companyRangeParams {
+		known[r.param] = true
+	}
 	return unknownAgainst(v, known)
 }
 

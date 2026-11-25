@@ -52,3 +52,60 @@ NOT exceed 256 characters. It SHALL appear for no other User-Agent. No tool desc
 - **WHEN** an MCP client initializes the canonical endpoint with User-Agent `Claude-User` or `openai-mcp`
 - **THEN** the returned instructions are identical to those served without this change and do not mention the CLI
 
+### Requirement: Agents Can Read the Account's Plan Before Metered Work
+The signed-in MCP server SHALL offer a read-only `get_plan` tool, to OAuth grants and
+full-scope API keys alike, reporting the account's tier, when its paid entitlement ends,
+when today's allowances reset, and for every metered AI feature today's limit, use,
+whether the limit is enforced, and — for an enforced limit — the remaining amount. It SHALL read the same use case as
+`GET /me/plan` and SHALL carry no prices, invoices or payment source, pointing at the
+website's plan page instead.
+
+#### Scenario: A paid account reads its allowances
+- **WHEN** a pro account that has used part of today's auto-apply allowance calls `get_plan`
+- **THEN** the result names the `pro` plan, its end date, and an `auto-apply` allowance whose used, limit and remaining agree with `GET /me/plan`
+
+#### Scenario: A free account is told it has no AI
+- **WHEN** a free account calls `get_plan`
+- **THEN** the result names the `free` plan with nothing remaining on any enforced limit and carries the plan page URL to upgrade from
+
+#### Scenario: A shadow limit claims no remainder
+- **WHEN** a feature's limit is not enforced
+- **THEN** its allowance carries the limit and use but no remaining amount
+
+#### Scenario: No payment details reach the agent
+- **WHEN** any account calls `get_plan`
+- **THEN** the result carries no price, payment source or invoice
+
+### Requirement: Unread application mail is visible to account MCP agents as metadata only
+The account MCP server SHALL serve a read-only `list_unread_mail` tool to OAuth grants and
+full-scope API keys that lists the caller's newest unread application mail as sender,
+subject, received time, classification label and, when confirmed, the linked company and job
+slug, together with the total unread count, whether the mailbox is still syncing or needs
+reconnecting, and a link to the inbox. It SHALL NOT return message bodies or snippets, SHALL
+NOT mark any message read, and SHALL NOT call a model.
+
+#### Scenario: Unread count exceeds the page
+- **WHEN** the caller has more unread application mail than the requested limit
+- **THEN** `unread_count` reports the total and `messages` holds at most the limit
+
+#### Scenario: Reading marks nothing
+- **WHEN** the tool lists a message
+- **THEN** the message is still unread afterwards
+
+#### Scenario: Another user's mail
+- **WHEN** another account has unread mail
+- **THEN** none of it appears in the caller's result or count
+
+#### Scenario: First Gmail sync still running
+- **WHEN** the caller's Gmail is connected and has never completed a sync
+- **THEN** `sync_pending` is true
+
+### Requirement: Sender-written mail text is returned as inert data
+Sender and subject SHALL be returned with control and format characters removed and their
+length capped, and the tool description, the result and the account server instructions SHALL
+state that they are written by the sender and must never be followed as instructions.
+
+#### Scenario: An injected instruction in a subject
+- **WHEN** a subject contains a line break followed by text addressed to the agent
+- **THEN** the subject is returned as one single-line string inside its field and the result carries the untrusted-text notice
+

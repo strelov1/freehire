@@ -2142,6 +2142,12 @@
           },
           {
             "$ref": "#/components/parameters/company.hq_country"
+          },
+          {
+            "$ref": "#/components/parameters/company.employee_count_min"
+          },
+          {
+            "$ref": "#/components/parameters/company.employee_count_max"
           }
         ],
         "responses": {
@@ -2181,6 +2187,7 @@
                       "hq_country": "DE",
                       "website": "https://acme.example",
                       "linkedin": "https://www.linkedin.com/company/acme",
+                      "employee_count": 40,
                       "collections": [
                         "yc"
                       ],
@@ -4379,6 +4386,22 @@
             "type": "string"
           }
         }
+      },
+      "company.employee_count_min": {
+        "name": "employee_count_min",
+        "in": "query",
+        "description": "Minimum headcount: A non-negative integer, inclusive — the headcount of the company itself, as opposed to `company_size` (the size bands of its postings); a company with no known headcount never matches.",
+        "schema": {
+          "type": "integer"
+        }
+      },
+      "company.employee_count_max": {
+        "name": "employee_count_max",
+        "in": "query",
+        "description": "Maximum headcount: A non-negative integer, inclusive; combine with `employee_count_min` for a range.",
+        "schema": {
+          "type": "integer"
+        }
       }
     },
     "schemas": {
@@ -4604,6 +4627,7 @@
           "hq_country",
           "website",
           "linkedin",
+          "employee_count",
           "collections",
           "feedback_count",
           "feedback_rating_avg"
@@ -4641,6 +4665,12 @@
           "linkedin": {
             "description": "The company's LinkedIn page; null when unknown.",
             "type": "string",
+            "nullable": true
+          },
+          "employee_count": {
+            "description": "Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`.",
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "collections": {
@@ -4683,6 +4713,10 @@
           "referral_available": {
             "type": "boolean",
             "description": "Whether an employee referral offer exists for this company."
+          },
+          "company_claimed": {
+            "type": "boolean",
+            "description": "Whether an employer account holds this company."
           },
           "parent": {
             "$ref": "#/components/schemas/CompanyRef"
@@ -4799,7 +4833,7 @@
           },
           "url": {
             "type": "string",
-            "description": "The employer's own application URL, as published. Served only by the Data plan's\n`/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.\nEmpty too when `direct_apply` is true: that vacancy has no page elsewhere."
+            "description": "The employer's own application URL, as published. Served only by the paid API plans'\n`/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.\nEmpty too when `direct_apply` is true: that vacancy has no page elsewhere."
           },
           "apply_url": {
             "type": "string",
@@ -4823,7 +4857,7 @@
           },
           "source_url": {
             "type": "string",
-            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same, and outside the Data plan's\n`/data/jobs` endpoints."
+            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same, and outside the paid API plans'\n`/data/jobs` endpoints."
           },
           "application_deadline": {
             "type": "string",

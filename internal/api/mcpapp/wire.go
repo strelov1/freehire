@@ -44,7 +44,7 @@ type JobSummary struct {
 	Summary string `json:"summary,omitempty" jsonschema:"a short preview, not the full description"`
 	// Source names the board this posting was collected from. It travels with every result:
 	// a posting repeated without its source reads as though freehire were the employer. The
-	// employer's own link is not served here; the Data plan's REST endpoints carry it.
+	// employer's own link is not served here; the paid API plans' /data/jobs REST endpoints carry it.
 	Source string `json:"source" jsonschema:"the job board this posting was collected from"`
 	URL    string `json:"url" jsonschema:"the posting's page on freehire"`
 	// ApplyURL is the link to hand a person who wants to apply: it counts the click and sends

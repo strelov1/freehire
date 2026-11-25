@@ -6358,6 +6358,8 @@ type CompanyListItem struct {
 	Website NilString `json:"website"`
 	// The company's LinkedIn page; null when unknown.
 	Linkedin NilString `json:"linkedin"`
+	// Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`.
+	EmployeeCount NilInt64 `json:"employee_count"`
 	// Curated company tags; the catalogue card renders the backer marks from these.
 	Collections   []string `json:"collections"`
 	FeedbackCount int64    `json:"feedback_count"`
@@ -6405,6 +6407,11 @@ func (s *CompanyListItem) GetWebsite() NilString {
 // GetLinkedin returns the value of Linkedin.
 func (s *CompanyListItem) GetLinkedin() NilString {
 	return s.Linkedin
+}
+
+// GetEmployeeCount returns the value of EmployeeCount.
+func (s *CompanyListItem) GetEmployeeCount() NilInt64 {
+	return s.EmployeeCount
 }
 
 // GetCollections returns the value of Collections.
@@ -6465,6 +6472,11 @@ func (s *CompanyListItem) SetWebsite(val NilString) {
 // SetLinkedin sets the value of Linkedin.
 func (s *CompanyListItem) SetLinkedin(val NilString) {
 	s.Linkedin = val
+}
+
+// SetEmployeeCount sets the value of EmployeeCount.
+func (s *CompanyListItem) SetEmployeeCount(val NilInt64) {
+	s.EmployeeCount = val
 }
 
 // SetCollections sets the value of Collections.
@@ -10993,13 +11005,21 @@ func (s *EmployerApplicationsPage) SetMeta(val EmployerApplicationsMeta) {
 
 // Ref: #/components/schemas/EmployerClaim
 type EmployerClaim struct {
+	// The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set.
 	CompanyName OptString `json:"company_name"`
+	// The slug of a company the catalogue lists (`company_slug` of a job or company page).
+	CompanySlug OptString `json:"company_slug"`
 	WorkEmail   OptString `json:"work_email"`
 }
 
 // GetCompanyName returns the value of CompanyName.
 func (s *EmployerClaim) GetCompanyName() OptString {
 	return s.CompanyName
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *EmployerClaim) GetCompanySlug() OptString {
+	return s.CompanySlug
 }
 
 // GetWorkEmail returns the value of WorkEmail.
@@ -11010,6 +11030,11 @@ func (s *EmployerClaim) GetWorkEmail() OptString {
 // SetCompanyName sets the value of CompanyName.
 func (s *EmployerClaim) SetCompanyName(val OptString) {
 	s.CompanyName = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *EmployerClaim) SetCompanySlug(val OptString) {
+	s.CompanySlug = val
 }
 
 // SetWorkEmail sets the value of WorkEmail.

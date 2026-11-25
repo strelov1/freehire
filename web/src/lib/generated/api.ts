@@ -862,11 +862,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search open jobs with their original links (Data plan).
+         * Search open jobs with their original links (API and Data plans).
          * @description The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
          *     each job's `url` (the employer's own posting) and `source_url` where it differs. The public
-         *     job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
-         *     account gets `403`. Never cached: the answer is private to the plan holder.
+         *     job reads leave both out and link only through `apply_url`. Needs a paid API plan (API or
+         *     Data): any other account gets `403`. Never cached: the answer is private to the plan holder.
          */
         get: operations["searchDataJobs"];
         put?: never;
@@ -885,9 +885,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A single job with its original links (Data plan).
-         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
-         *     Data plan: any other account gets `403`.
+         * A single job with its original links (API and Data plans).
+         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid
+         *     API plan (API or Data): any other account gets `403`.
          */
         get: operations["getDataJob"];
         put?: never;
@@ -7878,6 +7878,8 @@ export interface components {
             website: string | null;
             /** @description The company's LinkedIn page; null when unknown. */
             linkedin: string | null;
+            /** @description Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`. */
+            employee_count: number | null;
             /** @description Curated company tags; the catalogue card renders the backer marks from these. */
             collections: string[];
             /** Format: int64 */
@@ -7896,6 +7898,8 @@ export interface components {
             jobs?: components["schemas"]["Job"][];
             /** @description Whether an employee referral offer exists for this company. */
             referral_available?: boolean;
+            /** @description Whether an employer account holds this company. */
+            company_claimed?: boolean;
             parent?: components["schemas"]["CompanyRef"];
             /** @description Companies this one owns. Each is a separate employer with its own jobs. Omitted when there are none. */
             subsidiaries?: components["schemas"]["CompanyRef"][];
@@ -8522,7 +8526,10 @@ export interface components {
             meta: components["schemas"]["EmployerApplicationsMeta"];
         };
         EmployerClaim: {
+            /** @description The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set. */
             company_name?: string;
+            /** @description The slug of a company the catalogue lists (`company_slug` of a job or company page). */
+            company_slug?: string;
             work_email?: string;
         };
         /** @enum {string} */
@@ -9174,7 +9181,7 @@ export interface components {
             company: string;
             company_slug?: string;
             /**
-             * @description The employer's own application URL, as published. Served only by the Data plan's
+             * @description The employer's own application URL, as published. Served only by the paid API plans'
              *     `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
              *     Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
              */
@@ -9198,7 +9205,7 @@ export interface components {
             external_id?: string;
             /**
              * @description The original posting when `url` points at a separately verified application
-             *     destination. Absent when both links are the same, and outside the Data plan's
+             *     destination. Absent when both links are the same, and outside the paid API plans'
              *     `/data/jobs` endpoints.
              */
             source_url?: string;
@@ -12799,6 +12806,7 @@ export interface operations {
                      *           "hq_country": "DE",
                      *           "website": "https://acme.example",
                      *           "linkedin": "https://www.linkedin.com/company/acme",
+                     *           "employee_count": 40,
                      *           "collections": [
                      *             "yc"
                      *           ],

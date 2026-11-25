@@ -24,7 +24,7 @@ model Job {
   company_slug?: string;
 
   /**
-   * The employer's own application URL, as published. Served only by the Data plan's
+   * The employer's own application URL, as published. Served only by the paid API plans'
    * `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
    * Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
    */
@@ -54,7 +54,7 @@ model Job {
 
   /**
    * The original posting when `url` points at a separately verified application
-   * destination. Absent when both links are the same, and outside the Data plan's
+   * destination. Absent when both links are the same, and outside the paid API plans'
    * `/data/jobs` endpoints.
    */
   source_url?: string;
@@ -429,6 +429,9 @@ model CompanyPage {
 
   /** Whether an employee referral offer exists for this company. */
   referral_available?: boolean;
+
+  /** Whether an employer account holds this company. */
+  company_claimed?: boolean;
 
   parent?: CompanyRef;
 

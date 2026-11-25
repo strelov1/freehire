@@ -31,6 +31,7 @@ import "./submissions.tsp";
 import "./tracking.tsp";
 import "./experience.tsp";
 import "./employer.tsp";
+import "./employer-vacancy.tsp";
 import "./employer-prefill.tsp";
 import "./referrals.tsp";
 import "./billing.tsp";
