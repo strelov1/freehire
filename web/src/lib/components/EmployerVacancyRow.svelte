@@ -2,7 +2,8 @@
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { t } from '#lib/i18n/t.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { sourceLabel } from '#lib/sourceLabels.js';
   import type { Job } from '#lib/types.js';
   import { Button } from '#lib/ui/index.js';
   import EmployerOutboundClicks from './EmployerOutboundClicks.svelte';
@@ -19,6 +20,7 @@
     onEdit,
     onClose,
     onReopen,
+    onDelete,
   }: {
     job: Job;
     canManage?: boolean;
@@ -29,9 +31,13 @@
     onEdit: () => void;
     onClose: () => void;
     onReopen: () => void;
+    onDelete: () => void;
   } = $props();
 
   const s = $derived(t(messages, locale()));
+  // Only a vacancy the employer's team published is theirs to change; one collected from an
+  // ATS or another source is shown for reading and analytics only.
+  const authored = $derived(job.source === 'employer');
   let analytics = $state<ReturnType<typeof api.getEmployerVacancyAnalytics> | null>(null);
   const number = $derived(new Intl.NumberFormat(locale()));
   const percent = $derived(new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 1 }));
@@ -49,6 +55,14 @@
         {#if job.direct_apply}
           <span class="rounded-full bg-brand-muted px-2 py-0.5 text-xs font-medium text-brand-strong">
             {s.onSiteLabel}
+          </span>
+        {/if}
+        {#if !authored}
+          <span
+            title={s.importedHint}
+            class="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground"
+          >
+            {format(s.importedFrom, { source: sourceLabel(job.source ?? '') })}
           </span>
         {/if}
         {#if job.closed_at}
@@ -70,7 +84,7 @@
         onclick={() => (analytics = analytics ? null : api.getEmployerVacancyAnalytics(job.public_slug))}
         >{s.analytics}</Button
       >
-      {#if canManage}
+      {#if canManage && authored}
         <Button variant="ghost" size="sm" onclick={onEdit}>{s.editVacancy}</Button>
         {#if !job.closed_at}
           <Button variant="ghost" size="sm" disabled={closing} onclick={onClose}>
@@ -81,6 +95,7 @@
             {reopening ? s.reopening : s.reopenVacancy}
           </Button>
         {/if}
+        <Button variant="ghost" size="sm" onclick={onDelete}>{s.deleteVacancy}</Button>
       {/if}
     </div>
   </div>
@@ -94,14 +109,15 @@
         <p role="status" class="text-sm text-muted-foreground">{s.analyticsLoading}</p>
       {:then report}
         <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {#each [[s.analyticsViews, number.format(report.views)], [s.analyticsClicks, number.format(report.apply_clicks)], [s.analyticsApplications, number.format(report.applications)], [s.analyticsClickRate, report.views > 0 ? percent.format(report.apply_clicks / report.views) : '—']] as [label, value] (label)}
+          <!-- Apply clicks and applications are recorded only for a vacancy published here. -->
+          {#each authored ? [[s.analyticsViews, number.format(report.views)], [s.analyticsClicks, number.format(report.apply_clicks)], [s.analyticsApplications, number.format(report.applications)], [s.analyticsClickRate, report.views > 0 ? percent.format(report.apply_clicks / report.views) : '—']] : [[s.analyticsViews, number.format(report.views)]] as [label, value] (label)}
             <div class="flex flex-col gap-1">
               <dt class="text-xs text-muted-foreground">{label}</dt>
               <dd class="text-lg font-semibold tabular-nums">{value}</dd>
             </div>
           {/each}
         </dl>
-        <p class="text-xs text-muted-foreground">{s.analyticsNote}</p>
+        {#if authored}<p class="text-xs text-muted-foreground">{s.analyticsNote}</p>{/if}
         <!-- An on-site vacancy has no employer destination, so nothing is clicked through. -->
         {#if !job.direct_apply}<EmployerOutboundClicks slug={job.public_slug} />{/if}
       {:catch}

@@ -25,10 +25,12 @@ func (h *inboxHandlers) GetTrackedApplication(ctx context.Context, params apigen
 	if err != nil {
 		return nil, err
 	}
-	job, err := h.queries.GetJobBySlug(ctx, params.Slug)
+	// The employer's deletion hides a vacancy from jobs_read but not from the candidate's own history.
+	row, err := h.queries.GetJobBySlugForApplicant(ctx, params.Slug)
 	if err != nil {
 		return nil, err
 	}
+	job := db.Job(row)
 	if err := jobVisibleToCaller(job, userID, true); err != nil {
 		return nil, err
 	}

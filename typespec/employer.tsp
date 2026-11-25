@@ -169,7 +169,11 @@ op getEmployerCompany(): Data<EmployerCompany> | Problem;
 @patch
 op updateEmployerCompany(@body body: EmployerCompanyPatch): Data<EmployerCompany> | Problem;
 
-/** Every vacancy the caller published, newest first. */
+/**
+ * The caller's dashboard list, open first: the vacancies its team published (`source` is
+ * `employer`, editable; at most 200) and the open ones of its company collected from other
+ * sources (read-only; at most 200).
+ */
 @tag("Employer")
 @route("/employer/jobs")
 @get
@@ -193,6 +197,12 @@ op updateEmployerVacancy(@path slug: string, @body body: EmployerVacancyPatch): 
 @route("/employer/jobs/{slug}/close")
 @post
 op closeEmployerVacancy(@path slug: string): Data<EmployerClosed> | Problem;
+
+/** Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen does not bring it back. */
+@tag("Employer")
+@route("/employer/jobs/{slug}")
+@delete
+op deleteEmployerVacancy(@path slug: string): Data<EmployerRemoved> | Problem;
 
 @tag("Employer")
 @route("/employer/jobs/{slug}/reopen")

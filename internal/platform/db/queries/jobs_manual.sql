@@ -310,16 +310,31 @@ RETURNING jobs.id;
 
 -- name: ListEmployerJobs :many
 -- An employer's own dashboard list: every vacancy the actor's company team created through
--- this path (employer_team, migration 0271),
--- newest first, open and closed both (the dashboard shows a closed one with its own badge
--- rather than dropping it — the employer's own re-Create-to-reopen path needs the closed
--- ones findable). Capped rather than paginated: an MVP dashboard for one employer's own
--- postings, not the public catalogue.
+-- this path (employer_team, migration 0271), newest first, open and closed both (the
+-- dashboard shows a closed one with its own badge rather than dropping it — the employer's
+-- own re-Create-to-reopen path needs the closed ones findable). Capped rather than
+-- paginated: an MVP dashboard for one employer's own postings, not the public catalogue.
+-- A deleted one is gone from jobs_read (migration 0318).
 SELECT *
 FROM jobs_read
 WHERE created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(actor_id)::bigint)))
   AND source = 'employer'
 ORDER BY created_at DESC
+LIMIT 200;
+
+-- name: ListEmployerCollectedJobs :many
+-- The open vacancies of the actor's active company that were collected from other sources
+-- (active_employer_company, migration 0318): shown to the employer read-only, next to the ones
+-- it published. Open only, since a company's closed postings are history and can be hundreds
+-- of thousands; a posting flagged as a duplicate of another is left out so a role is not
+-- listed twice. Newest first and capped at 200, served by jobs_open_company_created_at_id_idx.
+-- A company with more than 200 open postings shows its newest 200.
+SELECT *
+FROM jobs_read
+WHERE company_slug = public.active_employer_company(sqlc.arg(actor_id)::bigint)
+  AND source <> 'employer'
+  AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ORDER BY created_at DESC, id DESC
 LIMIT 200;
 
 -- name: CloseEmployerJob :one
@@ -345,6 +360,29 @@ WITH closed AS (
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT count(*) FROM closed;
+
+-- name: DeleteEmployerJob :one
+-- Soft delete of an employer-authored posting (same scope as CloseEmployerJob). The row
+-- stays because applications reference it (they read the jobs table, not jobs_read); it is
+-- closed, marked 'employer_deleted' (which jobs_read hides, migration 0318) and queued for
+-- removal from search. ReopenEmployerJob only undoes 'employer_closed', so it stays gone;
+-- the employer re-creating the same URL (UpsertManualJob) is the one way to publish it again.
+WITH deleted AS (
+    UPDATE jobs
+    SET closed_at     = COALESCE(closed_at, now()),
+        closed_reason = 'employer_deleted',
+        updated_at    = now()
+    WHERE jobs.public_slug = sqlc.arg(public_slug)
+      AND jobs.created_by = ANY(ARRAY(SELECT employer_team(sqlc.arg(actor_id)::bigint)))
+      AND jobs.source = 'employer'
+      AND jobs.closed_reason <> 'employer_deleted'
+    RETURNING jobs.id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM deleted
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM deleted;
 
 -- name: ReopenEmployerJob :one
 -- Undoes CloseEmployerJob: the same scope (created_by in employer_team(actor_id) AND
