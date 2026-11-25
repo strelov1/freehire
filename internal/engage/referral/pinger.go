@@ -79,42 +79,49 @@ func (p *ChannelPinger) PingReferrer(ctx context.Context, r Recipient, cabinetUR
 	emailSilenced := p.silenced != nil && p.silenced.Silenced(ctx, r.UserID, emailprefs.GroupActivity)
 
 	if p.email != nil && r.Email != "" && !emailSilenced {
-		var content bytes.Buffer
-		// Trusted template, data escaped in context: a failure here is a template bug,
-		// caught by the golden previews.
-		_ = requestHTML.Execute(&content, cabinetURL)
-
-		// GroupActivity, not GroupNews: a referral request is somebody asking THIS person for
-		// something, so declining product news must not switch it off.
-		unsubscribe, err := p.links.For(r.UserID, emailprefs.GroupActivity)
-		if err != nil {
-			return fmt.Errorf("referral: unsubscribe link for user %d: %w", r.UserID, err)
-		}
-		htmlBody := p.layout.Render(mailtpl.Body{
-			Preheader:      "Someone asked you for a referral",
-			Heading:        "New referral request",
-			Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template below
-			Footer:         "You’re getting this because you offered to refer people at your company.",
-			UnsubscribeURL: unsubscribe,
-		})
-		textBody := "A job seeker asked for a referral. View the request in your inbox: " + cabinetURL +
-			"\n" + emailprefs.TextFooter(unsubscribe)
-		if err := p.email.Send(ctx, emailnotify.Message{
-			From: p.from, To: r.Email, Subject: "New referral request on freehire",
-			HTML: htmlBody, Text: textBody,
-			Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
-		}); err != nil {
+		if err := p.sendEmail(ctx, r, cabinetURL); err != nil {
+			// Email only: the Telegram branch below is its own channel, and a referrer
+			// linked there must still hear about the request.
 			errs = append(errs, err)
 		}
 	}
 
 	if p.tg != nil && r.ChatID != 0 {
 		msg := fmt.Sprintf(
-			`You have a new <b>referral request</b>. <a href="%s">Open it in your inbox</a>.`, link)
+			"You have a new <b>referral request</b>. <a href=\"%s\">Open it in your inbox</a>.", link)
 		if err := p.tg.SendMessage(ctx, r.ChatID, msg); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+// sendEmail mails the notice. An error means nothing was sent on this channel.
+func (p *ChannelPinger) sendEmail(ctx context.Context, r Recipient, cabinetURL string) error {
+	var content bytes.Buffer
+	if err := requestHTML.Execute(&content, cabinetURL); err != nil {
+		return fmt.Errorf("referral: render request notice for user %d: %w", r.UserID, err)
+	}
+
+	// GroupActivity, not GroupNews: a referral request is somebody asking THIS person for
+	// something, so declining product news must not switch it off.
+	unsubscribe, err := p.links.For(r.UserID, emailprefs.GroupActivity)
+	if err != nil {
+		return fmt.Errorf("referral: unsubscribe link for user %d: %w", r.UserID, err)
+	}
+	htmlBody := p.layout.Render(mailtpl.Body{
+		Preheader:      "Someone asked you for a referral",
+		Heading:        "New referral request",
+		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template below
+		Footer:         "You’re getting this because you offered to refer people at your company.",
+		UnsubscribeURL: unsubscribe,
+	})
+	textBody := "A job seeker asked for a referral. View the request in your inbox: " + cabinetURL +
+		"\n" + emailprefs.TextFooter(unsubscribe)
+	return p.email.Send(ctx, emailnotify.Message{
+		From: p.from, To: r.Email, Subject: "New referral request on freehire",
+		HTML: htmlBody, Text: textBody,
+		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
+	})
 }
