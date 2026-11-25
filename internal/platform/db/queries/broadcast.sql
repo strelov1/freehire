@@ -4,7 +4,8 @@
 -- Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
 -- 'b') narrows that to one side of a split test, a non-empty timezones list to the
 -- accounts whose stored timezone is one of them (how a campaign reaches one country), and
--- data_plan_only to the accounts holding a live Data plan.
+-- data_plan_only to the accounts holding a live Data plan, and api_plan_only to those holding
+-- a live API plan and no live Data plan.
 --
 -- No signup window, unlike the onboarding queries: a campaign is addressed to the
 -- whole audience by definition, and the launch it announces matters as much to
@@ -39,6 +40,7 @@ WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <
   AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id))
   AND (COALESCE(cardinality(sqlc.arg(timezones)::text[]), 0) = 0 OR u.timezone = ANY(sqlc.arg(timezones)::text[]))
   AND (NOT sqlc.arg(data_plan_only)::boolean OR u.api_data_until_stripe > now())
+  AND (NOT sqlc.arg(api_plan_only)::boolean OR (u.api_until_stripe > now() AND NOT COALESCE(u.api_data_until_stripe > now(), false)))
   AND NOT EXISTS (
       SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
@@ -59,7 +61,8 @@ WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <
   )
   AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id))
   AND (COALESCE(cardinality(sqlc.arg(timezones)::text[]), 0) = 0 OR u.timezone = ANY(sqlc.arg(timezones)::text[]))
-  AND (NOT sqlc.arg(data_plan_only)::boolean OR u.api_data_until_stripe > now());
+  AND (NOT sqlc.arg(data_plan_only)::boolean OR u.api_data_until_stripe > now())
+  AND (NOT sqlc.arg(api_plan_only)::boolean OR (u.api_until_stripe > now() AND NOT COALESCE(u.api_data_until_stripe > now(), false)));
 
 -- name: RecordBroadcastEmail :exec
 -- Closes out one (user, campaign) whether or not the send worked.

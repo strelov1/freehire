@@ -37,6 +37,8 @@ type Campaign struct {
 	Timezones []string
 	// DataPlanOnly limits the audience to accounts holding a live Data plan.
 	DataPlanOnly bool
+	// APIPlanOnly limits the audience to accounts holding a live API plan and no live Data plan.
+	APIPlanOnly bool
 	// Half limits a run to one side of a split test, "a" or "b". Empty sends to everyone.
 	// Lookup returns a copy, so setting it for one run leaves the registry alone.
 	Half string

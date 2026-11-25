@@ -99,4 +99,13 @@ func TestBroadcastCandidates_DataPlanAudience(t *testing.T) {
 	if count != 1 {
 		t.Errorf("count = %d, want 1", count)
 	}
+
+	// An API-plan campaign reaches the API-plan holder and not the Data one.
+	rows, err = q.ListBroadcastCandidates(ctx, ListBroadcastCandidatesParams{Campaign: "api-test", ApiPlanOnly: true, MaxRows: 100})
+	if err != nil {
+		t.Fatalf("ListBroadcastCandidates: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != apiOnly {
+		t.Errorf("API campaign reached %v, want only %d", rows, apiOnly)
+	}
 }
