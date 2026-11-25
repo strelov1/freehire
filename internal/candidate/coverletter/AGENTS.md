@@ -118,7 +118,7 @@ resolving an ATS form's own cover-letter field for auto-apply** — no new metho
 the same `Get(ctx, userID, jobID) (*Stored, error)` this package's own read path already
 exposes. A nil `*Stored` (no letter drafted yet) degrades to that package's generic drafter,
 not to drafting one here — this package's own three-stage chain never runs unattended. See
-`openspec/changes/autoapply-reuse-cover-letter`.
+`openspec/changes/archive/2026-11-25-autoapply-reuse-cover-letter`.
 
 **A cached fit analysis is a precondition, not something drafting produces.** `Required` reads
 the cache and returns `ErrNoAnalysis` when it is empty; producing is `Ensure`'s, and `Ensure`

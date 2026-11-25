@@ -76,7 +76,7 @@ is `no cache observed`.
 calls no grader model. It ranks on `cvmatch` and `atscheck` — free, pure, and the same
 numbers the candidate already sees in the workspace — and emits every run's tailored CV
 text beside its vacancy so a reader judges the rest. See
-`openspec/changes/assistant-model-bakeoff/design.md` for why a judge model was rejected.
+`openspec/changes/archive/2026-09-08-assistant-model-bakeoff/design.md` for why a judge model was rejected.
 
 **Only the turn model varies.** The fit chain stays pinned to `LLM_MODEL`, and the test
 asserts it: swapping both would measure two models and attribute the result to one.

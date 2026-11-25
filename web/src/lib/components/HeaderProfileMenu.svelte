@@ -12,7 +12,7 @@
   // Desktop-only: the profile icon doubles as a second, independent dropdown
   // trigger scoped to the signed-in user's own account, split off HeaderMenu's
   // consolidated menu so Log out is reachable without scrolling past every site
-  // nav link — see openspec/changes/split-header-profile-menu/design.md. Signed
+  // nav link — see openspec/changes/archive/2026-09-16-split-header-profile-menu/design.md. Signed
   // out, it stays the existing direct Sign-in icon action: there is nothing to
   // list, so no dropdown.
 

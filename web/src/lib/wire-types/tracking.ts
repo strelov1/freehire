@@ -27,7 +27,7 @@ export type MyJob = Omit<components['schemas']['TrackedJob'], 'job'> & {
 export type AutoApplyPreviewPending = components['schemas']['AutoApplyPreviewPending'];
 
 /** What a tracked job's own drawer read (`TrackedApplication.auto_apply`) surfaces about
- *  its live auto-apply attempt (openspec/changes/auto-apply-review-tracking).
+ *  its live auto-apply attempt (openspec/changes/archive/2026-09-05-auto-apply-review-tracking).
  *  `resolved_preview` is present only when `status` is `pending_review`; `unmapped` only
  *  when `status` is `blocked`. `queue_id` addresses the attempt for
  *  `api.reviewAutoApply(queue_id, decision)`; `may_have_reached_employer` is set on a

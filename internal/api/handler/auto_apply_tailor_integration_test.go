@@ -322,7 +322,7 @@ func TestPostAutoApplyTailor_RunsAndRecordsTheTailoredCV(t *testing.T) {
 		t.Errorf("stored tailored_cv_id = %s, want %s", stored, out.Data.TailoredCVID)
 	}
 
-	// No notification at tailor time (openspec/changes/auto-apply-review-tracking): a
+	// No notification at tailor time (openspec/changes/archive/2026-09-05-auto-apply-review-tracking): a
 	// tailored CV alone has nothing to review yet — cmd/auto-apply's own preview pass
 	// notifies once the answer preview is ready too. See internal/application/autoapply's
 	// own SetPreview tests for that notification's coverage.

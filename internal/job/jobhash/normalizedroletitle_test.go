@@ -40,7 +40,7 @@ func TestNormalizedRoleTitle_DiffersForDifferentRoles(t *testing.T) {
 // postings of the same role must normalize identically, since RoleFingerprint folds
 // the company slug into its hash and would never let that happen — this is the
 // exact confusion the recentfeed grouping key design initially got wrong (see
-// openspec/changes/add-homepage-recent-jobs-feed/design.md).
+// openspec/changes/archive/2026-09-07-add-homepage-recent-jobs-feed/design.md).
 func TestNormalizedRoleTitle_UnlikeRoleFingerprint_IgnoresCompanyIdentity(t *testing.T) {
 	acme := db.UpsertJobParams{CompanySlug: "acme", Title: "Senior Backend Engineer", Description: "Build things."}
 	globex := db.UpsertJobParams{CompanySlug: "globex", Title: "Senior Backend Engineer", Description: "Build things."}

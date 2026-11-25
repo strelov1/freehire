@@ -169,7 +169,7 @@ func TestDBStore_Submit(t *testing.T) {
 }
 
 // insertTailoredQueueRowForTest inserts a tailored, unreviewed entry — dbStore.
-// ClaimForPreview's own claimable shape (openspec/changes/auto-apply-review-tracking).
+// ClaimForPreview's own claimable shape (openspec/changes/archive/2026-09-05-auto-apply-review-tracking).
 func insertTailoredQueueRowForTest(t *testing.T, pool *pgxpool.Pool, user, job int64) int64 {
 	t.Helper()
 	var cvID uuid.UUID
