@@ -38,7 +38,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'What are the rate limits, and do I need an account?',
     answer:
-      'Per 60 seconds: no key, 300 requests per IP (agent search has its own 300); any account\'s key, 300; API plan, 1,200; Data plan, 6,000. Search and agent search share the account budget. Every tier returns up to 100 results per page. Commercial use and the paid limits need an API or Data plan on a free freehire account.',
+      "Per 60 seconds: no key, 300 requests per IP (agent search has its own 300); any account's key, 300; API plan, 1,200; Data plan, 6,000. Search and agent search share the account budget. Every tier returns up to 100 results per page. Commercial use and the paid limits need an API or Data plan on a free freehire account.",
   },
   {
     question: 'How do I authenticate?',
@@ -48,7 +48,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'How fresh is the data, and do closed jobs disappear?',
     answer:
-      'Each posting is re-read on its source\'s crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen by default (some sources wait longer, up to 35 days, when the source itself keeps postings up that long), not deleted. Search returns open postings only; a single posting fetched by its slug still answers after it closes, carrying its closed_at. A change feed with webhooks for new, updated and removed postings is the next thing we are building.',
+      "Each posting is re-read on its source's crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen by default (some sources wait longer, up to 35 days, when the source itself keeps postings up that long), not deleted. Search returns open postings only; a single posting fetched by its slug still answers after it closes, carrying its closed_at. A change feed with webhooks for new, updated and removed postings is the next thing we are building.",
   },
   {
     question: 'Can I cancel?',
