@@ -43,7 +43,7 @@ func TestPushNotifier_RendersTitleBodyAndSlugDataToEveryDevice(t *testing.T) {
 	}}
 	transport := &fakePushTransport{}
 	n := NewPushNotifier(lister, transport)
-	msg := ReminderMessage{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme", URL: "https://ats/x"}
+	msg := ReminderMessage{JobTitle: "Go Dev", Company: "Acme", Slug: "go-dev-acme"}
 
 	if err := n.Send(context.Background(), "push", strconv.FormatInt(42, 10), []ReminderMessage{msg}); err != nil {
 		t.Fatalf("Send: %v", err)

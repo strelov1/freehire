@@ -12,10 +12,10 @@ import (
 )
 
 const getEmployerOwnedJobID = `-- name: GetEmployerOwnedJobID :one
-SELECT j.id FROM public.jobs j
+SELECT j.id FROM public.jobs_read j
 WHERE j.public_slug = $1
-  AND j.source = 'employer' AND NOT j.is_private
-  AND j.created_by IN (SELECT public.active_employer_team($2::bigint))
+  AND j.company_slug = public.active_employer_company($2::bigint)
+  AND NOT j.is_private
 `
 
 type GetEmployerOwnedJobIDParams struct {
@@ -23,9 +23,9 @@ type GetEmployerOwnedJobIDParams struct {
 	ActorID    int64  `json:"actor_id"`
 }
 
-// The job id behind a public slug, only for an employer vacancy the actor's active team owns:
-// the same guard as GetEmployerVacancyAnalytics, so a stranger's slug is indistinguishable
-// from a missing one.
+// The job id behind a public slug, only for a vacancy of the actor's active company, authored
+// by its team or collected from another source: the same guard as GetEmployerVacancyAnalytics,
+// so a stranger's slug is indistinguishable from a missing one.
 func (q *Queries) GetEmployerOwnedJobID(ctx context.Context, arg GetEmployerOwnedJobIDParams) (int64, error) {
 	row := q.db.QueryRow(ctx, getEmployerOwnedJobID, arg.PublicSlug, arg.ActorID)
 	var id int64
@@ -48,11 +48,11 @@ SELECT
      WHERE a.job_id = j.id
        AND a.sent_at >= ((w.today - 30)::timestamp AT TIME ZONE 'UTC')
        AND a.sent_at < (w.today::timestamp AT TIME ZONE 'UTC')) AS applications
-FROM public.jobs j
+FROM public.jobs_read j
 CROSS JOIN report_window w
 WHERE j.public_slug = $1
-  AND j.source = 'employer' AND NOT j.is_private
-  AND j.created_by IN (SELECT public.active_employer_team($2::bigint))
+  AND j.company_slug = public.active_employer_company($2::bigint)
+  AND NOT j.is_private
 `
 
 type GetEmployerVacancyAnalyticsParams struct {
@@ -66,6 +66,7 @@ type GetEmployerVacancyAnalyticsRow struct {
 	Applications int64 `json:"applications"`
 }
 
+// Read through jobs_read, so a vacancy the employer deleted (migration 0318) has no report.
 // Use one UTC window for all three counts. The view rollup processes completed days,
 // and its (day, job_id) primary key supports one point lookup per day.
 func (q *Queries) GetEmployerVacancyAnalytics(ctx context.Context, arg GetEmployerVacancyAnalyticsParams) (GetEmployerVacancyAnalyticsRow, error) {

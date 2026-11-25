@@ -31,7 +31,7 @@ describe('JobView closure notice', () => {
   });
 
   it('offers no outside page for a vacancy published here', () => {
-    expect(notice).toContain('{#if job.url && !job.direct_apply}');
+    expect(notice).toContain('{#if (job.apply_url || job.url) && !job.direct_apply}');
   });
 
   it('is not counted as an application', () => {

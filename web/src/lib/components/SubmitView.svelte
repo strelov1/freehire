@@ -18,6 +18,7 @@
   import { api, ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { htmlToMarkdown } from '#lib/htmlToMarkdown.js';
+  import { fillEmpty, prefillFound } from '#lib/prefill.js';
   import { renderMarkdown } from '#lib/markdown.js';
   import {
     REGION_OPTIONS,
@@ -142,31 +143,24 @@
         known = { url: target, slug: result.existing_job_slug };
         return;
       }
-      // Object.values(...).some((v) => v) would treat an empty array (skills: [])
-      // as a hit — an array is truthy regardless of length.
-      const found = Object.values(result).some((v) =>
-        Array.isArray(v) ? v.length > 0 : typeof v === 'string' && v.trim() !== '',
-      );
-      if (!found) {
+      if (!prefillFound(result)) {
         prefillMissURL = target;
         return;
       }
-      if (title.trim() === '' && result.title) title = result.title;
-      if (company.trim() === '' && result.company) company = result.company;
-      if (location.trim() === '' && result.location) location = result.location;
-      if (workMode === '' && result.work_mode) workMode = result.work_mode;
-      if (employmentType === '' && result.employment_type) employmentType = result.employment_type;
-      if (seniority === '' && result.seniority) seniority = result.seniority;
-      if (source.trim() === '' && result.source) source = result.source;
+      title = fillEmpty(title, result.title);
+      company = fillEmpty(company, result.company);
+      location = fillEmpty(location, result.location);
+      workMode = fillEmpty(workMode, result.work_mode);
+      employmentType = fillEmpty(employmentType, result.employment_type);
+      seniority = fillEmpty(seniority, result.seniority);
+      source = fillEmpty(source, result.source);
       // Skills is a list, not a scalar: merge in whatever the platform stated
       // structurally rather than an all-or-nothing overwrite, same dedup as typing
       // one in by hand.
       for (const skill of result.skills ?? []) skills = addToken(skills, skill);
       // The source page's description arrives as sanitized HTML, not the markdown this
       // editor wants, so it is converted before it lands.
-      if (descriptionMarkdown.trim() === '' && result.description) {
-        descriptionMarkdown = htmlToMarkdown(result.description);
-      }
+      descriptionMarkdown = fillEmpty(descriptionMarkdown, result.description, htmlToMarkdown);
     } catch {
       // Best-effort: leave the form exactly as it was.
     } finally {

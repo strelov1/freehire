@@ -38,6 +38,7 @@ func (h *searchHandlers) SimilarJobs(ctx context.Context, params apigen.SimilarJ
 	if err != nil {
 		return nil, err
 	}
+	hideOrigins(ctx, views)
 	data, err := marshalRaws(views)
 	if err != nil {
 		return nil, err

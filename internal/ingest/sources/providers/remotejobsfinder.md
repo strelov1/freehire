@@ -1,0 +1,9 @@
+**RemoteJobsFinder traps** (`remotejobsfinder`, remotejobsfinder.co; verified live 2026-11-24, plain client):
+
+- **It is a re-aggregator, US only.** Company logos come from a data vendor (crustdata), the posting pages carry no apply link, and the sitemap holds only `/usa/` paths (3,916 `remote-jobs`, 6 `hybrid-jobs`). Boardless + `Aggregator()`, so the duplicate pass settles overlap with ATS adapters.
+- **The catalogue is one sitemap**: `robots.txt` -> `sitemap_index.xml` -> `sitemap_listings_active.xml` (3,922 posting URLs of the form `/en/<remote|hybrid>-jobs/usa/<slug>_<uuid>`). The `/en/` prefix is the only language read, so a posting is not ingested twice. The homepage is a Next.js RSC shell with no job data and no JSON API was found; the posting page's JobPosting is the cheapest complete path.
+- **Identity is the uuid** after the last `_`; the slug in front can change. `ExternalID` is available from the sitemap, so stored postings refresh with no page request.
+- **Stale sitemap rows**: ~2 of 10 (3 of 80 live) posting URLs answer 404; the adapter counts that as answered and drops them.
+- **JobPosting**: `title`, `description` (HTML, full), `hiringOrganization.name`, `datePosted` (a day), `employmentType` (`["Full Time"]`, spaced, handled in `schemaEmploymentType`), optional `baseSalary` (hourly or yearly), `jobLocationType: TELECOMMUTE` on most pages but absent on some `/remote-jobs/` ones (so those read as not remote). `applicantLocationRequirements` is always `USA` and there is no `jobLocation`, so `FallbackCountries` is `us`. `validThrough` is a synthetic rolling date (same for every posting), not a deadline, and is not mapped.
+- **Cost**: pages are ~300 KB, 1-4 s each. Interval 500 ms, two workers, 4,500 new pages per run, so a cold run reads everything in ~35 min.
+- Needs a `boards` row (`cmd/add-board --provider=remotejobsfinder`, no board id) to be scheduled.

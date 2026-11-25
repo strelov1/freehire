@@ -33,7 +33,8 @@ type Job struct {
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
 	// URL is the employer's own application URL, as stored: the canonical address the
-	// extension matches pages against and API consumers deduplicate on.
+	// extension matches pages against. Served to the public only on the Data plan's
+	// endpoints; every other surface drops it with HideOrigin.
 	URL string `json:"url"`
 	// ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts
 	// the click. Every link a person is sent out by uses it; URL is for matching, not clicking.
@@ -120,7 +121,7 @@ type Job struct {
 	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
 	ApplicationDeadline *string `json:"application_deadline,omitempty"`
 	// Team is the department or team the source ATS files the posting under (Greenhouse,
-	// Lever and Ashby state one), verbatim. Omitted when the source states none.
+	// Lever, Ashby, Gem, Recruitee and Employment Hero state one), verbatim. Omitted when the source states none.
 	Team string `json:"team,omitempty"`
 	// ApplyQuestions is how many questions the application form REQUIRES beyond the
 	// standard fields (name, contact details, CV), counted from the captured form
@@ -177,6 +178,16 @@ type Job struct {
 	// an anonymous caller. Caller-scoped like MyVote: only the detail handler overlays it,
 	// keyed by (caller_id, job_id), so the shared job query stays free of it.
 	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`
+	// EmploymentType and Salary repeat enrichment.employment_type and enrichment.salary_*
+	// at the top level of the detail, where a reader of one posting looks for them first.
+	// Detail handler only (DetailFacts); list rows and search documents keep the nested copy.
+	EmploymentType string  `json:"employment_type,omitempty"`
+	Salary         *Salary `json:"salary,omitempty"`
+	// CompanyWebsite is the employer's site as its company record states it, and CompanyLogo
+	// that employer's mark through the logo proxy, resolved by the site's domain. Detail
+	// handler only; both omitted when the company has no site on record.
+	CompanyWebsite string `json:"company_website,omitempty"`
+	CompanyLogo    string `json:"company_logo,omitempty"`
 }
 
 // FromRow maps a database job row to the public wire shape. It hydrates the row into

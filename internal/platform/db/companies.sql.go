@@ -140,6 +140,7 @@ WHERE job_count > 0
   AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
   AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
   AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
+  AND (coalesce(cardinality($16::text[]), 0) = 0 OR lower(hq_country) = ANY($16::text[]))
 `
 
 type CountCompaniesParams struct {
@@ -158,6 +159,7 @@ type CountCompaniesParams struct {
 	YcFlags       []string `json:"yc_flags"`
 	Maturity      []string `json:"maturity"`
 	Subindustries []string `json:"subindustries"`
+	HqCountries   []string `json:"hq_countries"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -180,6 +182,7 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.YcFlags,
 		arg.Maturity,
 		arg.Subindustries,
+		arg.HqCountries,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -271,6 +274,28 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 	return i, err
 }
 
+const getCompanySite = `-- name: GetCompanySite :one
+SELECT COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(company_site_host(company_info), '')::text AS host
+FROM companies
+WHERE slug = $1
+`
+
+type GetCompanySiteRow struct {
+	Website string `json:"website"`
+	Host    string `json:"host"`
+}
+
+// A company's site as recorded (company_info website, else homepage, trimmed the way
+// ListCompaniesBySiteHost trims it) and that site's bare host; ” for either when none.
+// The job detail names the employer's site and logo from it.
+func (q *Queries) GetCompanySite(ctx context.Context, slug string) (GetCompanySiteRow, error) {
+	row := q.db.QueryRow(ctx, getCompanySite, slug)
+	var i GetCompanySiteRow
+	err := row.Scan(&i.Website, &i.Host)
+	return i, err
+}
+
 const insertMissingCompaniesForSlugs = `-- name: InsertMissingCompaniesForSlugs :execrows
 INSERT INTO companies (slug, name)
 SELECT DISTINCT ON (j.company_slug) j.company_slug, j.company
@@ -302,7 +327,9 @@ func (q *Queries) InsertMissingCompaniesForSlugs(ctx context.Context, slugs []st
 
 const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
-       feedback_count, feedback_rating_avg, ai_interview_reports
+       feedback_count, feedback_rating_avg, ai_interview_reports,
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(regexp_replace(company_info ->> 'linkedin', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '')::text AS linkedin
 FROM companies
 WHERE job_count > 0
   AND ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
@@ -335,10 +362,14 @@ WHERE job_count > 0
   AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
   AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
+  -- hq_country is where the company is headquartered (` + "`" + `countries` + "`" + ` is where its open jobs
+  -- are). A NULLABLE SCALAR stored in mixed case ("US", "us"): the handler lowercases the
+  -- requested codes and the column is lowered here; NULL matches none.
+  AND (coalesce(cardinality($16::text[]), 0) = 0 OR lower(hq_country) = ANY($16::text[]))
 ORDER BY
-  CASE WHEN $16::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
+  CASE WHEN $17::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
   job_count DESC, name
-LIMIT $18 OFFSET $17
+LIMIT $19 OFFSET $18
 `
 
 type ListCompaniesParams struct {
@@ -357,6 +388,7 @@ type ListCompaniesParams struct {
 	YcFlags       []string `json:"yc_flags"`
 	Maturity      []string `json:"maturity"`
 	Subindustries []string `json:"subindustries"`
+	HqCountries   []string `json:"hq_countries"`
 	Sort          string   `json:"sort"`
 	Offset        int32    `json:"offset"`
 	Limit         int32    `json:"limit"`
@@ -373,6 +405,8 @@ type ListCompaniesRow struct {
 	FeedbackCount      int32         `json:"feedback_count"`
 	FeedbackRatingAvg  pgtype.Float4 `json:"feedback_rating_avg"`
 	AiInterviewReports int32         `json:"ai_interview_reports"`
+	Website            string        `json:"website"`
+	Linkedin           string        `json:"linkedin"`
 }
 
 // Catalog page: companies with their job counts, most active first. The job count
@@ -395,6 +429,10 @@ type ListCompaniesRow struct {
 // postings the JOB SEARCH INDEX holds (see the facet recount in company_facets.sql), so the number here
 // is the number the company's own page shows — the two used to disagree, listing
 // Stripe at 570 against 444 on its page.
+//
+// website and linkedin are how a caller outside freehire recognises the company: the site
+// (company_info website, else homepage, trimmed the way ListCompaniesBySiteHost trims it)
+// and the LinkedIn page. ” when unknown; the handler serves that as null.
 // `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
 // companies sort last), falling through to the default job_count DESC, name
 // for the tiebreak. Any other value (including ”, the default) leaves the
@@ -420,6 +458,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.YcFlags,
 		arg.Maturity,
 		arg.Subindustries,
+		arg.HqCountries,
 		arg.Sort,
 		arg.Offset,
 		arg.Limit,
@@ -442,6 +481,8 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 			&i.FeedbackCount,
 			&i.FeedbackRatingAvg,
 			&i.AiInterviewReports,
+			&i.Website,
+			&i.Linkedin,
 		); err != nil {
 			return nil, err
 		}

@@ -42,14 +42,13 @@ type JobSummary struct {
 	// Summary is the search index's truncated preview, never the full body; get_job reads
 	// the full body of the one posting a person picked.
 	Summary string `json:"summary,omitempty" jsonschema:"a short preview, not the full description"`
-	// Source names the board this posting was collected from, and OfficialJobURL is the
-	// employer's own link. Both travel with every result: prose drops links easily, and a
-	// posting repeated without its source reads as though freehire were the employer.
-	Source         string `json:"source" jsonschema:"the job board this posting was collected from"`
-	URL            string `json:"url" jsonschema:"the posting's page on freehire"`
-	OfficialJobURL string `json:"official_job_url,omitempty" jsonschema:"the employer's own posting, when known"`
+	// Source names the board this posting was collected from. It travels with every result:
+	// a posting repeated without its source reads as though freehire were the employer. The
+	// employer's own link is not served here; the Data plan's REST endpoints carry it.
+	Source string `json:"source" jsonschema:"the job board this posting was collected from"`
+	URL    string `json:"url" jsonschema:"the posting's page on freehire"`
 	// ApplyURL is the link to hand a person who wants to apply: it counts the click and sends
-	// them to the employer. OfficialJobURL stays the canonical address to match and dedupe on.
+	// them to the employer.
 	ApplyURL string `json:"apply_url,omitempty" jsonschema:"the link to give a person who wants to apply; it opens the employer's application. Absent when the posting takes applications on freehire itself — use url then"`
 }
 
@@ -191,13 +190,12 @@ type ResearchDocument struct {
 // research report that quotes a posting without its board reads as though freehire were the
 // employer.
 type ResearchMetadata struct {
-	Company        string `json:"company"`
-	Location       string `json:"location,omitempty"`
-	Source         string `json:"source"`
-	OfficialJobURL string `json:"official_job_url,omitempty"`
-	PostedAt       string `json:"posted_at,omitempty"`
-	Reality        string `json:"reality,omitempty"`
-	GhostLevel     string `json:"ghost_level,omitempty"`
+	Company    string `json:"company"`
+	Location   string `json:"location,omitempty"`
+	Source     string `json:"source"`
+	PostedAt   string `json:"posted_at,omitempty"`
+	Reality    string `json:"reality,omitempty"`
+	GhostLevel string `json:"ghost_level,omitempty"`
 }
 
 // SimilarJobsResult is what similar_jobs answers: the posting's nearest neighbours, nearest

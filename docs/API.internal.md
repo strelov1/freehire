@@ -88,7 +88,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -107,6 +109,7 @@ A posting is **open** until something closes it, and a closed posting carries `c
 - A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).
 - An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).
 - A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).
+- The employer deleting a posting they published themselves (`employer_deleted`). Unlike every other closer this is final: the posting leaves every list and `GET /jobs/{slug}` answers 404. The row is kept for the applications that reference it.
 
 Postings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.
 
@@ -4963,7 +4966,9 @@ curl -X PATCH "https://freehire.me/api/v1/employer/company" -b cookies.txt
 
 **Auth:** Session only
 
-Every vacancy the caller published, newest first.
+The caller's dashboard list, open first: the vacancies its team published (`source` is
+`employer`, editable; at most 200) and the open ones of its company collected from other
+sources (read-only; at most 200).
 
 ```bash
 curl "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
@@ -5002,6 +5007,22 @@ Publishes, or idempotently updates the caller's own vacancy at the same URL.
 curl -X POST "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
 ```
 
+### `POST /employer/jobs/prefill`
+
+**Auth:** Session only
+
+Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in the catalogue returns its stored fields.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | no | The job posting URL to parse. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/jobs/prefill" -b cookies.txt -H 'Content-Type: application/json' -d '{"url":"https://example.com/jobs/123"}'
+```
+
 ### `PATCH /employer/jobs/{slug}`
 
 **Auth:** Session only
@@ -5026,6 +5047,22 @@ curl -X POST "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
 
 ```bash
 curl -X PATCH "https://freehire.me/api/v1/employer/jobs/<slug>" -b cookies.txt
+```
+
+### `DELETE /employer/jobs/{slug}`
+
+**Auth:** Session only
+
+Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen does not bring it back.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/employer/jobs/<slug>" -b cookies.txt
 ```
 
 ### `GET /employer/jobs/{slug}/analytics`
