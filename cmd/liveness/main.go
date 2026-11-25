@@ -145,8 +145,8 @@ const staleCutoff = sources.DefaultSweepGrace
 // adzuna's stored `/land/ad/<id>` tracking redirect answers 403 to a bot, which classifies
 // uncertain, so this worker can never close an adzuna posting (cmd/adzuna-liveness reads
 // the hosted page, and this age rule is the backstop); careerjet's jobs.url is a
-// jobviewtrack.com click-tracking link with no page to read. All three also lose postings
-// from a date-ordered, bounded crawl that never revisits an ageing one.
+// jobviewtrack.com click-tracking link with no page to read; jooble's `link` is a jooble.org
+// tracking URL with no probe at all. All four also lose postings from a date-ordered, bounded crawl that never revisits an ageing one.
 //
 // Unlike unsignalledSources, these are re-crawled, so the age guess must agree with what
 // the crawl last saw before it may close anything (CloseStaleUnseenUnprobeableJobs and
@@ -155,12 +155,12 @@ const staleCutoff = sources.DefaultSweepGrace
 //
 // A prefix, not a list: whatjobs runs one registered provider per country ("whatjobs" for
 // the US, "whatjobs-<cc>" otherwise), so a new market is covered automatically.
-var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna", "careerjet"}
+var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna", "careerjet", "jooble"}
 
 // optionalExpirePrefixes are expireDespiteRegisteredPrefixes members a host may crawl without:
-// careerjet is new and optional, and registeredAgeFallback reads membership from taxonomy, so a
-// host without its credential still age-expires it. Only the crawl-registry guard skips them.
-var optionalExpirePrefixes = []string{"careerjet"}
+// careerjet and jooble are new and optional, and registeredAgeFallback reads membership from
+// taxonomy, so a host without its credential still age-expires it. Only the crawl-registry guard skips them.
+var optionalExpirePrefixes = []string{"careerjet", "jooble"}
 
 // guardedExpirePrefixes are the prefixes whose absence from the crawl registry stops the run.
 func guardedExpirePrefixes() []string {

@@ -4,7 +4,6 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
@@ -72,33 +71,14 @@ func (adzuna) SweepGrace() time.Duration { return adzunaSweepGrace }
 // and closes on a 404/410.
 func (adzuna) LivenessProbed() {}
 
-// adzunaID reads a posting's id, which the API emits as a JSON string for most postings but as a
-// bare number for some. A page hitting it must decode rather than fail whole, mirroring
-// habrJobLocations/habrAddress's shape-tolerant UnmarshalJSON.
-type adzunaID string
-
-func (id *adzunaID) UnmarshalJSON(b []byte) error {
-	var s string
-	if json.Unmarshal(b, &s) == nil {
-		*id = adzunaID(s)
-		return nil
-	}
-	var n json.Number
-	if err := json.Unmarshal(b, &n); err != nil {
-		return err
-	}
-	*id = adzunaID(n.String())
-	return nil
-}
-
 // adzunaPosting is one search result. salary_min/salary_max/salary_is_predicted and category are
 // deliberately unread: none has a home in the Job shape.
 type adzunaPosting struct {
-	ID          adzunaID `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Created     string   `json:"created"`
-	RedirectURL string   `json:"redirect_url"`
+	ID          looseID `json:"id"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Created     string  `json:"created"`
+	RedirectURL string  `json:"redirect_url"`
 	Company     struct {
 		DisplayName string `json:"display_name"`
 	} `json:"company"`

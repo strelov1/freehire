@@ -39,3 +39,12 @@ func TestCrawlRegistryRequiresCompleteCredentialPairs(t *testing.T) {
 		})
 	}
 }
+
+func TestCrawlRegistryRequiresJoobleKey(t *testing.T) {
+	for key, want := range map[string]bool{"": false, "test-key": true} {
+		t.Setenv("JOOBLE_API_KEY", key)
+		if _, registered := All(NewClient())["jooble"]; registered != want {
+			t.Errorf("All(client) registered jooble with key %q = %t, want %t", key, registered, want)
+		}
+	}
+}
