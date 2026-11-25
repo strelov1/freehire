@@ -48,7 +48,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'How fresh is the data, and do closed jobs disappear?',
     answer:
-      'Each posting is re-read on its source\'s crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen, not deleted. Search returns open postings only; a single posting fetched by its slug still answers after it closes, carrying its closed_at. A change feed with webhooks for new, updated and removed postings is the next thing we are building.',
+      'Each posting is re-read on its source\'s crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen by default (some sources wait longer, up to 35 days, when the source itself keeps postings up that long), not deleted. Search returns open postings only; a single posting fetched by its slug still answers after it closes, carrying its closed_at. A change feed with webhooks for new, updated and removed postings is the next thing we are building.',
   },
   {
     question: 'Can I cancel?',

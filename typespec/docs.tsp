@@ -62,7 +62,7 @@ The gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLim
 
 ## Data freshness and closed jobs
 
-Freshness in one line: each posting is re-read on its source's crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen.
+Freshness in one line: each posting is re-read on its source's crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen by default (some sources wait longer, up to 35 days, when the source itself keeps postings up that long).
 
 A posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:
 
