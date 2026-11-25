@@ -63,6 +63,7 @@
         name: 'API',
         blurb: 'For a job board, a bot or an agent that reads the catalogue.',
         perks: [
+          '1,200 requests per minute, up to 100 results per page',
           'Every search filter, every field, company data',
           'Store and show the postings in your product, under the data licence',
         ],
@@ -71,7 +72,7 @@
         price: dataPrice,
         name: 'Data',
         blurb: 'For mirroring the catalogue at volume.',
-        perks: ['Everything in API', 'Daily bulk catalogue files'],
+        perks: ['Everything in API, at 6,000 requests per minute', 'Daily bulk catalogue files'],
       },
     ].filter((c) => !!c);
   });
@@ -85,6 +86,10 @@
         The read API is free for personal and non-commercial use. An API plan licenses the data for use in your product.
         Send a full-access key as
         <code class="text-sm">Authorization: Bearer</code>.
+      </p>
+      <p class="max-w-2xl text-balance text-sm text-muted-foreground">
+        Without a plan: no key needed, 300 requests per minute per IP (300 per account with a free account's key), no
+        commercial use. Every tier returns up to 100 results per page. A plan needs a free freehire account.
       </p>
       <p class="max-w-2xl text-balance text-sm text-muted-foreground">
         API plans are billed separately from Pro. You do not need Pro to use the API, and an API plan does not include

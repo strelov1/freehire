@@ -185,7 +185,7 @@
     <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Build on the catalogue.</h2>
     <p class="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
       Every page here is one unauthenticated JSON call, in a schema that carries the facets the page only renders. The
-      read API is free for personal and non-commercial use; an API plan licenses the data for your product at one flat
+      read API is free for personal and non-commercial use (300 requests a minute, no key); an API plan licenses the data for your product at one flat
       monthly price, not per record.
     </p>
     <div class="mt-6 flex flex-wrap gap-3">

@@ -36,6 +36,11 @@ export const JOBS_API_FAQ: FaqItem[] = [
       'Yes: the read API answers without a key for personal and non-commercial use. It is the same API, so you can build against it for free and switch to a plan when you go live.',
   },
   {
+    question: 'What are the rate limits, and do I need an account?',
+    answer:
+      'Per 60 seconds: no key, 300 requests per IP (agent search has its own 300); any account\'s key, 300; API plan, 1,200; Data plan, 6,000. Search and agent search share the account budget. Every tier returns up to 100 results per page. Commercial use and the paid limits need an API or Data plan on a free freehire account.',
+  },
+  {
     question: 'How do I authenticate?',
     answer:
       'Create a full-access key on your API keys page and send it as an Authorization: Bearer header. Signed-in MCP and CLI connections can also authenticate through OAuth.',
@@ -43,7 +48,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'How fresh is the data, and do closed jobs disappear?',
     answer:
-      'Sources are re-crawled continuously, and a posting that leaves its source is closed rather than deleted. Search returns open postings only; a single posting fetched by its slug still answers after it closes, carrying its closed_at. A change feed with webhooks for new, updated and removed postings is the next thing we are building.',
+      'Each posting is re-read on its source\'s crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen, not deleted. Search returns open postings only; a single posting fetched by its slug still answers after it closes, carrying its closed_at. A change feed with webhooks for new, updated and removed postings is the next thing we are building.',
   },
   {
     question: 'Can I cancel?',
