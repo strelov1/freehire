@@ -21,18 +21,25 @@ WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <
   )
   AND $2::text IN ('', broadcast_half($1::text, u.id))
   AND (COALESCE(cardinality($3::text[]), 0) = 0 OR u.timezone = ANY($3::text[]))
+  AND (NOT $4::boolean OR u.api_data_until_stripe > now())
 `
 
 type CountBroadcastCandidatesParams struct {
-	Campaign  string   `json:"campaign"`
-	Half      string   `json:"half"`
-	Timezones []string `json:"timezones"`
+	Campaign     string   `json:"campaign"`
+	Half         string   `json:"half"`
+	Timezones    []string `json:"timezones"`
+	DataPlanOnly bool     `json:"data_plan_only"`
 }
 
 // How many people a campaign would reach right now. Read before sending: a campaign
 // is irreversible and goes to everyone, so the number is worth seeing first.
 func (q *Queries) CountBroadcastCandidates(ctx context.Context, arg CountBroadcastCandidatesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countBroadcastCandidates, arg.Campaign, arg.Half, arg.Timezones)
+	row := q.db.QueryRow(ctx, countBroadcastCandidates,
+		arg.Campaign,
+		arg.Half,
+		arg.Timezones,
+		arg.DataPlanOnly,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -51,18 +58,20 @@ WHERE mail_recipient(u.email, u.email_verified, u.last_active_at, u.banned_at) <
   )
   AND $2::text IN ('', broadcast_half($1::text, u.id))
   AND (COALESCE(cardinality($3::text[]), 0) = 0 OR u.timezone = ANY($3::text[]))
+  AND (NOT $4::boolean OR u.api_data_until_stripe > now())
   AND NOT EXISTS (
       SELECT 1 FROM mail_day_claims c WHERE c.user_id = u.id AND c.day = mail_today()
   )
 ORDER BY u.created_at
-LIMIT $4::int
+LIMIT $5::int
 `
 
 type ListBroadcastCandidatesParams struct {
-	Campaign  string   `json:"campaign"`
-	Half      string   `json:"half"`
-	Timezones []string `json:"timezones"`
-	MaxRows   int32    `json:"max_rows"`
+	Campaign     string   `json:"campaign"`
+	Half         string   `json:"half"`
+	Timezones    []string `json:"timezones"`
+	DataPlanOnly bool     `json:"data_plan_only"`
+	MaxRows      int32    `json:"max_rows"`
 }
 
 type ListBroadcastCandidatesRow struct {
@@ -72,8 +81,9 @@ type ListBroadcastCandidatesRow struct {
 
 // Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
 // Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
-// 'b') narrows that to one side of a split test, and a non-empty timezones list to the
-// accounts whose stored timezone is one of them (how a campaign reaches one country).
+// 'b') narrows that to one side of a split test, a non-empty timezones list to the
+// accounts whose stored timezone is one of them (how a campaign reaches one country), and
+// data_plan_only to the accounts holding a live Data plan.
 //
 // No signup window, unlike the onboarding queries: a campaign is addressed to the
 // whole audience by definition, and the launch it announces matters as much to
@@ -101,6 +111,7 @@ func (q *Queries) ListBroadcastCandidates(ctx context.Context, arg ListBroadcast
 		arg.Campaign,
 		arg.Half,
 		arg.Timezones,
+		arg.DataPlanOnly,
 		arg.MaxRows,
 	)
 	if err != nil {

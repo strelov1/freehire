@@ -9,6 +9,7 @@ import type { AnyApiReferenceConfiguration } from '@scalar/types/api-reference';
 
 const SCALAR_SPEC_URL = '/api-reference.openapi.json';
 export const SCALAR_INTERNAL_SPEC_URL = '/api-reference.internal.openapi.json';
+export const SCALAR_DATA_SPEC_URL = '/api-reference.data.openapi.json';
 
 const SCALAR_BASE_CONFIG = {
   layout: 'modern',
@@ -21,7 +22,7 @@ export function scalarConfigFromContent(spec: Record<string, unknown>): AnyApiRe
   return { ...SCALAR_BASE_CONFIG, content: spec };
 }
 
-/** `/docs/api`'s own spec by default; pass SCALAR_INTERNAL_SPEC_URL for `/docs/api/internal`. */
+/** `/docs/api`'s own spec by default; pass SCALAR_INTERNAL_SPEC_URL or SCALAR_DATA_SPEC_URL for `/docs/api/internal` or `/docs/api/data`. */
 export function scalarConfigFromUrl(url: string = SCALAR_SPEC_URL): AnyApiReferenceConfiguration {
   return { ...SCALAR_BASE_CONFIG, url };
 }

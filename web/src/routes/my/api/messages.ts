@@ -23,6 +23,7 @@ export const messages = defineMessages(
     planError: 'Could not load your API plan.',
     retry: 'Try again',
     docs: 'API reference',
+    dataDocs: 'Data plan reference',
   },
   {
     ru: {
@@ -47,6 +48,7 @@ export const messages = defineMessages(
       planError: 'Не удалось загрузить ваш API-тариф.',
       retry: 'Повторить',
       docs: 'Документация API',
+      dataDocs: 'Документация Data-тарифа',
     },
   },
 );

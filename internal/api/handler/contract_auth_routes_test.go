@@ -92,7 +92,7 @@ var authGates = map[string]string{
 }
 
 // callerGates need a caller already in hand, so a public operation must mount none of them.
-var callerGates = []string{"paidAI", "moderator", "admin"}
+var callerGates = []string{"paidAI", "moderator", "admin", "dataPlan"}
 
 // gatesMatch reports whether the comma-separated gates a route mounts implement security:
 // a public operation (an empty requirement) mounts no gate that needs a caller; an
@@ -140,6 +140,8 @@ func TestGatesMatch(t *testing.T) {
 		{"public, optional", public, "optional", true},
 		{"public, optional then cookie", public, "optional,cookie", false},
 		{"public, paidAI", public, "paidAI", false},
+		{"public, dataPlan", public, "dataPlan", false},
+		{"either, key then dataPlan", either, "key,dataPlan", true},
 		{"cookie, cookie", cookie, "cookie", true},
 		{"cookie, cookie then moderator", cookie, "cookie,moderator", true},
 		{"cookie, open", cookie, "optional", false},
@@ -181,6 +183,7 @@ func mountRecordingRoutes(t *testing.T) *fiber.App {
 		optionalCookie: gate("optionalCookie"),
 		moderator:      gate("moderator"),
 		paidAI:         func(plan.Feature) fiber.Handler { return gate("paidAI") },
+		dataPlan:       gate("dataPlan"),
 	}
 	contract := func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusTeapot) }
 

@@ -29,7 +29,7 @@
          that used to carry this link are withheld. A quiet link, not a CTA, so it does
          not read as a way to apply; `nofollow` for the reason JobView's `applyCta` states. -->
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-      {#if job.url && !job.direct_apply}
+      {#if (job.apply_url || job.url) && !job.direct_apply}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
           href={job.source_url || job.apply_url || job.url}
           target="_blank"

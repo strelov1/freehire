@@ -6,7 +6,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
-	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/job/outboundurl"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -21,21 +20,14 @@ import (
 // full job descriptions and silently exhaust the model's context.
 const summaryMaxChars = 400
 
-// Projector renders our stored shapes into what the tools answer in. It holds the two things
-// a projection cannot derive: where this deployment is served from, and which providers
-// publish a URL that really is the employer's own page.
+// Projector renders our stored shapes into what the tools answer in. It holds what a
+// projection cannot derive: where this deployment is served from.
 type Projector struct {
 	origin string
-	// publishesEmployerURL is resolved ONCE, here: asking the sources package per job
-	// rebuilds every adapter.
-	publishesEmployerURL map[string]bool
 }
 
 func NewProjector(origin string) Projector {
-	return Projector{
-		origin:               strings.TrimSuffix(origin, "/"),
-		publishesEmployerURL: sources.EmployerURLProviders(),
-	}
+	return Projector{origin: strings.TrimSuffix(origin, "/")}
 }
 
 // JobSummary projects one posting as a search result.
@@ -63,7 +55,6 @@ func (p Projector) JobSummary(j jobview.Job) JobSummary {
 		Summary:         preview(j.Description),
 		Source:          j.Source,
 		URL:             p.pageURL("/jobs/", j.PublicSlug),
-		OfficialJobURL:  sources.EmployerURL(p.publishesEmployerURL, j.Source, j.URL),
 		ApplyURL:        j.ApplyURLFor(outboundurl.SrcMCP),
 	}
 }
@@ -151,7 +142,7 @@ func openJobs(count int32) int { return max(int(count), 0) }
 // pageURL builds a link into this deployment, or nothing at all.
 //
 // An unconfigured origin would produce a relative path nobody can follow; publishing no
-// link is better, since official_job_url and the employer's own site remain.
+// link is better, since apply_url and the employer's own site remain.
 func (p Projector) pageURL(path, slug string) string {
 	if p.origin == "" || slug == "" {
 		return ""

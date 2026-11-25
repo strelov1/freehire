@@ -138,3 +138,11 @@ func TestCompanyFilterFromValues_CommaJoinedAndRepeatedMeanTheSame(t *testing.T)
 		t.Errorf("comma-joined gave %v and repeated gave %v", joined, repeated)
 	}
 }
+
+// hq_country is the headquarters, a facet of its own beside `countries` (where the jobs are).
+func TestCompanyFilterFromValues_HQCountry(t *testing.T) {
+	g := groups(t, CompanyFilterFromValues(url.Values{"hq_country": {"AU,nz"}}))
+	if !hasGroup(g, Eq("hq_country", "AU"), Eq("hq_country", "nz")) || len(g) != 1 {
+		t.Errorf("filter = %v, want one hq_country group", g)
+	}
+}

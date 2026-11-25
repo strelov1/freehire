@@ -182,19 +182,11 @@ shows. Neither is a trade worth making.
   `contains`, which shares `ContainsMatcher` with `list_filter_values`). The whole vocabulary
   was ~125 KB. `facets` stays beside `list_filter_values` because the latter does not cover every
   facet: metros, `company_slug`, the boolean facets and the numeric ranges (`stats`) are only here.
-- **Give a person the employer URL instead of `apply_url`.** Do not: `apply_url` (`outboundurl.ApplyURL`, `src=mcp`)
-  is the link to give someone who wants to apply: it counts the click. `official_job_url` stays
-  canonical, for matching and dedup. A posting taking applications on freehire has no `apply_url`.
-  The research `url` falls back to `apply_url`, not the employer URL, when no origin is set.
-- **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
-  `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
-  resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a
-  per-provider predicate, and each call rebuilt all 223 adapters (35µs, 394 allocations),
-  which a ten-result page paid ten times over. An
-  aggregator's stored URL points at the aggregator, and this channel renders it as a link a
-  person clicks expecting the employer. This field is the employer's own URL and is
-  not click-counted yet: the MCP projector will hand out `outboundurl.ApplyURL(slug,
-  outboundurl.SrcMCP)` once the agent surfaces move to the redirect.
+- **Serve the employer's own URL.** Do not: it belongs to the Data plan, whose REST endpoints
+  (`/data/jobs/*`) are the only surface that serves it. Hand out `apply_url`
+  (`outboundurl.ApplyURL`, `src=mcp`): it counts the click and forwards to the employer. A
+  posting taking applications on freehire has no `apply_url`. The research `url` falls back to
+  `apply_url` when no origin is set.
 - **Narrow on a value the catalogue cannot filter on.** Measured against production on
   2026-09-18: `/jobs/search?category=ai` answers 0 results and reports nothing ignored. Over
   REST that is a client's problem; here the client summarises the zero as "freehire has no

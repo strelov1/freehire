@@ -21,7 +21,7 @@ const testOrigin = "https://freehire.me"
 //
 // NEVER as a jobview.Job literal. The literal skips the facet
 // normalisation, so it carries values no production read can produce — which is exactly how
-// a utm-tagged official_job_url passed green on the OJCP surface until a review caught it
+// a utm-tagged employer URL passed green on the OJCP surface until a review caught it
 // (internal/api/ojcp/AGENTS.md records the two defects that got through that way).
 func aJob(t *testing.T, mutate ...func(*db.Job)) jobview.Job {
 	t.Helper()
@@ -68,10 +68,11 @@ func enrichmentJSON(t *testing.T, e enrich.Enrichment) json.RawMessage {
 	return raw
 }
 
-func TestEverySearchResultNamesItsSourceAndBothURLs(t *testing.T) {
+func TestEverySearchResultNamesItsSourceAndItsLinks(t *testing.T) {
 	// This channel renders results as prose, where a link is the easiest thing to drop. A
 	// posting that arrives without its source can be repeated as though freehire were the
-	// employer, and one without the employer's own link sends nobody anywhere.
+	// employer, and one without a link out sends nobody anywhere. The employer's own URL is the
+	// Data plan's, so the way out is the click redirect.
 	got := NewProjector(testOrigin).JobSummary(aJob(t))
 
 	if got.Source != "greenhouse" {
@@ -80,22 +81,15 @@ func TestEverySearchResultNamesItsSourceAndBothURLs(t *testing.T) {
 	if got.URL != "https://freehire.me/jobs/senior-go-engineer-acme-abc123" {
 		t.Errorf("url = %q, want the posting's page on freehire", got.URL)
 	}
-	// Untagged. jobview stamps utm_source on every URL it serves, and this field is what a
-	// consumer deduplicates and domain-verifies against, so the tag defeats both. Our own
-	// `url` keeps it.
-	if got.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/1" {
-		t.Errorf("official_job_url = %q, want the employer's own posting untagged", got.OfficialJobURL)
-	}
-}
-
-func TestApplyURLIsTheRedirectAndOfficialJobURLStaysCanonical(t *testing.T) {
-	got := NewProjector(testOrigin).JobSummary(aJob(t))
-
 	if want := "https://freehire.me/api/v1/go/senior-go-engineer-acme-abc123?src=mcp"; got.ApplyURL != want {
 		t.Errorf("apply_url = %q, want %q", got.ApplyURL, want)
 	}
-	if got.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/1" {
-		t.Errorf("official_job_url = %q, want the canonical employer URL", got.OfficialJobURL)
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "boards.greenhouse.io") {
+		t.Errorf("summary carries the employer's own URL: %s", raw)
 	}
 }
 
@@ -107,36 +101,16 @@ func TestAnUnconfiguredOriginResearchLinkIsTheRedirect(t *testing.T) {
 	}
 }
 
-func TestAnAggregatorsLinkIsNeverCalledTheEmployersOwn(t *testing.T) {
-	// An aggregator's stored URL points at the aggregator, not at the employer. Publishing
-	// it as official_job_url is a claim we cannot vouch for, and a consumer that
-	// domain-verifies on the field would be misled by every one of them. The source name
-	// still travels, so attribution is not lost — only the claim is.
-	j := aJob(t, func(row *db.Job) {
-		row.Source = "adzuna"
-		row.URL = "https://www.adzuna.com/details/123"
-	})
-
-	got := NewProjector(testOrigin).JobSummary(j)
-
-	if got.OfficialJobURL != "" {
-		t.Errorf("official_job_url = %q, want nothing for an aggregator", got.OfficialJobURL)
-	}
-	if got.Source != "adzuna" {
-		t.Errorf("source = %q, want the aggregator still named", got.Source)
-	}
-}
-
 func TestAnUnconfiguredOriginPublishesNoFreehireURLRatherThanARelativeOne(t *testing.T) {
 	// A relative "/jobs/<slug>" is a link the model will render and nobody can follow. The
-	// posting is still reachable through official_job_url, which is the better failure.
+	// posting is still reachable through apply_url, which is the better failure.
 	got := NewProjector("").JobSummary(aJob(t))
 
 	if got.URL != "" {
 		t.Errorf("url = %q, want empty when no origin is configured", got.URL)
 	}
-	if got.OfficialJobURL == "" {
-		t.Error("official_job_url was dropped too; it does not depend on our origin")
+	if got.ApplyURL == "" {
+		t.Error("apply_url was dropped too; it does not depend on our origin")
 	}
 }
 

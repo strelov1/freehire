@@ -59,7 +59,7 @@ const created: CreatedApiKey = {
   last_used_at: null,
   expires_at: null,
   // Deliberately not shaped like a credential: a realistic-looking fixture trips the
-  // gitleaks pre-commit hook, and a scanner taught to ignore this file would stop guarding
+  // Betterleaks pre-commit hook, and a scanner taught to ignore this file would stop guarding
   // the real thing.
   token: 'plaintext-token-shown-once',
 };

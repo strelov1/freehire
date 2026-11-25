@@ -30,5 +30,6 @@ func (a *API) newMiddleware(cfg Config, plans *plan.Store) middleware {
 		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
 		moderator:      requireModerator,
 		paidAI:         paidAIGate(entitlementOf(plans)),
+		dataPlan:       dataPlanGate(a.queries),
 	}
 }

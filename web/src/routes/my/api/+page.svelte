@@ -59,5 +59,8 @@
     <p class="text-xs text-muted-foreground">{s.usageNote}</p>
   </section>
 
-  <a href={resolve('/docs/api')} class="text-sm font-medium underline-offset-4 hover:underline">{s.docs}</a>
+  <div class="flex flex-wrap gap-4">
+    <a href={resolve('/docs/api')} class="text-sm font-medium underline-offset-4 hover:underline">{s.docs}</a>
+    <a href={resolve('/docs/api/data')} class="text-sm font-medium underline-offset-4 hover:underline">{s.dataDocs}</a>
+  </div>
 </div>
