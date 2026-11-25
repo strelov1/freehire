@@ -98,7 +98,9 @@ jobs:
       # The other half of the check in ci.yml's web-work job: lib/assistant holds verbatim
       # ports of web/src/lib/assistant, and an extension-only change selects this job alone.
       - name: Check the assistant ports against the web
-        working-directory: ..
+        # A step's working-directory is resolved against the checkout root, not the job's
+        # default, so this is the root and not `..` (one level above it).
+        working-directory: .
         run: node scripts/check-assistant-ports.mjs
 
       # Production build (.env.production -> freehire.me),
