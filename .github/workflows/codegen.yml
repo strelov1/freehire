@@ -14,7 +14,13 @@ permissions:
 
 concurrency:
   group: codegen-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a newer pull request run cancels an older one. On main each run is the verdict on
+  # one merge, and the next merge's run does not replace it: its jobs are selected by ITS
+  # diff, so its `migrations` job is skipped when it touches no migration. Both happened
+  # on 2026-11-24: at 17:08Z three pushes were cancelled inside 40 seconds, and at 10:01Z
+  # the one survivor of a burst had its `migrations` job skipped. Cancelling is what can
+  # let a collision through unchecked.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   changes:
@@ -220,12 +226,32 @@ jobs:
 
       # The allowlist is the duplicate prefixes already applied, each with its file
       # count. A new file that reuses a number — including one more 0144 — fails here.
+      #
+      # What it cannot see is another pull request's file: each run reads the tree it was
+      # started with, so two pull requests that each add 0309_*.sql both pass, and the
+      # second to merge lands a duplicate (2026-11-24: #5124 passed at 11:00, #5121 put its
+      # own 0309 on main at 12:47, #5124 merged at 17:09). Making it bite is two settings
+      # on main, both in branch protection: add this job (`migrations`) to the required
+      # checks, and tick "Require branches to be up to date before merging".
+      #
+      # Until then the push to main is where a collision surfaces, and this step names the
+      # file the push added on the colliding number. That file is the one to fix, not the one
+      # already on main. A red run here does not hold back a deploy, so it may already have
+      # run: rename it only while it has run nowhere, otherwise raise its allowlist count.
+      # The script runs BEFORE the test file on purpose. GitHub runs a `run:`
+      # block with `bash -e`, and the test file's first case asserts the live tree, so on a
+      # collision it exits nonzero and everything after it is skipped: the diagnostic has
+      # to come first to be printed.
       - name: Check migration numbers
+        env:
+          # The tip before this push. Empty on a pull request, where there is no such
+          # answer to give: both files already exist at the pull request's base.
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
+          pnpm check:migration-numbers --base "$BEFORE_SHA"
           node --test scripts/check-migration-numbers.test.mjs
           node scripts/check-gitignore.mjs --self-test
           node scripts/check-gitignore.mjs
-          pnpm check:migration-numbers
 
   # The public API's contract against main: read scripts/check-openapi-breaking.sh for
   # what counts as breaking and the `API-Break:` trailer that lets a deliberate break

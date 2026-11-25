@@ -141,7 +141,7 @@ func (s talentsoft) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	}
 	outOfTime := 0
 	for _, p := range fresh {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime++
 			continue
 		}
@@ -162,13 +162,6 @@ func (s talentsoft) siteLimiter() waiter {
 		return nil
 	}
 	return rate.NewLimiter(rate.Every(s.siteInterval), 1)
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s talentsoft) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // talentsoftPaced routes one site's requests through its own pacer and the vendor's.

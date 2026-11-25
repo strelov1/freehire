@@ -178,12 +178,22 @@ var blocks = map[string][]string{
 		// sequence. Both exist to reach the user.
 		// deliverywindow is the quiet-hours and digest-time clock the notify, reminder and
 		// nudge engines share; mailtpl is the shell every outgoing mail is rendered into.
+		// foundermail is the envelope (human sender, Reply-To, news group and unsubscribe link)
+		// shared by the five first-person founder-letter senders: onboarding, limitnudge,
+		// broadcast, cvlifecycle and prowelcome. Each still owns its copy.
 		// Standard library only, and only engage imports them.
-		"maildaily", "cvlifecycle", "deliverywindow", "mailtpl",
+		"maildaily", "cvlifecycle", "deliverywindow", "mailtpl", "foundermail",
+		// digest is the snapshot → render → claim → send → record loop the inbox and application
+		// digests share; each keeps its own query and mail.
+		"digest",
 		"linkedinauth", "mailpreview", "mentorship", "messaging",
 		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
 		// reaches into application (gmailsync) as mentorship does for calendar-write consent.
 		"mentorship/busysync",
+		// batchnotify is the Telegram and email wrapper the nudge and reminder engines share.
+		// It sits above telegramnotify/emailnotify (which implement notify.Notifier) and so
+		// cannot live in notify itself, which they import.
+		"batchnotify",
 		"applicationdigest", "inboxdigest", "interviewscheduling", "notify", "nudge", "onboarding", "problemreport",
 		// ga4mp sends one sign-up event to Google Analytics, imports only the standard library,
 		// and is called by the auth handlers; a growth measurement, so engage.

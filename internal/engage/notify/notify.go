@@ -196,13 +196,6 @@ type DigestJob struct {
 	SalaryPeriod   string
 }
 
-// Notifier delivers a message over a channel to a destination. The matching engine
-// depends only on this, so a new channel is a new implementation, not a change
-// here. (Telegram resolves dest as a chat_id string; webhook/email as a URL/address.)
-type Notifier interface {
-	Send(ctx context.Context, channel, dest string, m Message) error
-}
-
 // Searcher is the search backend the matcher runs filters against. *search.Client
 // satisfies it; tests inject a fake.
 type Searcher interface {
@@ -353,14 +346,14 @@ func (s Stats) MatchingCollapsed() bool {
 type Runner struct {
 	store    Store
 	searcher Searcher
-	notifier Notifier
+	notifier Notifier[Message]
 	cfg      Config
 	now      func() time.Time
 	ads      adConfig
 }
 
 // New builds a Runner.
-func New(store Store, searcher Searcher, notifier Notifier, cfg Config) *Runner {
+func New(store Store, searcher Searcher, notifier Notifier[Message], cfg Config) *Runner {
 	return &Runner{store: store, searcher: searcher, notifier: notifier, cfg: cfg, now: time.Now}
 }
 

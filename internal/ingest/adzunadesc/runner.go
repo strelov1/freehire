@@ -88,7 +88,7 @@ func (s RunStats) Degraded() bool {
 // recorded against it.
 func Run(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions) (RunStats, error) {
 	rn := &run{store: s, fetch: fetch, opts: opts}
-	result, err := outbox.RunPool(ctx, &cancelAwareClaimer{store: s}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: s}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,
@@ -104,25 +104,6 @@ func Run(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions) (RunSta
 		return stats, fmt.Errorf("claim adzuna description captures: %w", err)
 	}
 	return stats, nil
-}
-
-// cancelAwareClaimer adapts Store to outbox.Claimer, checking ctx.Err() before every
-// claim AFTER the first — see internal/ingest/applyform's identical adapter (this package
-// mirrors it) for the full rationale, including why the first call is deliberately
-// unguarded: the original loop never checked ctx before its first claim, only between
-// waves, so an already-cancelled ctx at Run()'s very start still made one real claim
-// attempt (a visible error) rather than a silent zero-stats no-op.
-type cancelAwareClaimer struct {
-	store Store
-	calls int
-}
-
-func (c *cancelAwareClaimer) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
-	if c.calls > 0 && ctx.Err() != nil {
-		return nil, nil
-	}
-	c.calls++
-	return c.store.Claim(ctx, batch, leaseSeconds)
 }
 
 // run carries one Run's dependencies and options so process uses the receiver instead

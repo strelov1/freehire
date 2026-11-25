@@ -3,9 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"slices"
 	"sort"
@@ -232,8 +230,7 @@ func (s spainjobs) detail(ctx context.Context, p spainjobsPosting) (Job, bool, e
 	}
 	root, err := s.http.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

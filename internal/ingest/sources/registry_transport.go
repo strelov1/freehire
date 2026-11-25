@@ -1,24 +1,28 @@
 package sources
 
-// cookieSessionSource builds a registry entry for an adapter whose API is session- or
-// CSRF-cookie-authenticated (taleo, aijobs) and so cannot share the shared jar-less
-// client. On a real crawl (c != nil) it hands build a fresh cookie-jar client; on the
-// transport-free taxonomy path (c == nil, e.g. FilterableProviders) it hands build a true
-// nil transport, since T is an interface type parameter and its zero value is nil —
-// Provider()/marker assertions never touch it.
-func cookieSessionSource[T any](c HTTPClient, build func(T) Source) Source {
+// ownTransportSource builds a registry entry for an adapter that cannot share the pooled
+// client and needs a transport of its own: a session- or CSRF-cookie jar (taleo, aijobs), a
+// connection the platform mishandles when reused (profession), or a User-Agent its edge admits
+// (4dayweek, Feishu Hire, OCC Mundial, UKG). On a real crawl (c != nil) it hands build a client
+// from newClient; on the transport-free taxonomy path (c == nil, e.g. FilterableProviders) it
+// hands build a true nil transport, since T is an interface type parameter and its zero value is
+// nil — Provider()/marker assertions never touch it.
+func ownTransportSource[T any](c HTTPClient, newClient func() *Client, build func(T) Source) Source {
 	if c == nil {
 		var zero T
 		return build(zero)
 	}
-	return build(any(newCookieClient()).(T))
+	return build(any(newClient()).(T))
 }
 
-// singleUseConnSource builds a registry entry for an adapter whose platform mishandles a
-// reused HTTP connection (profession) and so cannot share the pooled client. It mirrors
-// cookieSessionSource exactly, including its nil-transport case: on the taxonomy path
-// (c == nil) it hands build a true nil, since T is an interface type parameter whose zero
-// value is nil and Provider()/marker assertions never touch it.
+// cookieSessionSource is ownTransportSource for an adapter whose API is session- or
+// CSRF-cookie-authenticated, and so cannot share the shared jar-less client.
+func cookieSessionSource[T any](c HTTPClient, build func(T) Source) Source {
+	return ownTransportSource(c, newCookieClient, build)
+}
+
+// singleUseConnSource is ownTransportSource for an adapter whose platform mishandles a reused
+// HTTP connection (profession).
 //
 // The failure it answers is worth stating, because it does not present as a transport
 // problem: over a pooled connection the platform answers the first request or two and then
@@ -26,43 +30,26 @@ func cookieSessionSource[T any](c HTTPClient, build func(T) Source) Source {
 // sitemap that parses cleanly as a much shorter one. Pacing does not help and a retry
 // cannot, since the retry reuses the same pool.
 func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
-	if c == nil {
-		var zero T
-		return build(zero)
-	}
-	return build(any(newSingleUseConnClient()).(T))
+	return ownTransportSource(c, newSingleUseConnClient, build)
 }
 
-// browserUASource builds a registry entry for an adapter whose platform refuses any client
-// that identifies itself, on a path that platform's own robots.txt allows (4dayweek). It
-// mirrors cookieSessionSource exactly, including its nil-transport case for the taxonomy path.
-// See BrowserUserAgent for the rationale, and for the line this does NOT cross.
+// browserUASource is ownTransportSource for an adapter whose platform refuses any client that
+// identifies itself, on a path that platform's own robots.txt allows (4dayweek). See
+// BrowserUserAgent for the rationale, and for the line this does NOT cross.
 func browserUASource[T any](c HTTPClient, build func(T) Source) Source {
-	if c == nil {
-		var zero T
-		return build(zero)
-	}
-	return build(any(newBrowserUAClient()).(T))
+	return ownTransportSource(c, newBrowserUAClient, build)
 }
 
 // macBrowserUASource is browserUASource for an edge that admits only a macOS browser string
 // (Feishu Hire). See macBrowserUserAgent.
 func macBrowserUASource[T any](c HTTPClient, build func(T) Source) Source {
-	if c == nil {
-		var zero T
-		return build(zero)
-	}
-	return build(any(newMacBrowserUAClient()).(T))
+	return ownTransportSource(c, newMacBrowserUAClient, build)
 }
 
 // compatibleUASource is browserUASource for an edge that admits the project's own identity once
 // it is written in the browser-compatible form (OCC Mundial). See compatibleUserAgent.
 func compatibleUASource[T any](c HTTPClient, build func(T) Source) Source {
-	if c == nil {
-		var zero T
-		return build(zero)
-	}
-	return build(any(NewCompatibleUAClient()).(T))
+	return ownTransportSource(c, NewCompatibleUAClient, build)
 }
 
 // crawlerUASource is compatibleUASource for an edge that refuses every self-identifying
@@ -71,11 +58,7 @@ func compatibleUASource[T any](c HTTPClient, build func(T) Source) Source {
 // the Googlebot string and a plain browser string are both served).
 // See crawlerUserAgent for the line this does not cross.
 func crawlerUASource[T any](c HTTPClient, build func(T) Source) Source {
-	if c == nil {
-		var zero T
-		return build(zero)
-	}
-	return build(any(newCrawlerUAClient()).(T))
+	return ownTransportSource(c, newCrawlerUAClient, build)
 }
 
 // reg indexes sources by provider key. A duplicate key means two adapters claim the

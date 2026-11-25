@@ -2,9 +2,7 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"sync/atomic"
 
@@ -74,8 +72,7 @@ func (s compleo) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 func (s compleo) FetchPosting(ctx context.Context, loc string) (Job, bool, error) {
 	root, err := s.http.GetHTML(ctx, loc)
 	if err != nil {
-		var status *StatusError
-		if errors.As(err, &status) && (status.Code == http.StatusNotFound || status.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, fmt.Errorf("compleo: posting %s: %w", compleoJobID(loc), err)

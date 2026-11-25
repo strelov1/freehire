@@ -41,13 +41,6 @@ func companyListItemFromDoc(d search.CompanyDocument) apigen.CompanyListItem {
 	}
 }
 
-func nilFloat32Ptr(p *float32) apigen.NilFloat32 {
-	if p == nil {
-		return apigen.NilFloat32{Null: true}
-	}
-	return apigen.NewNilFloat32(*p)
-}
-
 // presentOrNilFloat treats 0 as absent — CompanyDocument's "no rating" sentinel
 // (see its doc comment): a real average is never 0, since ratings are 1-5.
 func presentOrNilFloat(f float32) *float32 {
@@ -55,14 +48,6 @@ func presentOrNilFloat(f float32) *float32 {
 		return nil
 	}
 	return &f
-}
-
-// presentOrNil treats the empty string as absent — the search document's way of spelling NULL.
-func presentOrNil(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 // orEmpty normalizes a nil array so it serializes as [] rather than null.

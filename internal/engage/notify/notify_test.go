@@ -354,7 +354,7 @@ func TestDeliver_EmailResolvesAccountEmail(t *testing.T) {
 		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A"}},
 	}
 	em := &recordingNotifier{}
-	r := New(store, &fakeSearcher{}, Router{ChannelEmail: em}, DefaultConfig())
+	r := New(store, &fakeSearcher{}, Router[Message]{ChannelEmail: em}, DefaultConfig())
 
 	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatal(err)
@@ -377,7 +377,7 @@ func TestDeliver_UnconfiguredEmailChannelIsSoftSkipped(t *testing.T) {
 	}
 	// Router without an email notifier (SES unconfigured): the email channel is
 	// unregistered, so delivery must soft-skip rather than dead-letter.
-	r := New(store, &fakeSearcher{}, Router{ChannelTelegram: &recordingNotifier{}}, DefaultConfig())
+	r := New(store, &fakeSearcher{}, Router[Message]{ChannelTelegram: &recordingNotifier{}}, DefaultConfig())
 
 	stats, err := r.Run(context.Background())
 	if err != nil {

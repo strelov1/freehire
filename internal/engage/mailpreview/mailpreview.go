@@ -371,7 +371,7 @@ func savedJobReminderBatchSample(baseURL string) (Sample, error) {
 func followUpNudgeSample(baseURL string) (Sample, error) {
 	return sample("nudge-follow-up", "Tracking / Nudge: follow up", func(c *capture) error {
 		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindFollowUp, []nudge.Message{{
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []nudge.Message{{
 				UserID:     previewUserID,
 				Kind:       nudge.KindFollowUp,
 				JobTitle:   "Staff Engineer, Platform",
@@ -386,7 +386,7 @@ func followUpNudgeSample(baseURL string) (Sample, error) {
 func followUpNudgeBatchSample(baseURL string) (Sample, error) {
 	return sample("nudge-follow-up-batch", "Tracking / Nudge: follow up (batch)", func(c *capture) error {
 		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindFollowUp, []nudge.Message{
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []nudge.Message{
 				{UserID: previewUserID, Kind: nudge.KindFollowUp, JobTitle: "Staff Engineer, Platform", Company: "Speechify", Slug: "staff-engineer-platform-speechify", DaysSilent: 12},
 				{UserID: previewUserID, Kind: nudge.KindFollowUp, JobTitle: "Backend Engineer", Company: "Monzo", Slug: "backend-engineer-monzo", DaysSilent: 24},
 				{UserID: previewUserID, Kind: nudge.KindFollowUp, JobTitle: "Infrastructure Engineer", Company: "Grafana Labs", Slug: "infrastructure-engineer-grafana-labs", DaysSilent: 31},
@@ -397,7 +397,7 @@ func followUpNudgeBatchSample(baseURL string) (Sample, error) {
 func jobClosedNudgeSample(baseURL string) (Sample, error) {
 	return sample("nudge-job-closed", "Tracking / Nudge: job closed", func(c *capture) error {
 		return nudge.NewEmailNotifier(c, "alerts@freehire.me", baseURL, previewLinks(baseURL)).
-			Send(context.Background(), notify.ChannelEmail, "someone@example.com", nudge.KindJobClosed, []nudge.Message{{
+			Send(context.Background(), notify.ChannelEmail, "someone@example.com", []nudge.Message{{
 				UserID:   previewUserID,
 				Kind:     nudge.KindJobClosed,
 				JobTitle: "Go Developer — Payments",

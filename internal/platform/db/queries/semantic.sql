@@ -14,7 +14,7 @@
 --      against.
 --   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and
 --      canonical) — a job now closed OR a non-canonical repost (duplicate_of set) — so
---      the worker clears their stamp, legacy vector, and job_semantic_chunks rows
+--      the worker clears their stamp and job_semantic_chunks rows
 --      (Store.CompleteClosed; there is no search index left to remove a document from —
 --      see openspec/changes/drop-hybrid-search-pgvector-similar).
 -- ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every

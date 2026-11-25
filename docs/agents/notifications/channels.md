@@ -2,18 +2,18 @@
 
 Part of [notifications](../notifications.md): how a message reaches a person — the `Notifier` implementations, the channel vocabulary, and what a missing or blocked channel does.
 
-- **A new channel is a new `Notifier` implementation — but there are THREE of them.** Each engine
-  depends only on its own `Notifier` interface plus a `Router` (a `map[channel]Notifier`); the
-  three interfaces share a signature and differ in payload, and `notify`/`reminder`/`nudge` each
-  carry their own `Router`, `ErrChannelNotConfigured` and `recipient`. So adding a channel is a
-  digest notifier, a reminder transport, a nudge transport, a case in ALL THREE `recipient`
-  functions, and a wire-up in all three `cmd` mains — confirmed by push, the third channel to
-  actually land this way (`add-push-notification-channel`). Collapsing the three engines into one
-  is still not done: `internal/engage/nudge` was a third **use case** over the same channels and didn't
-  trigger it, and landing push — a third **channel** — didn't either, since the duplication is
-  three small, near-identical `PushNotifier`s (a few lines of message-rendering each) rather than
-  three copies of anything structurally significant. Revisit if a fourth channel makes the
-  per-engine cost look different.
+- **A new channel is a new `Notifier` implementation — one interface, three payloads.** The
+  engine seam is the generic `notify.Notifier[M]` plus `notify.Router[M]` (a
+  `map[channel]Notifier[M]`), instantiated as `notify.Notifier[notify.Message]` for a digest and
+  `notify.Notifier[[]T]` for a reminder or nudge batch. `ErrChannelNotConfigured`,
+  `ErrRecipientGone`, the destination rule (`notify.Recipient`), the claim release and the push
+  wrapper (`notify.Push[M]`) are shared; the Telegram and email wrappers live in
+  `internal/engage/batchnotify` because those channel packages implement `notify.Notifier` and
+  cannot be imported by it. Each engine owns only its message type and its copy (a render
+  function per channel). Adding a channel is therefore one wrapper plus one render function per
+  engine and a wire-up in each `cmd` main that should carry it; `reminder` and `nudge` read
+  destinations through the one `notify.Recipient`, so a new channel's destination rule is
+  written once.
   **The fourth channel (webhook, `add-saved-search-webhooks`) answers that by landing in
   only ONE of the three engines** — a saved search's "matched a job" alert is what a
   candidate's own tooling wants pushed to it; a saved-job reminder or a lifecycle nudge is
@@ -28,14 +28,14 @@ Part of [notifications](../notifications.md): how a message reaches a person —
   does), so this is reachable only by a direct API call — accepted as the cost of one shared
   vocabulary constant rather than a per-engine one.
   **Grouping made the duplication bigger, and that is the seam to watch.** `reminder` and
-  `nudge` now each carry a near-identical `collect` + `deliverBatch` pair — claim, validate
-  per item, group, send once, finalize every member — differing only in their ledger's
-  method names and in nudge's kind in the group key. Two copies is not yet an abstraction:
-  a shared engine would have to be generic over the delivery row, the ledger's five
-  statements and the message type, which is more machinery than the ~80 duplicated lines
-  cost. What IS shared is what would silently diverge — `notify.ListLimit` and `Listed`,
-  `notify.SnapshotJob`/`JobsSnapshot`, and `telegramnotify.MaxMessageLen`/`UTF16Len`. A
-  third batching engine is the signal to extract the loop itself.
+  `nudge` now each carry a near-identical `collect` + `deliverBatch` + `deliverChannels` trio
+  — claim, validate per item, group, send once, finalize every member — differing only in
+  their ledger's method names and in nudge's kind in the group key. Everything those loops
+  call that is not the ledger is shared (`notify.Recipient`, `notify.Release`,
+  `batchnotify.UnlinkTelegram`, `notify.JobsSnapshotOf`). The loops themselves are still two
+  copies: a shared engine would have to be generic over the delivery row and the ledger's
+  five statements, which is more machinery than the ~80 duplicated lines cost. A third
+  batching engine is the signal to extract the loop itself.
 
 - **Push needs no server-side credential and is therefore always registered.** Unlike Telegram
   (`TELEGRAM_BOT_TOKEN`) and email (`AWS_REGION`+`NOTIFY_EMAIL_FROM`), Expo's relay holds the
@@ -43,8 +43,8 @@ Part of [notifications](../notifications.md): how a message reaches a person —
   every `cmd` main registers the push notifier unconditionally — there is no "channel not
   configured" state for push, only a per-recipient one. `dest` for push is the recipient's user id
   (not a device token): a user may have zero-to-many registered devices
-  (`user_push_tokens`), so each engine's `recipient()` soft-skips on a live `HasPushDevice`
-  column (mirroring `TelegramChatID.Valid`) and the `PushNotifier` fans the send out to every
+  (`user_push_tokens`), so `recipient()`/`notify.Recipient` soft-skips on a live `HasPushDevice`
+  column (mirroring `TelegramChatID.Valid`) and `notify.Push` fans the send out to every
   device via `pushnotify.SendToDevices`, which is delivered as long as at least one device
   received it.
 
@@ -69,8 +69,8 @@ Part of [notifications](../notifications.md): how a message reaches a person —
 - **A blocked Telegram bot unlinks the chat; it does not fail the delivery.** Every 403 the
   Bot API answers a send with means the chat is permanently closed (blocked, deactivated,
   bot removed), and no retry reaches it. `telegramnotify.ErrChatUnreachable` carries that up;
-  each engine's Telegram notifier translates it into its own `ErrRecipientGone`, and the
-  runner deletes the user's `telegram_links` row and soft-skips. **Matched on the 403, not on
+  `telegramnotify.SendToChat` translates it into the one `notify.ErrRecipientGone` every engine
+  aliases, and the runner deletes the user's `telegram_links` row and soft-skips. **Matched on the 403, not on
   the description text** — that text is prose Telegram may reword, and a rule keyed to
   "Forbidden: bot was blocked by the user" would stop firing silently. Unlinking rather than
   disabling the subscription is the point: blocking the bot is a fact about the USER, so one

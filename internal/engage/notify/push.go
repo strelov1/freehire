@@ -1,43 +1,31 @@
 package notify
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 )
 
-// PushTokenLister lists a user's registered push devices.
-type PushTokenLister = pushnotify.TokenLister
-
-// PushNotifier delivers a digest as a mobile push, fanned out to every device
-// the user has registered. dest is the user id — recipient() resolves it live
-// from HasPushDevice rather than a stored per-subscription destination.
-type PushNotifier struct{ push *pushnotify.UserSender }
-
-// NewPushNotifier builds a PushNotifier resolving devices through tokens and
-// sending through transport.
-func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *PushNotifier {
-	return &PushNotifier{push: pushnotify.NewUserSender(tokens, transport)}
-}
-
-// Send renders the digest as a short title/body (no room for an itemized listing)
-// and fans it out to every device the user has registered. A single-job digest
-// carries the job's slug as deep-link data; a multi-job one carries none.
+// NewPushNotifier builds the digest's push notifier (notify.Push): it renders a
+// digest as a short title/body (no room for an itemized listing) and fans it out
+// to every device the user has registered. dest is the user id — recipient()
+// resolves it live from HasPushDevice rather than a stored per-subscription
+// destination.
 //
 // A message of several digests is still ONE push: its title counts the alerts and
-// its body the jobs.
-func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, m Message) error {
+// its body the jobs. A single-job digest carries the job's slug as deep-link data.
+func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *Push[Message] {
+	return NewPush(tokens, transport, renderPush)
+}
+
+// renderPush is the digest's push copy, shared by the one-digest and the
+// several-digest message.
+func renderPush(m Message) (title, body, slug string) {
 	if len(m.Digests) == 1 {
-		title, body, slug := renderDigest(m.Digests[0])
-		var data map[string]string
-		if slug != "" {
-			data = map[string]string{"slug": slug}
-		}
-		return n.push.Send(ctx, dest, title, body, data)
+		return renderDigest(m.Digests[0])
 	}
-	return n.push.Send(ctx, dest, fmt.Sprintf("%d job alerts", len(m.Digests)), JobCount(m.Total()), nil)
+	return fmt.Sprintf("%d job alerts", len(m.Digests)), JobCount(m.Total()), ""
 }
 
 // renderDigest renders a digest into its short copy: a title, a body with the match

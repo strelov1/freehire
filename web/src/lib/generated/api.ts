@@ -1275,6 +1275,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/jobs/{slug}/outbound-clicks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a vacancy's outbound clicks by day, country and source.
+         * @description Human clicks that freehire sent to the employer's site for the team's own vacancy; bots are excluded.
+         */
+        get: operations["getEmployerVacancyOutboundClicks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/jobs/{slug}/reopen": {
         parameters: {
             query?: never;
@@ -8483,6 +8503,44 @@ export interface components {
         EmployerConfirm: {
             code?: string;
         };
+        EmployerOutboundClicks: {
+            /** @description Days with at least one click, oldest first. */
+            days: components["schemas"]["EmployerOutboundDay"][];
+            /** @description Most clicks first. */
+            countries: components["schemas"]["EmployerOutboundCount"][];
+            /** @description Most clicks first. */
+            sources: components["schemas"]["EmployerOutboundCount"][];
+            /**
+             * Format: int64
+             * @description Clicks in the range.
+             */
+            clicks: number;
+            /**
+             * Format: int64
+             * @description Visitors in the range, one per visitor per day.
+             */
+            visitors: number;
+        };
+        EmployerOutboundCount: {
+            /** @description The country code (`CF-IPCountry`) or the surface (`web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram`, `api`, `other`). Empty when unknown. */
+            key: string;
+            /** Format: int64 */
+            clicks: number;
+        };
+        EmployerOutboundDay: {
+            /** @description UTC day, `YYYY-MM-DD`. */
+            day: string;
+            /**
+             * Format: int64
+             * @description Human clicks through the freehire redirect to the employer's site that day.
+             */
+            clicks: number;
+            /**
+             * Format: int64
+             * @description Distinct visitors that day.
+             */
+            visitors: number;
+        };
         /** @description A pending claim with the current domain check, not a stored historical failure reason. */
         EmployerPendingClaim: {
             /** Format: int64 */
@@ -14533,6 +14591,72 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["EmployerClosed"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEmployerVacancyOutboundClicks: {
+        parameters: {
+            query?: {
+                /** @description First UTC day, inclusive. Defaults to 29 days before `to`. (e.g. `2026-11-01`) */
+                from?: string;
+                /** @description Last UTC day, inclusive. Defaults to today. At most 366 days after `from`. (e.g. `2026-11-30`) */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The employer-authored vacancy's public slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "days": [
+                     *           {
+                     *             "day": "2026-11-20",
+                     *             "clicks": 12,
+                     *             "visitors": 9
+                     *           }
+                     *         ],
+                     *         "countries": [
+                     *           {
+                     *             "key": "DE",
+                     *             "clicks": 12
+                     *           }
+                     *         ],
+                     *         "sources": [
+                     *           {
+                     *             "key": "web",
+                     *             "clicks": 12
+                     *           }
+                     *         ],
+                     *         "clicks": 12,
+                     *         "visitors": 9
+                     *       }
+                     *     }
+                     */
+                    "application/json": {
+                        data: components["schemas"]["EmployerOutboundClicks"];
                     };
                 };
             };
