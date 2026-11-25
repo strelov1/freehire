@@ -494,3 +494,32 @@ func TestPlanMerges_CuratedEntryCannotRetireAFrozenCanon(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanMerges_FrozenCanonNeverRetiresThroughAnyGroup(t *testing.T) {
+	frozen := map[string]bool{"acme": true, "acme-inc": true}
+	cases := map[string]struct {
+		companies []company
+		curated   map[string]string
+	}{
+		// The curated fold pulls frozen acme into acme-inc's group by name.
+		"curated fold": {
+			companies: []company{{Slug: "acme", Name: "Acme", JobCount: 9}, {Slug: "acme-inc", Name: "Acme", JobCount: 5}, {Slug: "acme-1", Name: "Acme 1", JobCount: 1}},
+			curated:   map[string]string{"acme-1": "acme-inc"},
+		},
+		// Two frozen canons share an ordinary fold; electCanonical can keep only one.
+		"two canons in one fold": {
+			companies: []company{{Slug: "acme", Name: "Acme", JobCount: 9}, {Slug: "acme-inc", Name: "Acme Inc", JobCount: 5}},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, m := range planMerges(tc.companies, frozen, 0, tc.curated) {
+				for _, a := range m.Aliases {
+					if frozen[a.Slug] {
+						t.Errorf("planned frozen %q -> %q, want it kept", a.Slug, m.Canonical)
+					}
+				}
+			}
+		})
+	}
+}

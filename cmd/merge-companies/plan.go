@@ -100,9 +100,7 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		// join the canon's group. Key and winner are set together so they cannot disagree.
 		var canon string
 		switch named, isMember := curated[c.Slug]; {
-		case isMember && !frozen[c.Slug]:
-			// A frozen canon never moves, curated or not: other aliases already 301 to it and
-			// the registry resolves one hop, so retiring it would strand them.
+		case isMember:
 			// Comma-ok, not a non-empty test: an empty canon is a malformed entry
 			// (TestCuratedAliasesAreWellFormed rejects it), not silence.
 			canon = named
@@ -141,7 +139,10 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		m := merge{Canonical: winner, GroupKey: key}
 		for _, c := range members {
 			m.Jobs += c.JobCount
-			if c.Slug == winner {
+			// A frozen canon never moves, whatever path grouped it (curated entry, curated fold,
+			// a fold holding two canons): other aliases already 301 to it and the registry
+			// resolves one hop, so retiring it would strand them on an empty slug.
+			if c.Slug == winner || frozen[c.Slug] {
 				continue
 			}
 			m.Aliases = append(m.Aliases, alias{
