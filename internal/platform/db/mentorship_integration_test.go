@@ -232,8 +232,12 @@ func TestWithdrawalKeepsTheHistory(t *testing.T) {
 	})
 
 	t.Run("its review survives", func(t *testing.T) {
-		if _, err := q.GetMentorReviewForBooking(ctx, past.ID); err != nil {
-			t.Errorf("the review is gone: %v", err)
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM mentor_reviews WHERE booking_id = $1`, past.ID).Scan(&n); err != nil {
+			t.Fatalf("count reviews: %v", err)
+		}
+		if n != 1 {
+			t.Errorf("the booking holds %d reviews after withdrawal, want 1 — the review is gone", n)
 		}
 	})
 
@@ -758,6 +762,7 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("book: %v", err)
 		}
+		var reviews int
 		for _, rating := range []int16{5, 2} {
 			if _, err := q.UpsertMentorReview(ctx, UpsertMentorReviewParams{
 				BookingID: booking.ID, MentorID: mentor.ID, SeekerUserID: seeker,
@@ -767,12 +772,12 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 			}
 		}
 
-		summary, err := q.GetMentorReviewSummary(ctx, mentor.ID)
-		if err != nil {
-			t.Fatalf("GetMentorReviewSummary: %v", err)
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM mentor_reviews WHERE booking_id = $1`,
+			booking.ID).Scan(&reviews); err != nil {
+			t.Fatalf("count reviews: %v", err)
 		}
-		if summary.RatingCount != 1 {
-			t.Errorf("rating count = %d after two submissions, want 1", summary.RatingCount)
+		if reviews != 1 {
+			t.Errorf("review rows = %d after two submissions, want 1", reviews)
 		}
 	})
 }
