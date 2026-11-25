@@ -8,8 +8,9 @@
 //   - the filter params, from filters.ts (the contract reads them from the raw query on
 //     purpose, see typespec/search.tsp), declared here because an Action sends only the
 //     params its schema names;
-//   - the `data` of the operations that pass a job through as `unknown`, from the
-//     typespec/job-wire.tsp models (DATA_SCHEMAS);
+//   - the `data` of the one operation that still passes its answer through as `unknown`
+//     (`jobFacets`), from its typespec/job-wire.tsp model (DATA_SCHEMAS). A job is typed in
+//     the contract itself, so the job operations need no entry;
 //   - the info prose, chatgpt-openapi-info.md.
 
 // The operations in the schema, by contract operationId, mapped to the operationId the
@@ -33,12 +34,8 @@ const OPERATIONS = {
 // company listing's.
 const FILTERED = { searchJobs: 'job', agentSearchJobs: 'job', jobFacets: 'job', listCompanies: 'company' };
 
-// The model under `data` of an operation whose contract leaves it `unknown`.
+// The model under `data` of an operation whose contract still leaves it `unknown`.
 const DATA_SCHEMAS = {
-  searchJobs: 'Job',
-  agentSearchJobs: 'Job',
-  getJob: 'Job',
-  similarJobs: 'Job',
   jobFacets: 'JobFacetCounts',
 };
 

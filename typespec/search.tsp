@@ -4,8 +4,8 @@ using Http;
 
 namespace Freehire;
 
-// The job search surfaces over the Meilisearch index. A job is the jobview wire shape
-// (internal/job/jobview), shared with the MCP tools, so it is passed through as `unknown`.
+// The job search surfaces over the Meilisearch index. A job is the `Job` model
+// (job-wire.tsp, the jobview wire shape of internal/job/jobview), shared with the MCP tools.
 //
 // The filter vocabulary (`countries`, `seniority`, `work_mode`, ... and their `_exclude`
 // variants) is read from the raw query and is deliberately not declared here: a typed
@@ -18,7 +18,7 @@ model JobSearchMeta {
 }
 
 model JobSearchPage {
-  data: unknown[];
+  data: Job[];
   meta: JobSearchMeta;
 }
 
@@ -27,7 +27,7 @@ model AgentJobSearchMeta {
 }
 
 model AgentJobSearchPage {
-  data: unknown[];
+  data: Job[];
   meta: AgentJobSearchMeta;
 }
 
@@ -299,4 +299,4 @@ op similarJobs(
   @path slug: string,
   /** Max similar jobs. (e.g. `10`) */
   @query limit?: string,
-): Data<unknown[]> | Problem;
+): Data<Job[]> | Problem;

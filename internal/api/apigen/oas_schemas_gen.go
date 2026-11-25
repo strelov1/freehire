@@ -21824,7 +21824,6 @@ func (s *OnboardingCompleted) SetOnboardingComplete(val bool) {
 // One matching posting with how well its skills match the given ones.
 // Ref: #/components/schemas/OnboardingMatch
 type OnboardingMatch struct {
-	// The jobview wire shape `/jobs/search` answers with.
 	Job jx.Raw `json:"job"`
 	// The share of the posting's skills the given skills cover, 0-100.
 	MatchPercent int32 `json:"match_percent"`
@@ -32789,7 +32788,7 @@ type TrackedJob struct {
 	ID          string `json:"id"`
 	CompanySlug string `json:"company_slug"`
 	RoleTitle   string `json:"role_title"`
-	// The job in the shared wire shape; null once the catalogue has removed the posting.
+	// The listing card of the posting (`JobCard`); null once the catalogue has removed the posting.
 	Job        jx.Raw      `json:"job"`
 	ViewedAt   NilDateTime `json:"viewed_at"`
 	SavedAt    NilDateTime `json:"saved_at"`

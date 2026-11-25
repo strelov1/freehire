@@ -7,8 +7,8 @@ using TypeSpec.OpenAPI;
 namespace Freehire;
 
 // The public job catalogue reads and the moderator-authored job writes. A job is the
-// jobview wire shape (internal/job/jobview), shared with search and the MCP tools, so it
-// is passed through as `unknown` rather than modelled here.
+// `Job` model (job-wire.tsp, the jobview wire shape of internal/job/jobview), shared with
+// search and the MCP tools.
 
 /** The posting a page URL is, when the catalogue carries it. */
 model JobFoundPosting {
@@ -206,7 +206,7 @@ op listJobs(
   @query limit?: string,
   /** Rows to skip. (e.g. `0`) */
   @query offset?: string,
-): List<unknown> | Problem;
+): List<Job> | Problem;
 
 // The change feed of the catalogue: what opened, closed and reopened. Registered before
 // /jobs/{slug} so the literal is not read as a slug.
@@ -299,7 +299,7 @@ op findJob(/** The posting's URL in the wild. (e.g. `https://boards.greenhouse.i
 @tag("Jobs")
 @route("/jobs/{slug}")
 @get
-op getJob(/** The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */ @path slug: string): Data<unknown> | Problem;
+op getJob(/** The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */ @path slug: string): Data<Job> | Problem;
 
 model ToolJob {
   public_slug: string;
@@ -450,6 +450,8 @@ op jobApplyForm(/** The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`)
       data: #{
         public_slug: "senior-go-engineer-acme-1a2b",
         title: "Senior Go Engineer",
+        company: "Acme",
+        source: "manual",
         manually_added: true,
       },
     },
@@ -460,7 +462,7 @@ op jobApplyForm(/** The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`)
 @post
 op createJob(@body body: JobCreate): {
   @statusCode _: 201;
-  @body body: Data<unknown>;
+  @body body: Data<Job>;
 } | Problem;
 
 /** Moderators only. Edits a manual vacancy by public slug. */
@@ -476,12 +478,13 @@ op createJob(@body body: JobCreate): {
   },
   returnType: #{
     data: #{
-      public_slug: "...",
+      public_slug: "senior-go-engineer-acme-1a2b",
       title: "Staff Go Engineer",
+      company: "Acme",
     },
   },
 })
 @tag("Jobs")
 @route("/jobs/{slug}")
 @patch
-op updateJob(/** The job `public_slug`. */ @path slug: string, @body body: JobUpdate): Data<unknown> | Problem;
+op updateJob(/** The job `public_slug`. */ @path slug: string, @body body: JobUpdate): Data<Job> | Problem;
