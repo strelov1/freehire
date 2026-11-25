@@ -265,6 +265,21 @@ COMPANY_FILTERS.push({
   values:
     'ISO 3166-1 alpha-2 codes, any case — where the company is headquartered, as opposed to `countries` (where its open jobs are)',
 });
+COMPANY_FILTERS.push(
+  {
+    param: 'employee_count_min',
+    type: 'integer',
+    label: 'Minimum headcount',
+    values:
+      'A non-negative integer, inclusive — the headcount of the company itself, as opposed to `company_size` (the size bands of its postings); a company with no known headcount never matches',
+  },
+  {
+    param: 'employee_count_max',
+    type: 'integer',
+    label: 'Maximum headcount',
+    values: 'A non-negative integer, inclusive; combine with `employee_count_min` for a range',
+  },
+);
 
 /** Worked filter recipes shown as ready-to-run examples. */
 export interface Recipe {

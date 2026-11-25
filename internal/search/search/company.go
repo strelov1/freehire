@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/meilisearch/meilisearch-go"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -61,6 +63,9 @@ type CompanyDocument struct {
 	// company_info's website (else homepage) and linkedin, the ListCompanies row's columns.
 	Website  string `json:"website"`
 	LinkedIn string `json:"linkedin"`
+	// EmployeeCount is companies.employee_count, filterable by range. A pointer so an unknown
+	// headcount is stored as null and matches no employee_count bound.
+	EmployeeCount *int32 `json:"employee_count"`
 	// UpdatedAt is the row's last write, carried only for the company sitemap's <lastmod>
 	// (see sitemap.go). Not searchable, filterable or sortable.
 	UpdatedAt time.Time `json:"updated_at"`
@@ -79,6 +84,7 @@ func FromCompany(c db.Company) CompanyDocument {
 		HqCountry:         c.HqCountry.String,
 		Website:           site.website(),
 		LinkedIn:          strings.Trim(site.LinkedIn, siteSpace),
+		EmployeeCount:     employeeCount(c.EmployeeCount),
 		JobCount:          c.JobCount,
 		Collections:       c.Collections,
 		Regions:           c.Regions,
@@ -99,6 +105,13 @@ func FromCompany(c db.Company) CompanyDocument {
 		// companies.updated_at is NOT NULL.
 		UpdatedAt: c.UpdatedAt.Time,
 	}
+}
+
+func employeeCount(n pgtype.Int4) *int32 {
+	if !n.Valid {
+		return nil
+	}
+	return &n.Int32
 }
 
 // companyInfoSite is the part of companies.company_info that says where the company lives on
@@ -141,7 +154,7 @@ func companySettings() *meilisearch.Settings {
 			"industries_derived",
 			"company_types", "company_sizes", "remote_regions",
 			"yc_batch", "yc_status", "yc_stage", "yc_flags",
-			"maturity", "subindustry", "hq_country",
+			"maturity", "subindustry", "hq_country", "employee_count",
 		},
 		SortableAttributes: []string{"job_count"},
 		RankingRules:       []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "job_count:desc"},
@@ -175,6 +188,9 @@ var companyFacets = []struct{ param, attr string }{
 	{"hq_country", "hq_country"},
 }
 
+// companyRangeParams are the inclusive headcount bounds, in a fixed order.
+var companyRangeParams = []struct{ param, op string }{{"employee_count_min", ">="}, {"employee_count_max", "<="}}
+
 // CompanyFilterFromValues turns the facet params of a /companies request into a Meilisearch
 // filter: values within a facet are ORed, facets ANDed. An absent facet adds no constraint and
 // no facet at all yields nil. An empty scalar in the document matches no requested value.
@@ -205,6 +221,12 @@ func CompanyFilterFromValues(v url.Values) any {
 			}
 		}
 		g = append(g, group)
+	}
+	for _, r := range companyRangeParams {
+		// The handler rejects a non-integer first; one slipping through is skipped, never interpolated.
+		if n, err := strconv.Atoi(v.Get(r.param)); err == nil {
+			g = append(g, []string{"employee_count " + r.op + " " + strconv.Itoa(n)})
+		}
 	}
 	return Filter(g...)
 }
@@ -259,9 +281,11 @@ type CompanyRebuild struct {
 func (c *Client) NewCompanyRebuild() *CompanyRebuild { return &CompanyRebuild{c: c} }
 
 // Prepare ensures the live companies index exists (Promote's swap needs both) and creates a fresh
-// rebuild index, discarding any leftover from an aborted run.
+// rebuild index, discarding any leftover from an aborted run. The live index gets no settings: a
+// new filterable attribute applied to it before the swap would make filters on it match nothing
+// in the old documents instead of erroring into the Postgres fallback.
 func (r *CompanyRebuild) Prepare(ctx context.Context) error {
-	if err := r.c.ensure(ctx, r.c.manager.Index(companyIndexUID), companyIndexUID, companyPrimaryKey, companySettings()); err != nil {
+	if err := r.c.createIndex(ctx, r.c.manager.Index(companyIndexUID), companyIndexUID, companyPrimaryKey); err != nil {
 		return err
 	}
 	if err := r.c.dropIndex(ctx, companyRebuildUID); err != nil {

@@ -24,7 +24,7 @@
 -- (company_info website, else homepage, trimmed the way ListCompaniesBySiteHost trims it)
 -- and the LinkedIn page. '' when unknown; the handler serves that as null.
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
-       feedback_count, feedback_rating_avg, ai_interview_reports,
+       feedback_count, feedback_rating_avg, ai_interview_reports, employee_count,
        COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
        COALESCE(regexp_replace(company_info ->> 'linkedin', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '')::text AS linkedin
 FROM companies
@@ -63,6 +63,10 @@ WHERE job_count > 0
   -- are). A NULLABLE SCALAR stored in mixed case ("US", "us"): the handler lowercases the
   -- requested codes and the column is lowered here; NULL matches none.
   AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  -- employee_count is the company's own headcount (`company_size` is the size bands of its
+  -- postings). Both bounds are inclusive; a NULL headcount matches no range.
+  AND (sqlc.narg('employee_count_min')::int IS NULL OR employee_count >= sqlc.narg('employee_count_min')::int)
+  AND (sqlc.narg('employee_count_max')::int IS NULL OR employee_count <= sqlc.narg('employee_count_max')::int)
 -- `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
 -- companies sort last), falling through to the default job_count DESC, name
 -- for the tiebreak. Any other value (including '', the default) leaves the
@@ -110,7 +114,9 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
-  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]));
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  AND (sqlc.narg('employee_count_min')::int IS NULL OR employee_count >= sqlc.narg('employee_count_min')::int)
+  AND (sqlc.narg('employee_count_max')::int IS NULL OR employee_count <= sqlc.narg('employee_count_max')::int);
 
 -- name: EstimateHiringCompanies :one
 -- Fast approximate hiring-company total (job_count > 0) for the UNFILTERED /companies
