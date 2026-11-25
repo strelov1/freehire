@@ -10,6 +10,7 @@
 //
 //	harvest-ats extract <company-slugs.txt>       # collection datasets → unmatched {name,website} JSON (stdout)
 //	harvest-ats universities <company-slugs.txt>  # world-universities directory → unmatched {name,website} JSON (stdout)
+//	harvest-ats eustartups <company-slugs.txt> <state.jsonl>  # eu-startups.com directory → unmatched {name,website} JSON (stdout), resumable
 //	harvest-ats resolve <unmatched.json>          # → <provider>.seed.json per provider
 package main
 
@@ -42,7 +43,7 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	if len(os.Args) < 3 {
-		log.Printf("usage: harvest-ats extract <company-slugs.txt> | universities <company-slugs.txt> | resolve <unmatched.json>")
+		log.Printf("usage: harvest-ats extract <company-slugs.txt> | universities <company-slugs.txt> | eustartups <company-slugs.txt> <state.jsonl> | resolve <unmatched.json>")
 		return 2
 	}
 	switch os.Args[1] {
@@ -52,6 +53,12 @@ func run() int {
 		return runResolve(os.Args[2])
 	case "universities":
 		return runUniversities(os.Args[2])
+	case "eustartups":
+		if len(os.Args) < 4 {
+			log.Printf("usage: harvest-ats eustartups <company-slugs.txt> <state.jsonl>")
+			return 2
+		}
+		return runEUStartups(os.Args[2], os.Args[3])
 	default:
 		log.Printf("harvest-ats: unknown subcommand %q", os.Args[1])
 		return 2

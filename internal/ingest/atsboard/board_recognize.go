@@ -9,6 +9,16 @@ import (
 // (ATS provider), the board slug, and the canonical URL to store. ok=false when the host is
 // not a supported ATS or the URL carries no board segment/label.
 func Recognize(rawURL string) (source, board, canonical string, ok bool) {
+	source, board, canonical, ok = recognize(rawURL)
+	// Braces are never part of a real board id (RFC 3986 does not allow them unescaped), but a
+	// JS or mustache template a careers page carries verbatim (`/${ghSlug}`, `/{{slug}}`) has them.
+	if ok && strings.ContainsAny(board, "{}") {
+		return "", "", "", false
+	}
+	return source, board, canonical, ok
+}
+
+func recognize(rawURL string) (source, board, canonical string, ok bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return "", "", "", false
