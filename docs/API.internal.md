@@ -599,6 +599,8 @@ curl -X POST "https://freehire.me/api/v1/jobs" -b cookies.txt -H 'Content-Type: 
   "data": {
     "public_slug": "senior-go-engineer-acme-1a2b",
     "title": "Senior Go Engineer",
+    "company": "Acme",
+    "source": "manual",
     "manually_added": true
   }
 }
@@ -636,8 +638,9 @@ curl -X PATCH "https://freehire.me/api/v1/jobs/<slug>" -b cookies.txt -H 'Conten
 ```json
 {
   "data": {
-    "public_slug": "...",
-    "title": "Staff Go Engineer"
+    "public_slug": "senior-go-engineer-acme-1a2b",
+    "title": "Staff Go Engineer",
+    "company": "Acme"
   }
 }
 ```

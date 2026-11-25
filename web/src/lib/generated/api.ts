@@ -6891,7 +6891,7 @@ export interface components {
             total_is_lower_bound?: boolean;
         };
         AgentJobSearchPage: {
-            data: unknown[];
+            data: components["schemas"]["Job"][];
             meta: components["schemas"]["AgentJobSearchMeta"];
         };
         AgentPermissions: {
@@ -9093,7 +9093,10 @@ export interface components {
              */
             percent_off: number;
         };
-        /** @description One posting, as every job endpoint serves it. */
+        /**
+         * @description One posting, as every job endpoint serves it. TestJobSchemaCoversWireShape
+         *     (internal/job/jobview) fails when jobview.Job serves a key this model lacks.
+         */
         Job: {
             /** @description Stable public identifier. The freehire page is https://freehire.me/jobs/{public_slug}. */
             public_slug: string;
@@ -9123,6 +9126,11 @@ export interface components {
             source?: string;
             /** @description The source's own identifier for the posting. */
             external_id?: string;
+            /**
+             * @description The original posting when `url` points at a separately verified application
+             *     destination. Absent when both links are the same.
+             */
+            source_url?: string;
             /**
              * Format: date
              * @description Source-stated last application day, inclusive. Absent when the source states no deadline.
@@ -9195,6 +9203,11 @@ export interface components {
              */
             engagement?: string[];
             /**
+             * @description How many people reported that the company screens with an AI interviewer. Absent at
+             *     zero, so "no reports" is a missing field rather than a zero a badge could render.
+             */
+            ai_interview_reports?: number;
+            /**
              * @description Present and `true` only when the posting's ATS provider is one freehire's auto-apply
              *     feature can currently attempt to fill and submit for. Absent otherwise — a best-effort
              *     provider-eligibility signal, never a guarantee of successful submission.
@@ -9240,6 +9253,69 @@ export interface components {
             applied_count?: number;
             upvote_count?: number;
             downvote_count?: number;
+            /**
+             * @description True when the company has an approved employee referrer. Served by `getJob` only;
+             *     absent on every list and search row.
+             */
+            referral_available?: boolean;
+            /**
+             * @description True when a recruiter-contact lookup can run for the posting: the feature is configured
+             *     and the company has a website on record. Served by `getJob` only.
+             */
+            recruiter_contacts_available?: boolean;
+            /**
+             * @description The caller's own auto-apply status for the posting: `queued` (live, undecided),
+             *     `failed` (given up: dead-lettered, or parked for missing form data) or `declined`
+             *     (the candidate's permanent decision). Served by `getJob` to a signed-in caller with
+             *     an attempt; absent for everyone else.
+             * @enum {string}
+             */
+            auto_apply_status?: "queued" | "failed" | "declined";
+        };
+        /**
+         * @description The listing card of a posting: what a list row draws, without the description. Served
+         *     only inside `TrackedJob` (`/me/tracking`), from internal/job/jobview's `Card` — a
+         *     narrower projection than `Job`, not a subset of its shape: `seniority` and
+         *     `employment_type` sit at the top level here, not under `enrichment`. TestJobSchemaCoversWireShape
+         *     (internal/job/jobview) fails when `jobview.Card` serves a key this model lacks.
+         */
+        JobCard: {
+            public_slug: string;
+            title: string;
+            company: string;
+            /**
+             * Format: date
+             * @description Source-stated last application day (`YYYY-MM-DD`), inclusive.
+             */
+            application_deadline?: string;
+            /** @description Always present: when the posting closed, `null` while it is open. */
+            closed_at: string | null;
+            /** @description The posting's own location line, verbatim. */
+            location?: string;
+            /** @description The stated facets of the tag row; each absent when the posting does not state it. */
+            work_mode?: string;
+            seniority?: string;
+            employment_type?: string;
+            countries?: string[];
+            regions?: string[];
+            /**
+             * @description The row's skills and collections, and the line under the title: the enrichment's
+             *     summary, or the opening of the description with tags stripped, cut server-side to
+             *     about 220 characters. These three and `ghost` are dropped by `?compact=1` (the Kanban
+             *     board's read).
+             */
+            skills?: string[];
+            collections?: string[];
+            blurb?: string;
+            /** @description How many people reported that the company screens with an AI interviewer; absent at zero. */
+            ai_interview_reports?: number;
+            /**
+             * Format: date-time
+             * @description The effective posting date: the stated date, or the row's creation when the source gave none.
+             */
+            posted_at?: string;
+            /** @description The ghost signal, computed at read time; absent when there is nothing to say. */
+            ghost?: components["schemas"]["JobGhost"];
         };
         /** @description One transition of a posting, as the change feed reports it. */
         JobChange: {
@@ -9373,6 +9449,12 @@ export interface components {
             posting_language?: string;
             company_type?: string;
             company_size?: string;
+            /**
+             * @description Requirements the posting states (at most 30, each at most 200 characters): the
+             *     model's list, or the deterministic extractor's when the model has not reached the
+             *     posting. `priority` is `required` or `preferred`.
+             */
+            requirements?: components["schemas"]["JobRequirement"][];
         };
         /** @description The `/jobs/facets` answer: posting counts per facet value under the request's filters. */
         JobFacetCounts: {
@@ -9478,6 +9560,12 @@ export interface components {
         };
         /** @enum {string} */
         JobReportStatus: "pending" | "resolved" | "dismissed";
+        /** @description One requirement the posting states. */
+        JobRequirement: {
+            text: string;
+            /** @enum {string} */
+            priority: "required" | "preferred";
+        };
         JobSearchMeta: {
             /** Format: int64 */
             total: number;
@@ -9492,7 +9580,7 @@ export interface components {
             total_is_lower_bound?: boolean;
         };
         JobSearchPage: {
-            data: unknown[];
+            data: components["schemas"]["Job"][];
             meta: components["schemas"]["JobSearchMeta"];
         };
         /** @description The moderator edit body: a field left out or null is unchanged. */
@@ -9933,8 +10021,8 @@ export interface components {
         };
         /** @description One matching posting with how well its skills match the given ones. */
         OnboardingMatch: {
-            /** @description The jobview wire shape `/jobs/search` answers with. */
-            job: unknown;
+            /** @description The matching posting, in the shape `/jobs/search` answers with. */
+            job: components["schemas"]["Job"];
             /**
              * Format: int32
              * @description The share of the posting's skills the given skills cover, 0-100.
@@ -11271,8 +11359,8 @@ export interface components {
             id: string;
             company_slug: string;
             role_title: string;
-            /** @description The job in the shared wire shape; null once the catalogue has removed the posting. */
-            job: unknown;
+            /** @description The listing card of the posting (`JobCard`); null once the catalogue has removed the posting. */
+            job: components["schemas"]["JobCard"] | null;
             viewed_at: string | null;
             saved_at: string | null;
             applied_at: string | null;
@@ -14354,7 +14442,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: unknown[];
+                        data: components["schemas"]["Job"][];
                     };
                 };
             };
@@ -14389,7 +14477,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["Job"];
                     };
                 };
             };
@@ -14426,7 +14514,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["Job"];
                     };
                 };
             };
@@ -15381,7 +15469,7 @@ export interface operations {
                      *     }
                      */
                     "application/json": {
-                        data: unknown[];
+                        data: components["schemas"]["Job"][];
                         meta: components["schemas"]["ListMeta"];
                     };
                 };
@@ -15428,12 +15516,14 @@ export interface operations {
                      *       "data": {
                      *         "public_slug": "senior-go-engineer-acme-1a2b",
                      *         "title": "Senior Go Engineer",
+                     *         "company": "Acme",
+                     *         "source": "manual",
                      *         "manually_added": true
                      *       }
                      *     }
                      */
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["Job"];
                     };
                 };
             };
@@ -15823,7 +15913,7 @@ export interface operations {
                      *     }
                      */
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["Job"];
                     };
                 };
             };
@@ -15868,13 +15958,14 @@ export interface operations {
                     /**
                      * @example {
                      *       "data": {
-                     *         "public_slug": "...",
-                     *         "title": "Staff Go Engineer"
+                     *         "public_slug": "senior-go-engineer-acme-1a2b",
+                     *         "title": "Staff Go Engineer",
+                     *         "company": "Acme"
                      *       }
                      *     }
                      */
                     "application/json": {
-                        data: unknown;
+                        data: components["schemas"]["Job"];
                     };
                 };
             };
@@ -17020,7 +17111,7 @@ export interface operations {
                      *     }
                      */
                     "application/json": {
-                        data: unknown[];
+                        data: components["schemas"]["Job"][];
                     };
                 };
             };
@@ -25533,7 +25624,11 @@ export interface operations {
                      *           "role_title": "Senior Go Engineer",
                      *           "job": {
                      *             "public_slug": "senior-go-engineer-acme-1a2b",
-                     *             "title": "Senior Go Engineer"
+                     *             "title": "Senior Go Engineer",
+                     *             "company": "Acme",
+                     *             "closed_at": null,
+                     *             "seniority": "senior",
+                     *             "blurb": "Own the ingestion pipeline behind a catalogue of 400k postings."
                      *           },
                      *           "viewed_at": "2026-06-19T10:00:00Z",
                      *           "saved_at": null,

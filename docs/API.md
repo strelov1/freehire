@@ -2535,7 +2535,11 @@ curl "https://freehire.me/api/v1/me/tracking" -H "Authorization: Bearer $FREEHIR
       "role_title": "Senior Go Engineer",
       "job": {
         "public_slug": "senior-go-engineer-acme-1a2b",
-        "title": "Senior Go Engineer"
+        "title": "Senior Go Engineer",
+        "company": "Acme",
+        "closed_at": null,
+        "seniority": "senior",
+        "blurb": "Own the ingestion pipeline behind a catalogue of 400k postings."
       },
       "viewed_at": "2026-06-19T10:00:00Z",
       "saved_at": null,
