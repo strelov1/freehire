@@ -33,6 +33,8 @@ func dataPlanGate(entitlements entitlementReader) fiber.Handler {
 			return fiber.NewError(http.StatusForbidden, "original job links are part of the Data plan")
 		}
 		c.Locals(localsDataPlan, true)
+		// The links are the plan holder's alone: no shared cache may keep the answer.
+		c.Set(fiber.HeaderCacheControl, "private, no-store")
 		return c.Next()
 	}
 }

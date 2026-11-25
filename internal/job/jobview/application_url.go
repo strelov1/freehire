@@ -53,9 +53,10 @@ func originalPosting(f job.Fields) string {
 // surface: only the Data plan's /data/jobs endpoints serve them. ApplyURL, the click
 // redirect that forwards to the same page, stays, so every surface still links out. A job
 // without a redirect (a private job read by its owner, a direct-apply vacancy) keeps URL,
-// its only link.
+// its only link. An Adzuna job keeps them too: its url is Adzuna's own page, not the
+// employer's, and the attribution Adzuna's terms require names that page's local domain.
 func (j *Job) HideOrigin() {
-	if j.ApplyURL != "" {
+	if j.ApplyURL != "" && j.Source != "adzuna" {
 		j.URL, j.SourceURL = "", ""
 	}
 }

@@ -100,3 +100,12 @@ func TestHideOriginKeepsTheOnlyLinkOfAJobWithoutARedirect(t *testing.T) {
 		t.Errorf("got %+v, want url and source_url dropped, apply_url kept", public)
 	}
 }
+
+// An Adzuna job's url is Adzuna's own market page, which its attribution must name.
+func TestHideOriginKeepsAdzunasOwnPage(t *testing.T) {
+	j := jobview.Job{Source: "adzuna", URL: "https://www.adzuna.de/land/ad/1", ApplyURL: "https://freehire.me/api/v1/go/a?src=web"}
+	j.HideOrigin()
+	if j.URL == "" {
+		t.Error("an Adzuna job lost the page its attribution links")
+	}
+}

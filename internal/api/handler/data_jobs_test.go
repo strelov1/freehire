@@ -48,6 +48,9 @@ func TestDataPlanGateAdmitsOnlyTheDataPlan(t *testing.T) {
 			if resp.StatusCode != tc.status {
 				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
 			}
+			if tc.status == http.StatusOK && resp.Header.Get("Cache-Control") != "private, no-store" {
+				t.Errorf("Cache-Control = %q, want private, no-store", resp.Header.Get("Cache-Control"))
+			}
 		})
 	}
 }
