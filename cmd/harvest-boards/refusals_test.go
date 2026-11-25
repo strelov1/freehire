@@ -122,3 +122,30 @@ func TestCountingClientResetDropsDiscoveryAnswers(t *testing.T) {
 		t.Error("a refused probe after discovery must still dominate")
 	}
 }
+
+// The run's own discovery step must leave the guard counting probes only: Common Crawl answers by
+// the hundred would otherwise outvote a platform that refuses every probe, and the run would exit 0.
+func TestRunCandidatesKeepsDiscoveryOutOfRefusalGuard(t *testing.T) {
+	const cdx = "https://index.commoncrawl.org/CC-MAIN-2026-30-index?url="
+	c := newCountingClient(fakeGetter{
+		"https://index.commoncrawl.org/collinfo.json":                                  commonCrawlCollInfoBody,
+		cdx + "jobs.smartrecruiters.com/*&output=json&showNumPages=true&pageSize=1":    `{"pages":1}`,
+		cdx + "jobs.smartrecruiters.com/*&output=json&page=0&pageSize=1":               `{"url": "https://jobs.smartrecruiters.com/Acme/123"}`,
+		cdx + "careers.smartrecruiters.com/*&output=json&showNumPages=true&pageSize=1": `{"pages":1}`,
+		cdx + "careers.smartrecruiters.com/*&output=json&page=0&pageSize=1":            `{"url": "https://careers.smartrecruiters.com/Beta"}`,
+	})
+	raw, _, err := runCandidates(context.Background(), "smartrecruiters", probers["smartrecruiters"], c, "")
+	if err != nil {
+		t.Fatalf("runCandidates: %v", err)
+	}
+	if len(raw) != 2 {
+		t.Fatalf("candidates = %v, want the two discovered boards", raw)
+	}
+	if c.refused() != 0 || c.answered() != 0 {
+		t.Fatalf("after discovery: refused=%d answered=%d, want 0/0", c.refused(), c.answered())
+	}
+	c.record(&sources.StatusError{Method: http.MethodGet, Code: http.StatusTooManyRequests, URL: "u"})
+	if !refusalsDominated(c.refused(), c.answered()) {
+		t.Error("one refused probe after more discovery answers must still stop the run")
+	}
+}

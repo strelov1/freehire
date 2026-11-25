@@ -124,18 +124,10 @@ func run() int {
 		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", probeRate, *workers)
 	}
 
-	source := p
-	if seedPath == "" {
-		source = crawlDiscovery(provider, p)
-	}
-	raw, expected, err := resolveCandidates(ctx, source, client, seedPath)
+	raw, expected, err := runCandidates(ctx, provider, p, client, seedPath)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1
-	}
-	if seedPath == "" {
-		// The refusal guard below judges the platform being probed, not the index discovery read.
-		client.reset()
 	}
 
 	listed, err := boardcatalog.LoadForProvider(ctx, repo, provider)
@@ -223,6 +215,18 @@ func addBoards(ctx context.Context, repo boardcatalog.Repository, provider strin
 	}
 	log.Printf("harvest-boards: added %d boards (pending), %d already listed", added, duplicate)
 	return 0
+}
+
+// runCandidates is resolveCandidates for a run: a seedless run also discovers through the Common
+// Crawl sweep when the prober cannot discover by itself, and then forgets the discovery traffic so
+// the refusal guard judges the platform being probed, not the index discovery read.
+func runCandidates(ctx context.Context, provider string, p prober, client *countingClient, seedPath string) ([]string, map[string]expectation, error) {
+	if seedPath != "" {
+		return resolveCandidates(ctx, p, client, seedPath)
+	}
+	raw, expected, err := resolveCandidates(ctx, crawlDiscovery(provider, p), client, seedPath)
+	client.reset()
+	return raw, expected, err
 }
 
 // resolveCandidates supplies a run's candidate board ids. With no seed file the prober must
