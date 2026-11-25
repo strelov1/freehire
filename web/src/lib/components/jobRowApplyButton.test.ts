@@ -42,7 +42,9 @@ describe('JobRow direct-apply button', () => {
   it('is gated on an open job that actually carries an outbound url', () => {
     // A non-empty one: a vacancy taking applications on freehire carries neither link. And an
     // open one: a closed posting takes no applications, on any surface that lists it.
-    expect(ROW).toContain("const applyJob = $derived('url' in job && (job.apply_url || job.url) && !job.closed_at ? job : null);");
+    expect(ROW).toContain(
+      "const applyJob = $derived('url' in job && (job.apply_url || job.url) && !job.closed_at ? job : null);",
+    );
     expect(ROW).toContain('job.direct_apply === true && !job.closed_at');
     expect(ROW).toContain('applyUrl={sponsoredUrl ?? (applyJob?.apply_url || applyJob?.url) ?? null}');
     expect(applyBlock).not.toBe('');

@@ -58,7 +58,10 @@ async function main() {
   assert('data documents the Data plan search', data.includes('### `GET /data/jobs/search`'));
   assert('data documents the catalogue export', data.includes('### `GET /catalogue/snapshots`'));
   assert('data omits the public search', !data.includes('### `GET /jobs/search`'));
-  assert('data operations are all external', Object.keys(dataDoc.paths).every((p) => extDoc.paths[p]));
+  assert(
+    'data operations are all external',
+    Object.keys(dataDoc.paths).every((p) => extDoc.paths[p]),
+  );
   assert('external cross-links to the data reference', external.includes('freehire.me/docs/api/data'));
 
   // Key management cannot be called by a client (cookie + fresh identity proof).
