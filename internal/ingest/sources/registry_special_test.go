@@ -9,6 +9,7 @@ func TestCrawlRegistryRequiresCompleteCredentialPairs(t *testing.T) {
 		secretEnv string
 	}{
 		{"adzuna", "ADZUNA_APP_ID", "ADZUNA_APP_KEY"},
+		{"careerjet", "CAREERJET_API_KEY", "CAREERJET_USER_IP"},
 		{"francetravail", "FRANCE_TRAVAIL_CLIENT_ID", "FRANCE_TRAVAIL_CLIENT_SECRET"},
 	}
 	cases := []struct {
