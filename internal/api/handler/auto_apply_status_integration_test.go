@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
@@ -82,7 +84,7 @@ func TestGetJob_AutoApplyStatusOverlay(t *testing.T) {
 
 // TestGetJob_AutoApplyStatusOverlay_NonGreenhouseSource guards the overlay for every source
 // auto-apply can now queue against, not only Greenhouse — the enqueue gate
-// (autoApplyEnqueueSources) and this read's own gate must name the same set, or a
+// (autoapply.Queueable) and this read's own gate must name the same set, or a
 // successfully queued Ashby/Workable/Lever/Recruitee attempt would read back as no attempt
 // at all and the button would look idle forever.
 func TestGetJob_AutoApplyStatusOverlay_NonGreenhouseSource(t *testing.T) {
@@ -140,8 +142,8 @@ func TestGetJob_AutoApplyStatusOverlay_FailedEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	if got := decodeAutoApplyStatus(t, resp); got == nil || *got != autoApplyStatusFailed {
-		t.Fatalf("status for a dead-lettered entry = %v, want %q", got, autoApplyStatusFailed)
+	if got := decodeAutoApplyStatus(t, resp); got == nil || *got != string(autoapply.EntryFailed) {
+		t.Fatalf("status for a dead-lettered entry = %v, want %q", got, string(autoapply.EntryFailed))
 	}
 
 	repeat := enqueueRequest(t, app, "failed-job", cookie)

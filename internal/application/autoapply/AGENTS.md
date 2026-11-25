@@ -1,11 +1,15 @@
 # Auto-apply queue-drain conventions
 
 ## Scope
-The domain logic behind `cmd/auto-apply`: claim a wave of `auto_apply_queue` rows, assemble
-each candidate's known answers, ask a browser driver to resolve and maybe submit the
-application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` and
-`SidecarClient` are ports; `cmd/auto-apply` supplies the real implementations
-(`dbStore`, `assemblerAnswerSource`, `internal/api/atsapply.Client`).
+Both ends of the `auto_apply_queue`. `Enqueuer` (`enqueue.go`) creates an attempt for a
+candidate — the use case behind the job page's start route and the MCP `auto_apply_start`
+tool (`internal/api/handler` maps its typed refusals to statuses and sentences). The rest is
+the domain logic behind `cmd/auto-apply`: claim a wave of rows, assemble each candidate's
+known answers, ask a browser driver to resolve and maybe submit the application, and record
+the outcome. Pgx/Fiber-free — `EnqueueStore`, `Allowance`, `Tracker`, `Store`, `AnswerSource`
+and `SidecarClient` are ports; `cmd/auto-apply` supplies the real implementations
+(`dbStore`, `assemblerAnswerSource`, `internal/api/atsapply.Client`), and `*db.Queries`,
+`*plan.Store` and `*jobtracking.Service` satisfy the enqueue ones.
 
 ## Always true
 - **Submits only when every required question is answered.** `SidecarClient.Submit` returns
@@ -73,10 +77,11 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
 
 - **An enqueue-time eligibility gate refuses (or, in shadow mode, only logs) a positively
   mismatched (candidate, job) pair before it ever reaches this package's queue at all.**
-  `internal/api/handler`'s `startAutoApply` (the only creator of `auto_apply_queue` rows,
-  behind both the job page's route and the MCP `auto_apply_start` tool) calls `internal/candidate/hardconstraint.Evaluate` — the same deterministic,
-  no-I/O evaluator the match-analysis surface already uses advisorily — and refuses
-  enqueueing when it reports an unmet `work-authorization` or `location-and-work-mode`
+  `Enqueuer.Start` (the only creator of `auto_apply_queue` rows, behind both the job page's
+  route and the MCP `auto_apply_start` tool) takes the blockers from its `Blockers` port — the
+  match surface's `jobBlockers`, which calls `internal/candidate/hardconstraint.Evaluate`, the
+  same deterministic, no-I/O evaluator the match-analysis surface already uses advisorily — and
+  refuses enqueueing when it reports an unmet `work-authorization` or `location-and-work-mode`
   blocker for the pair. Gated behind `AUTO_APPLY_ELIGIBILITY_ENFORCE` (unset = shadow:
   logs what would have been refused and enqueues anyway), mirroring `internal/ai/plan`'s
   `PLAN_ENFORCE` rollout — a false positive here has an immediate, visible cost for a
@@ -95,6 +100,5 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
 `RunStats.Degraded` treats a parked attempt as healthy (the system correctly declined to
 guess, not a fault) — only a dead letter or a run that failed everything counts.
 
-What populates `auto_apply_queue` is out of scope for this package entirely — see
-`openspec/changes/archive/2026-11-25-auto-apply-worker/design.md`. `Run` only ever claims what is already
-there.
+`Run` only ever claims what is already in `auto_apply_queue`; `Enqueuer.Start` is what puts it
+there (the worker's side: `openspec/changes/archive/2026-11-25-auto-apply-worker/design.md`).
