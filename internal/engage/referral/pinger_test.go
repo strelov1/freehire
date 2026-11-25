@@ -12,10 +12,12 @@ import (
 
 type pingerSender struct {
 	calls int
+	last  emailnotify.Message
 }
 
-func (s *pingerSender) Send(context.Context, emailnotify.Message) error {
+func (s *pingerSender) Send(_ context.Context, m emailnotify.Message) error {
 	s.calls++
+	s.last = m
 	return nil
 }
 
@@ -54,5 +56,26 @@ func TestChannelPinger_RenderFailureSkipsOnlyTheEmail(t *testing.T) {
 	}
 	if tg.calls != 1 || tg.chatID != 42 {
 		t.Errorf("telegram calls = %d (chat %d), want 1 to chat 42: a failed email must not silence the other channel", tg.calls, tg.chatID)
+	}
+}
+
+// The happy path: the mail goes out with the cabinet link, and Telegram with the
+// same link escaped.
+func TestChannelPinger_SendsEmailAndTelegram(t *testing.T) {
+	email := &pingerSender{}
+	tg := &pingerTelegram{}
+	p := NewChannelPinger(email, "hi@freehire.me", tg, "https://freehire.me",
+		emailprefs.NewLinks("pinger-test-secret-padded-to-32-byte", "https://freehire.me"), nil)
+
+	if err := p.PingReferrer(context.Background(),
+		Recipient{UserID: 7, Email: "referrer@example.com", ChatID: 42},
+		"https://freehire.me/my/referrals/incoming"); err != nil {
+		t.Fatalf("PingReferrer: %v", err)
+	}
+	if email.calls != 1 || tg.calls != 1 || tg.chatID != 42 {
+		t.Fatalf("email calls = %d, telegram calls = %d (chat %d), want 1 and 1 to chat 42", email.calls, tg.calls, tg.chatID)
+	}
+	if !strings.Contains(email.last.HTML, "https://freehire.me/my/referrals/incoming") || email.last.To != "referrer@example.com" {
+		t.Errorf("mail to %q does not carry the cabinet link: %q", email.last.To, email.last.HTML)
 	}
 }
