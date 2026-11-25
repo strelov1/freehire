@@ -168,7 +168,7 @@
     },
     {
       "name": "Data plan",
-      "description": "Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, the employer's own page, and `source_url` where the application goes elsewhere. Every other job read leaves both out and links through `apply_url`, a freehire redirect. The Data plan's 6,000-request window applies on these endpoints only, counted apart from the 1,200-request window it holds on every other endpoint. Session or API key; any other account gets `403`."
+      "description": "Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, the employer's own page, and `source_url` where the application goes elsewhere. Every other job read links only through `apply_url`, a freehire redirect. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`."
     },
     {
       "name": "Change webhooks",
