@@ -4799,7 +4799,7 @@
           },
           "url": {
             "type": "string",
-            "description": "The employer's own application URL, as published. Served only by the Data plan's\n`/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.\nEmpty too when `direct_apply` is true: that vacancy has no page elsewhere."
+            "description": "The employer's own application URL, as published. Served only by the paid API plans'\n`/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.\nEmpty too when `direct_apply` is true: that vacancy has no page elsewhere."
           },
           "apply_url": {
             "type": "string",
@@ -4823,7 +4823,7 @@
           },
           "source_url": {
             "type": "string",
-            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same, and outside the Data plan's\n`/data/jobs` endpoints."
+            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same, and outside the paid API plans'\n`/data/jobs` endpoints."
           },
           "application_deadline": {
             "type": "string",

@@ -13538,7 +13538,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 							switch method {
 							case "GET":
 								r.name = SearchDataJobsOperation
-								r.summary = "Search open jobs with their original links (Data plan)."
+								r.summary = "Search open jobs with their original links (API and Data plans)."
 								r.operationID = "searchDataJobs"
 								r.operationGroup = ""
 								r.pathPattern = "/data/jobs/search"
@@ -13566,7 +13566,7 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 						switch method {
 						case "GET":
 							r.name = GetDataJobOperation
-							r.summary = "A single job with its original links (Data plan)."
+							r.summary = "A single job with its original links (API and Data plans)."
 							r.operationID = "getDataJob"
 							r.operationGroup = ""
 							r.pathPattern = "/data/jobs/{slug}"

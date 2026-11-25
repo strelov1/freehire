@@ -822,8 +822,8 @@ type Handler interface {
 	GetCVTailorContext(ctx context.Context, params GetCVTailorContextParams) (*GetCVTailorContextOK, error)
 	// GetDataJob implements getDataJob operation.
 	//
-	// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the Data plan:
-	// any other account gets `403`.
+	// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid API plan
+	// (API or Data): any other account gets `403`.
 	//
 	// GET /data/jobs/{slug}
 	GetDataJob(ctx context.Context, params GetDataJobParams) (*GetDataJobOK, error)
@@ -2309,8 +2309,8 @@ type Handler interface {
 	//
 	// The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with each
 	// job's `url` (the employer's own posting) and `source_url` where it differs. The public job reads
-	// leave both out and link only through `apply_url`. Needs the Data plan: any other account gets `403`.
-	// Never cached: the answer is private to the plan holder.
+	// leave both out and link only through `apply_url`. Needs a paid API plan (API or Data): any other
+	// account gets `403`. Never cached: the answer is private to the plan holder.
 	//
 	// GET /data/jobs/search
 	SearchDataJobs(ctx context.Context, params SearchDataJobsParams) (*JobSearchPageHeaders, error)

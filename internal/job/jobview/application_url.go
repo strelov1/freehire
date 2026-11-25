@@ -50,7 +50,7 @@ func originalPosting(f job.Fields) string {
 }
 
 // HideOrigin drops the employer's own links (URL, SourceURL) from a job served on a public
-// surface: only the Data plan's /data/jobs endpoints serve them. ApplyURL, the click
+// surface: only the paid API plans' /data/jobs endpoints serve them. ApplyURL, the click
 // redirect that forwards to the same page, stays, so every surface still links out. A job
 // without a redirect (a private job read by its owner, a direct-apply vacancy) keeps URL,
 // its only link. An Adzuna job keeps them too: its url is Adzuna's own page, not the

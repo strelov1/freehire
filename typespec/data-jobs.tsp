@@ -4,17 +4,17 @@ using Http;
 
 namespace Freehire;
 
-// The Data plan's job reads: the same answers as `/jobs/search` and `/jobs/{slug}`, plus the
+// The paid API plans' job reads: the same answers as `/jobs/search` and `/jobs/{slug}`, plus the
 // employer's own links (`url`, `source_url`) that every other surface leaves out.
 /**
  * The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
  * each job's `url` (the employer's own posting) and `source_url` where it differs. The public
- * job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
- * account gets `403`. Never cached: the answer is private to the plan holder.
+ * job reads leave both out and link only through `apply_url`. Needs a paid API plan (API or
+ * Data): any other account gets `403`. Never cached: the answer is private to the plan holder.
  */
-@summary("Search open jobs with their original links (Data plan).")
+@summary("Search open jobs with their original links (API and Data plans).")
 @useAuth(SessionOrKey)
-@tag("Data plan")
+@tag("Original job links")
 @route("/data/jobs/search")
 @get
 op searchDataJobs(
@@ -38,12 +38,12 @@ op searchDataJobs(
 } | Problem;
 
 /**
- * The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
- * Data plan: any other account gets `403`.
+ * The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid
+ * API plan (API or Data): any other account gets `403`.
  */
-@summary("A single job with its original links (Data plan).")
+@summary("A single job with its original links (API and Data plans).")
 @useAuth(SessionOrKey)
-@tag("Data plan")
+@tag("Original job links")
 @route("/data/jobs/{slug}")
 @get
 op getDataJob(/** The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) */ @path slug: string): Data<Job> | Problem;
