@@ -162,11 +162,12 @@ func (p careerjetPosting) toJob() (kit.Job, bool) {
 	}, true
 }
 
-// externalID hashes title, company and locations: the payload has no job id, and the tracking
-// url is a per-click link whose stability across requests is not established, so it cannot key a
-// posting. The date is left out on purpose: a re-dated repost is the same posting.
+// externalID hashes title, company, locations and the excerpt: the payload has no job id, and the
+// tracking url is a per-click link whose stability across requests is not established, so it
+// cannot key a posting. The excerpt tells apart two vacancies of one employer with the same title
+// and place. The date is left out on purpose: a re-dated repost is the same posting.
 func (p careerjetPosting) externalID() string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{p.Title, p.Company, p.Locations}, "\x00")))
+	sum := sha256.Sum256([]byte(strings.Join([]string{p.Title, p.Company, p.Locations, p.Description}, "\x00")))
 	return hex.EncodeToString(sum[:])[:24]
 }
 

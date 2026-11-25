@@ -157,6 +157,18 @@ const staleCutoff = sources.DefaultSweepGrace
 // the US, "whatjobs-<cc>" otherwise), so a new market is covered automatically.
 var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna", "careerjet"}
 
+// optionalExpirePrefixes are expireDespiteRegisteredPrefixes members a host may crawl without:
+// careerjet is new and optional, and registeredAgeFallback reads membership from taxonomy, so a
+// host without its credential still age-expires it. Only the crawl-registry guard skips them.
+var optionalExpirePrefixes = []string{"careerjet"}
+
+// guardedExpirePrefixes are the prefixes whose absence from the crawl registry stops the run.
+func guardedExpirePrefixes() []string {
+	return slices.DeleteFunc(slices.Clone(expireDespiteRegisteredPrefixes), func(p string) bool {
+		return slices.Contains(optionalExpirePrefixes, p)
+	})
+}
+
 func main() {
 	worker.Main(run)
 }
@@ -247,7 +259,7 @@ func run() int {
 	// Keep the credential guard on the live crawl registry. The fallback's membership
 	// and grace come from taxonomy, so a market missing this host's credentials still
 	// has an age-based closure path instead of being excluded from every path.
-	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+	if missing := unmatchedPrefixes(crawlProviders, guardedExpirePrefixes()); len(missing) > 0 {
 		log.Printf("liveness: %q matches no registered ATS provider — refusing to run (a source that cannot be age-expired would silently fall to the URL probe instead)",
 			strings.Join(missing, ", "))
 		return 1

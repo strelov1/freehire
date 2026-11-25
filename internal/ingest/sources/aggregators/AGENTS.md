@@ -28,5 +28,5 @@ and PL boards) still lives in `sources` and moves here one PR at a time (#4586).
 - **`careerjet` is credential-gated** on `CAREERJET_API_KEY` and `CAREERJET_USER_IP` (the server's
   public egress IP, its required `user_ip`). Its urls are click-tracking links, so like `adzuna` it
   cannot be probed: a 14-day `SweepGrace`, and `cmd/liveness` age-expires it
-  (`expireDespiteRegisteredPrefixes`).
+  (`expireDespiteRegisteredPrefixes`; optional there, so a liveness host needs no credential).
 - Provider notes: [adzuna](../providers/adzuna.md), [careerjet](../providers/careerjet.md), [jobnet](../providers/jobnet.md).

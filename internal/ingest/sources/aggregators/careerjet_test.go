@@ -154,3 +154,18 @@ type careerjetFunc func(v any) error
 func (f careerjetFunc) GetJSONWithHeaders(_ context.Context, _ string, _ map[string]string, v any) error {
 	return f(v)
 }
+
+// Two vacancies of one employer with the same title and place must not share an id.
+func TestCareerjetExternalIDSeparatesSameTitleVacancies(t *testing.T) {
+	a := careerjetPosting{Title: "Nurse", Company: "NHS", Locations: "Leeds", Description: "Ward A"}
+	b := a
+	b.Description = "Ward B"
+	if a.externalID() == b.externalID() {
+		t.Fatal("different vacancies share an id")
+	}
+	b = a
+	b.Date = "Mon, 13 Nov 2025 10:00:00 GMT"
+	if a.externalID() != b.externalID() {
+		t.Fatal("a re-dated repost must keep its id")
+	}
+}
