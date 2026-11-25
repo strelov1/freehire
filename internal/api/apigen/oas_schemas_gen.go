@@ -9132,6 +9132,21 @@ func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 // DeleteEmailNoContent is response for DeleteEmail operation.
 type DeleteEmailNoContent struct{}
 
+// A single item: `{"data": ...}`.
+type DeleteEmployerVacancyOK struct {
+	Data EmployerRemoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DeleteEmployerVacancyOK) GetData() EmployerRemoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DeleteEmployerVacancyOK) SetData(val EmployerRemoved) {
+	s.Data = val
+}
+
 // DeleteEmploymentNoContent is response for DeleteEmployment operation.
 type DeleteEmploymentNoContent struct{}
 

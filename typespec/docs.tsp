@@ -64,6 +64,7 @@ A posting is **open** until something closes it, and a closed posting carries `c
 - A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).
 - An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).
 - A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).
+- The employer deleting a posting they published themselves (`employer_deleted`). Unlike every other closer this is final: the posting leaves every list and `GET /jobs/{slug}` answers 404. The row is kept for the applications that reference it.
 
 Postings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.
 

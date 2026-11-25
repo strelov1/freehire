@@ -96,6 +96,7 @@ const (
 	DeleteChangeWebhookOperation                OperationName = "DeleteChangeWebhook"
 	DeleteCompanyFeedbackOperation              OperationName = "DeleteCompanyFeedback"
 	DeleteEmailOperation                        OperationName = "DeleteEmail"
+	DeleteEmployerVacancyOperation              OperationName = "DeleteEmployerVacancy"
 	DeleteEmploymentOperation                   OperationName = "DeleteEmployment"
 	DeleteJobAutoApplyOperation                 OperationName = "DeleteJobAutoApply"
 	DeleteProfileOperation                      OperationName = "DeleteProfile"

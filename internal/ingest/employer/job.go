@@ -89,8 +89,9 @@ type JobRepository interface {
 	// actorID's team; ErrJobNotFound for anything else (missing, another company's, another
 	// source's, or private).
 	BySlug(ctx context.Context, actorID int64, slug string) (job.Job, job.Extras, error)
-	// ListMine returns every vacancy actorID's team has created through this path, newest
-	// first — the dashboard's own list, open and closed both.
+	// ListMine returns the dashboard list: the vacancies actorID's team created through this
+	// path (open and closed) and the open ones of its company collected from other sources,
+	// open first, newest first.
 	ListMine(ctx context.Context, actorID int64) ([]job.Job, []job.Extras, error)
 	// SaveForm stores (replacing) the questions of an on-site vacancy as its apply_forms
 	// row. The vacancy is one this account already owns: a fresh mint, or a BySlug load.
@@ -101,6 +102,10 @@ type JobRepository interface {
 	// an already-closed vacancy is a no-op, not an error — ownership is the caller's job
 	// (via a preceding BySlug), not this method's.
 	Close(ctx context.Context, actorID int64, slug string) error
+	// Delete soft-deletes the vacancy for good (closed_reason='employer_deleted'): it leaves
+	// every list and the public page, and Reopen does not bring it back. Ownership is the
+	// caller's job, as for Close.
+	Delete(ctx context.Context, actorID int64, slug string) error
 	// Reopen undoes a close this account made (closed_reason='employer_closed') and
 	// reports whether there was one to undo; ownership is the caller's job, as for Close.
 	Reopen(ctx context.Context, actorID int64, slug string) (bool, error)
@@ -167,10 +172,10 @@ func requireDescription(description string) error {
 	return nil
 }
 
-// ListVacancies returns every vacancy userID has published through this path, newest first
-// — the dashboard's own list. Gated on ActiveAccount like every other employer capability
-// except MyAccount itself (a pending/revoked account has no vacancies to list yet, since
-// CreateVacancy is ActiveAccount-gated too).
+// ListVacancies returns userID's dashboard list: the vacancies its team published through
+// this path and the open ones of its company collected from other sources (read-only for the
+// employer), open first. Gated on ActiveAccount like every other employer capability except MyAccount
+// itself.
 func (s *Service) ListVacancies(ctx context.Context, userID int64) ([]job.Job, []job.Extras, error) {
 	if _, err := s.ActiveAccount(ctx, userID); err != nil {
 		return nil, nil, err
@@ -372,6 +377,19 @@ func (s *Service) CloseVacancy(ctx context.Context, userID int64, slug string) e
 		return err
 	}
 	return s.jobs.Close(ctx, userID, slug)
+}
+
+// DeleteVacancy soft-deletes userID's own vacancy. Like CloseVacancy, ownership and existence
+// are settled by BySlug (own team, source 'employer'), so a collected vacancy of the same
+// company is ErrJobNotFound here, never deletable. An already-deleted one is not found either.
+func (s *Service) DeleteVacancy(ctx context.Context, userID int64, slug string) error {
+	if _, err := s.managementAccount(ctx, userID); err != nil {
+		return err
+	}
+	if _, _, err := s.jobs.BySlug(ctx, userID, slug); err != nil {
+		return err
+	}
+	return s.jobs.Delete(ctx, userID, slug)
 }
 
 // ReopenVacancy undoes userID's own close of their vacancy. Only a close the employer made
