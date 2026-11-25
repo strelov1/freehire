@@ -107,7 +107,7 @@ type ComputeInsightsRolePulseRow struct {
 
 // Compute on the read connection; publish the result separately on the writer.
 // Three figures per category over canonical, public postings, each for the last 30 days
-// and the 30 before (openspec/changes/insights-role-pulse/design.md has the prod
+// and the 30 before (openspec/changes/archive/2026-11-25-insights-role-pulse/design.md has the prod
 // measurements behind every choice below).
 // COMPETITION is page views over exposure. Views are job_daily_views.page_uniques, never
 // uniques (AGENTS.md "View counts"). Exposure is the posting-days a posting was OPEN ON

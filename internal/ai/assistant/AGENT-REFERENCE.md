@@ -174,7 +174,7 @@ required — a tool may go unnamed, its own description is what the model reads.
 
 **Interview rehearsal, voice mode and the interview debrief** — the application row as authorisation, the server-placed invitation, the bank gate, the voice call through Bifrost, and how the debrief inverts the rehearsal — are in [AGENT-REFERENCE-INTERVIEW.md](AGENT-REFERENCE-INTERVIEW.md).
 
-**The application chat** (`apply`, openspec/changes/auto-apply-chat) is held against one
+**The application chat** (`apply`, openspec/changes/archive/2026-10-27-auto-apply-chat) is held against one
 automatic application, minted from `POST /assistant/sessions?preset=apply&job=<slug>` — and
 an application holds ONE: asking again returns it, so the numbered questions and the answers
 to them stay in one transcript. Its tools are the MCP server's auto-apply tools bound to the

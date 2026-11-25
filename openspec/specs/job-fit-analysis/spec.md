@@ -153,12 +153,27 @@ work-mode fit, not only skills and title.
 
 The SPA SHALL present the fit result in fuller detail: each dimension's score and its one-line
 rationale visible (not only the bar), the six dimensions including Location & work-mode fit, the
-ATS requirement match, and the strengths/gaps/recommendation, in a clear visual hierarchy.
+ATS requirement match, and the strengths/gaps/recommendation, in a clear visual hierarchy. The
+`recommendation` (the verdict card) MUST render as multi-paragraph prose through the same
+untrusted-model markup sanitizer used elsewhere on the site, so paragraph breaks and ordinary
+emphasis survive without collapsing into a single block or admitting request-triggering markup. In
+the narrow stacked panel the verdict card MUST use a body size that keeps a three-paragraph verdict
+readable rather than a wall of large type.
 
 #### Scenario: Dimension rationale is visible
 
 - **WHEN** the analysis renders
 - **THEN** each dimension shows its score and its rationale comment, so the user sees why, not just a number
+
+#### Scenario: Multi-paragraph recommendation keeps its breaks
+
+- **WHEN** the analysis carries a recommendation with two or three paragraphs separated by blank lines
+- **THEN** the verdict card renders those as separate paragraphs, not one collapsed run of text
+
+#### Scenario: Hostile markup in the recommendation never fires a request
+
+- **WHEN** a recommendation contains a markdown image or a non-http link
+- **THEN** the rendered verdict card contains no request-triggering element for that payload
 
 ### Requirement: Live-streaming fit computation
 
@@ -327,3 +342,65 @@ per-analysis masking is performed.
 
 - **WHEN** a user has a stored CV but no current structured résumé (extraction absent or stale)
 - **THEN** the fit analysis does not run and the endpoint responds `200` with no analysis
+
+### Requirement: Hidden signals from posting wording
+
+The fit analysis SHALL include a `hidden_signals` field: an array of up to 5 objects, each
+carrying a verbatim `quote` excerpted from the job description and a short `insight`
+interpreting what that wording implies about pace, ownership expectations, team stage, or
+culture. The signals MUST be extracted as part of the existing Stage 1 (Extract & Match) LLM
+call — no additional model call or stage. Both `quote` and `insight` MUST be non-empty,
+length-bounded, and drawn only from the job description text; the field MUST NOT require or
+depend on the candidate's résumé/CV content, even though the analysis as a whole (and therefore
+this field) is only produced for a candidate with banked/structured experience.
+
+#### Scenario: Posting wording implies pace and ownership expectations
+
+- **WHEN** a job description repeatedly uses phrasing like "thrive in ambiguity" and "high
+  ownership, fast-paced"
+- **THEN** the served analysis's `hidden_signals` includes an entry quoting that wording with an
+  insight naming the implied self-driven/fast-pace expectation
+
+#### Scenario: Generic posting yields no signals
+
+- **WHEN** a job description is short or carries no distinctive wording to interpret
+- **THEN** `hidden_signals` is an empty array, and the analysis is served normally with no error
+  and no fabricated signal
+
+#### Scenario: Malformed model output is dropped, not coerced
+
+- **WHEN** the model returns a signal entry with a blank `quote` or a blank `insight`
+- **THEN** that entry is dropped from the served `hidden_signals` rather than served with a
+  placeholder value
+
+#### Scenario: Signals are cached with the rest of the analysis
+
+- **WHEN** an analysis with `hidden_signals` is served from cache on a subsequent request for the
+  same (user, job) with unchanged CV upload time, job `content_hash`, and model
+- **THEN** the same `hidden_signals` are served without a new LLM call, under the analysis's
+  existing cache stamp
+
+### Requirement: Recommendation has a stated length contract
+
+The recruiter and audit stages SHALL instruct the model that `recommendation` is two or three
+short prose paragraphs of hiring judgement — not a requirement-by-requirement recap of statuses the
+page already shows — with no headings and no lists. The server's sanitizer length bound on
+`recommendation` MUST sit well clear of that budget so it acts as a safety ceiling on runaway or
+hostile model text, not as a routine shear of ordinary answers. The two numbers keep distinct jobs:
+the prompt governs style; the bound governs safety.
+
+#### Scenario: A normal-length verdict is served intact
+
+- **WHEN** the model returns a recommendation of two or three short paragraphs within the stated budget
+- **THEN** the served `recommendation` is the full text, not truncated mid-word
+
+#### Scenario: An oversized recommendation is still bounded
+
+- **WHEN** the model returns a recommendation longer than the sanitizer's safety ceiling
+- **THEN** the stored and served value is truncated to that ceiling before persistence
+
+#### Scenario: Both stages name the same budget
+
+- **WHEN** Stage 2 writes a recommendation and Stage 3 rewrites it
+- **THEN** both stages' prompts state the same length and shape contract for the field
+

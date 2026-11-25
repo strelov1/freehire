@@ -28,7 +28,7 @@
   // mobile it additionally carries the workspace switcher and the auth
   // action (Sign in/Log out) — on desktop those live in HeaderProfileMenu, the
   // bar's separate profile trigger, so Log out is reachable without scrolling
-  // past the whole site nav first (openspec/changes/split-header-profile-menu).
+  // past the whole site nav first (openspec/changes/archive/2026-09-16-split-header-profile-menu).
   //
   // Two layouts from one markup: on mobile the panel is a full-screen drawer
   // (own top bar · scrollable sectioned links · pinned bottom action bar); on
@@ -313,7 +313,7 @@
         <div class="my-1 h-px bg-border"></div>
 
         <!-- Mobile-only: the account section moved to HeaderProfileMenu on desktop
-             (openspec/changes/split-header-profile-menu), so this stays scoped to
+             (openspec/changes/archive/2026-09-16-split-header-profile-menu), so this stays scoped to
              the drawer via sm:hidden rather than removed — the mobile drawer's
              markup is otherwise unchanged. The account entry is the same
              WorkspaceSwitcher HeaderProfileMenu's desktop panel renders, so a phone and a

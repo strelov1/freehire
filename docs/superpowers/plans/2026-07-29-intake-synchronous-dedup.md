@@ -14,7 +14,7 @@ canonical slug, after recording the contribution.
 **Tech Stack:** Go, pgx, sqlc, Postgres. Tests are Go integration tests behind the
 `integration` build tag (testcontainers-backed Postgres).
 
-**Source of truth:** the OpenSpec change `openspec/changes/intake-storefront-dedup/` —
+**Source of truth:** the OpenSpec change `openspec/changes/archive/2026-07-29-intake-storefront-dedup/` —
 `proposal.md` (why), `design.md` (how), `specs/` (the requirements), `tasks.md` (progress).
 This plan is the step-by-step expansion of those tasks; if the two disagree, OpenSpec wins.
 
@@ -27,7 +27,7 @@ This plan is the step-by-step expansion of those tasks; if the two disagree, Ope
   `(company_slug, role_fingerprint)` index already exists (`migrations/0003_role_fingerprint.sql`).
 - Integration tests run with `go test -tags=integration ./internal/<pkg>/` and need Docker.
 - Branch: `feat/intake-sync-dedup` (created off `origin/main`).
-- Mark each OpenSpec task `- [ ]` → `- [x]` in `openspec/changes/intake-storefront-dedup/tasks.md`
+- Mark each OpenSpec task `- [ ]` → `- [x]` in `openspec/changes/archive/2026-07-29-intake-storefront-dedup/tasks.md`
   as it lands.
 
 ---

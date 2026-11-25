@@ -9,9 +9,7 @@ cards gives a seeker nothing to choose between. It reaches the public only by a
 moderator's hand. Nothing infers approval, including an approved referral offer for the
 same company. Also covers pausing, withdrawing, the public directory, and the entry
 points from a vacancy and a company page.
-
 ## Requirements
-
 ### Requirement: A mentor profile is owned by one account and may name a company
 
 The system SHALL hold at most one mentor profile per user account. A profile MAY name a
@@ -122,10 +120,10 @@ The display name SHALL be a field of the PROFILE, not read from the account: `us
 carries no name at all — only an address and a username, and a username is an address
 rather than a name.
 
-An avatar is NOT part of this requirement. Serving one means a public image endpoint
-with its own caching, sizing and abuse surface, and the account's stored headshot is a
-CV photo a mentor may not want here. It belongs with the screens that display it; until
-then a profile is named but not pictured, which is enough to stop it being anonymous.
+A profile SHALL carry a `show_photo` opt-in, defaulting to off, that controls whether
+the mentor's account headshot is served publicly (see the photo requirement below). A
+profile that has never opted in SHALL remain exactly as pictureless as this requirement
+originally described.
 
 #### Scenario: An anonymous visitor reads a published profile
 
@@ -374,3 +372,68 @@ withdrawn in the first place.
 
 - **WHEN** an account with no mentor profile requests resubmission
 - **THEN** the system refuses with a not-found error
+
+### Requirement: A meeting link is required only without a connected calendar
+
+A mentor profile SHALL require a meeting link only when its owner has not connected
+Google Calendar for write access. A mentor who has connected it MAY submit or update
+their profile with an empty meeting link, because a real one is minted per booking
+instead.
+
+#### Scenario: A meeting link is still required without a connected calendar
+
+- **WHEN** a mentor with no connected calendar submits a profile with an empty meeting
+  link
+- **THEN** the submission is refused, exactly as it always has been
+
+#### Scenario: A connected mentor may omit the meeting link
+
+- **WHEN** a mentor who has connected Google Calendar for write access submits or
+  updates their profile with an empty meeting link
+- **THEN** the submission succeeds
+
+#### Scenario: A connected mentor may still set one
+
+- **WHEN** a mentor who has connected Google Calendar for write access submits a
+  non-empty meeting link
+- **THEN** it is stored exactly as any other profile field
+- **AND** no booking of theirs ever reads it while the connection stands, whether or
+  not a given booking's own link generation succeeds
+
+### Requirement: A mentor's photo is shown only with their explicit opt-in
+
+The system SHALL serve a mentor's account headshot on their public directory card and
+profile page only when that mentor's own `show_photo` field is set to true. Setting
+`show_photo` SHALL be an ordinary, mentor-controlled edit to their own profile, off by
+default for both a newly created and a pre-existing profile. Opting in SHALL NOT copy
+or duplicate the photo into mentor-specific storage — the account's existing CV
+headshot remains the single stored copy, and turning the opt-in back off SHALL stop it
+being served publicly with no further action needed.
+
+The photo SHALL be reachable only for a profile that is currently public under the
+existing publication rule (`approved` and not paused): opting in does not create a way
+to read a photo for a profile that itself is not publicly readable.
+
+#### Scenario: An opted-in, approved mentor's photo is publicly served
+
+- **WHEN** an approved, unpaused mentor with `show_photo` set to true has a stored
+  account headshot
+- **THEN** a signed-out visitor's request for that mentor's public photo succeeds
+
+#### Scenario: A mentor who has not opted in serves no photo
+
+- **WHEN** a mentor has `show_photo` set to false, whether or not they have a stored
+  account headshot
+- **THEN** a request for their public photo does not serve it
+
+#### Scenario: Opting in without a stored headshot serves no photo
+
+- **WHEN** a mentor sets `show_photo` to true but has no stored account headshot
+- **THEN** a request for their public photo does not serve it
+
+#### Scenario: A non-public profile's photo is not reachable regardless of opt-in
+
+- **WHEN** a mentor profile is `pending`, `rejected`, `paused`, or withdrawn, even with
+  `show_photo` set to true and a stored headshot
+- **THEN** a request for that mentor's public photo does not serve it
+
