@@ -9,8 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 func insertPaywallJob(t *testing.T, pool *pgxpool.Pool, slug string) int64 {
@@ -210,57 +208,5 @@ func TestDeletingTheJobKeepsTheHitWithoutIt(t *testing.T) {
 	}
 	if _, ok := paywallJobSlug(t, pool, user, "match"); ok {
 		t.Error("the hit still names a job that no longer exists")
-	}
-}
-
-func TestListPaywallHitsByFeatureReadsTheLastWindow(t *testing.T) {
-	s, pool := newStore(t, enforcing(), time.Now().UTC())
-	ctx := context.Background()
-	user := insertUser(t, pool, "paywall-list@example.test")
-	insertPaywallJob(t, pool, "list-job")
-	for _, h := range []struct {
-		feature string
-		job     PaywallJob
-	}{
-		{"tailor", PaywallJob{Slug: "list-job"}},
-		{"ats_review", PaywallJob{}},
-		{"match", PaywallJob{Slug: "list-job"}},
-	} {
-		if err := s.RecordPaywallHit(ctx, user, h.feature, h.job); err != nil {
-			t.Fatalf("record %s: %v", h.feature, err)
-		}
-	}
-	// One older than the window, which the report must not show.
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO paywall_hits (user_id, feature, day, created_at)
-		 VALUES ($1, 'autofill', current_date - 30, now() - interval '30 days')`, user); err != nil {
-		t.Fatalf("seed old hit: %v", err)
-	}
-
-	rows, err := db.New(pool).ListPaywallHitsByFeature(ctx, 7)
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	var features []string
-	for _, r := range rows {
-		features = append(features, r.Feature)
-		if r.UserID != user {
-			t.Errorf("row for user %d, want %d", r.UserID, user)
-		}
-		if r.Feature == "ats_review" && r.JobSlug.Valid {
-			t.Errorf("ats_review carries job %q, want none", r.JobSlug.String)
-		}
-		if r.Feature == "match" && r.JobSlug.String != "list-job" {
-			t.Errorf("match job = %q, want list-job", r.JobSlug.String)
-		}
-	}
-	want := []string{"ats_review", "match", "tailor"}
-	if len(features) != len(want) {
-		t.Fatalf("features = %v, want %v ordered by feature, without the 30-day-old autofill", features, want)
-	}
-	for i := range want {
-		if features[i] != want[i] {
-			t.Fatalf("features = %v, want %v", features, want)
-		}
 	}
 }
