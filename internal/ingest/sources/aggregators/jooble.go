@@ -110,18 +110,9 @@ func (j jooble) redactKey(err error) error {
 // Fetch reads one keyword+location slice. Per the house pagination rule, a failure on the first
 // page is a board-level error; a failure on a later page ends the walk with what was already
 // gathered. Pagination stops once totalCount postings are read, on an empty page, or at
-// joobleMaxPages.
+// joobleMaxPages. There is deliberately no FetchRecent: that interface needs a publication-date
+// filter verified against the live API, and datecreatedfrom is not (see joobleRequest).
 func (j jooble) Fetch(ctx context.Context, e kit.CompanyEntry) ([]kit.Job, error) {
-	return j.fetch(ctx, e, joobleMaxDaysOld)
-}
-
-// FetchRecent reads the same slice as Fetch but bounds it to the run's window, as
-// datecreatedfrom. A window under one day still asks for one, the finest grain the field has.
-func (j jooble) FetchRecent(ctx context.Context, e kit.CompanyEntry, window time.Duration) ([]kit.Job, error) {
-	return j.fetch(ctx, e, max(1, int(window/(24*time.Hour))))
-}
-
-func (j jooble) fetch(ctx context.Context, e kit.CompanyEntry, maxDaysOld int) ([]kit.Job, error) {
 	location := strings.TrimSpace(e.Region)
 	if location == "" {
 		return nil, fmt.Errorf("jooble: company %q has a blank location (Region)", e.Company)
@@ -135,7 +126,7 @@ func (j jooble) fetch(ctx context.Context, e kit.CompanyEntry, maxDaysOld int) (
 		Keywords:        keywords,
 		Location:        location,
 		ResultOnPage:    joobleResultOnPage,
-		DateCreatedFrom: j.now().UTC().AddDate(0, 0, -maxDaysOld).Format("2006-01-02"),
+		DateCreatedFrom: j.now().UTC().AddDate(0, 0, -joobleMaxDaysOld).Format("2006-01-02"),
 	}
 	var jobs []kit.Job
 	for page := 1; page <= joobleMaxPages; page++ {

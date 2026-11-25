@@ -112,27 +112,6 @@ func TestJoobleFetchRequest(t *testing.T) {
 	}
 }
 
-func TestJoobleFetchRecentSendsTheRunWindow(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		window time.Duration
-		want   string
-	}{
-		{"three days", 72 * time.Hour, "2026-11-22"},
-		{"below a day rounds up to one", time.Hour, "2026-11-24"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h := &joobleHTTP{pages: []string{`{"totalCount":0,"jobs":[]}`}}
-			if _, err := newTestJooble(h).FetchRecent(context.Background(), joobleEntry, tc.window); err != nil {
-				t.Fatalf("FetchRecent: %v", err)
-			}
-			if got := h.gotBody[0].DateCreatedFrom; got != tc.want {
-				t.Fatalf("datecreatedfrom = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 // The walk ends once totalCount postings are read, without spending a request on an empty page.
 func TestJoobleFetchStopsAtTotalCount(t *testing.T) {
 	h := &joobleHTTP{pages: []string{joobleFullPage(3, 2), joobleFullPage(3, 1), joobleFullPage(3, 1)}}
