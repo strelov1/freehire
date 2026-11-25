@@ -30,9 +30,17 @@ func stripPostalPrefix(tok string) string {
 	return tok
 }
 
+// storeCodeRE matches a one-letter store/site code glued to a place with a hyphen
+// ("j-florence", Workday's Texas Roadhouse stores), which would otherwise split into a
+// bogus place ("florence" the Italian city) and swallow the state code beside it.
+var storeCodeRE = regexp.MustCompile(`^\p{L}-(\p{L}{3}.*)$`)
+
 // stripCityPrefix removes a leading Russian city marker from an already-lowercased,
 // trimmed token, returning the bare city name (or the token unchanged).
 func stripCityPrefix(tok string) string {
+	if m := storeCodeRE.FindStringSubmatch(tok); m != nil {
+		tok = m[1]
+	}
 	for _, p := range cityMarkerPrefixes {
 		if rest, ok := strings.CutPrefix(tok, p); ok {
 			return strings.TrimSpace(rest)
