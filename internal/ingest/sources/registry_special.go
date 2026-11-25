@@ -12,11 +12,11 @@ import (
 // their own (a cookie session, a long timeout, a TLS fingerprint). It follows All's rule: on the
 // taxonomy path (c == nil) every provider registers, transport-free.
 func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
-	// usajobs, reed, whatjobs, adzuna, careerjet and arc are the keyed sources: each needs a credential read from
+	// usajobs, reed, whatjobs, adzuna, careerjet, jooble and arc are the keyed sources: each needs a credential read from
 	// the environment, never from a board file. The credential gates the CRAWL registry only — a
 	// host without it must not register a provider whose every board would fail to authenticate,
 	// so its board file fails config validation before a request goes out. The taxonomy path
-	// (c == nil, see Taxonomy) registers all four regardless, empty credential included.
+	// (c == nil, see Taxonomy) registers them all regardless, empty credential included.
 	// Conflating the two would classify whatjobs, a CPC reseller of first-party ATS postings,
 	// as an ATS on every keyless host, so none of its copies would be suppressed.
 	if key := os.Getenv("USAJOBS_API_KEY"); c == nil || key != "" {
@@ -54,6 +54,11 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 		if c == nil || ok {
 			registry["careerjet"] = aggregators.NewCareerjet(hc, key, ip)
 		}
+	}
+	// Jooble's credential is a single key, which Jooble issues per country site (a jooble.org key
+	// sees US listings only). The key is a URL path segment, so the adapter redacts it from errors.
+	if key := os.Getenv("JOOBLE_API_KEY"); c == nil || key != "" {
+		registry["jooble"] = aggregators.NewJooble(c, key)
 	}
 	// whatjobs' credential is a publisher id rather than an API key, and it is per-country — one
 	// account per market, each under its own provider name (whatjobsMarkets). Rather than one
