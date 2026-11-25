@@ -3,6 +3,7 @@ package search
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"testing"
 )
 
@@ -136,5 +137,18 @@ func TestCompanyFilterFromValues_CommaJoinedAndRepeatedMeanTheSame(t *testing.T)
 
 	if fmt.Sprint(joined) != fmt.Sprint(repeated) {
 		t.Errorf("comma-joined gave %v and repeated gave %v", joined, repeated)
+	}
+}
+
+func TestCompanyFilterFromValues_HqCountryAndEmployeeRange(t *testing.T) {
+	g := groups(t, CompanyFilterFromValues(url.Values{
+		"hq_country": {"AU"}, "employee_count_min": {"11"}, "employee_count_max": {"50"}, "employee_count_x": {"1"},
+	}))
+	want := [][]string{{`hq_country = "AU"`}, {"employee_count >= 11"}, {"employee_count <= 50"}}
+	if !reflect.DeepEqual(g, want) {
+		t.Fatalf("got %v, want %v", g, want)
+	}
+	if f := CompanyFilterFromValues(url.Values{"employee_count_min": {"1; DROP"}}); f != nil {
+		t.Fatalf("non-integer bound must be skipped, got %v", f)
 	}
 }

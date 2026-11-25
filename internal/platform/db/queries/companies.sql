@@ -20,7 +20,9 @@
 -- is the number the company's own page shows — the two used to disagree, listing
 -- Stripe at 570 against 444 on its page.
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
-       feedback_count, feedback_rating_avg, ai_interview_reports
+       feedback_count, feedback_rating_avg, ai_interview_reports, employee_count,
+       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), NULLIF(btrim(company_info ->> 'homepage'), ''))::text AS website,
+       NULLIF(btrim(company_info ->> 'linkedin'), '')::text AS linkedin_url
 FROM companies
 WHERE job_count > 0
   AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
@@ -53,6 +55,11 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
+  -- hq_country: the company's own HQ (stored in mixed case, so compared upper-cased; the
+  -- caller upper-cases the values). employee_count bounds are inclusive; NULL never matches.
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR upper(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  AND (sqlc.narg('employee_count_min')::int IS NULL OR employee_count >= sqlc.narg('employee_count_min')::int)
+  AND (sqlc.narg('employee_count_max')::int IS NULL OR employee_count <= sqlc.narg('employee_count_max')::int)
 -- `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
 -- companies sort last), falling through to the default job_count DESC, name
 -- for the tiebreak. Any other value (including '', the default) leaves the
@@ -99,7 +106,12 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('yc_stage')::text[]), 0) = 0 OR yc_stage && sqlc.arg('yc_stage')::text[])
   AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
-  AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]));
+  AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
+  -- hq_country: the company's own HQ (stored in mixed case, so compared upper-cased; the
+  -- caller upper-cases the values). employee_count bounds are inclusive; NULL never matches.
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR upper(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  AND (sqlc.narg('employee_count_min')::int IS NULL OR employee_count >= sqlc.narg('employee_count_min')::int)
+  AND (sqlc.narg('employee_count_max')::int IS NULL OR employee_count <= sqlc.narg('employee_count_max')::int);
 
 -- name: EstimateHiringCompanies :one
 -- Fast approximate hiring-company total (job_count > 0) for the UNFILTERED /companies

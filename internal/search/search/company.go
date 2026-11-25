@@ -2,10 +2,14 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/meilisearch/meilisearch-go"
 
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -35,20 +39,25 @@ type CompanyDocument struct {
 	// CompanyFilterFromValues ORs it into the Industries group; queried only, never served.
 	IndustriesDerived []string `json:"industries_derived"`
 	HqCountry         string   `json:"hq_country"`
-	JobCount          int32    `json:"job_count"`
-	Collections       []string `json:"collections"`
-	Regions           []string `json:"regions"`
-	Countries         []string `json:"countries"`
-	Domains           []string `json:"domains"`
-	CompanyTypes      []string `json:"company_types"`
-	CompanySizes      []string `json:"company_sizes"`
-	RemoteRegions     []string `json:"remote_regions"`
-	YcBatch           []string `json:"yc_batch"`
-	YcStatus          []string `json:"yc_status"`
-	YcStage           []string `json:"yc_stage"`
-	YcFlags           []string `json:"yc_flags"`
-	Maturity          string   `json:"maturity"`
-	Subindustry       string   `json:"subindustry"`
+	// Website/LinkedinURL come from company_info (empty when unknown); EmployeeCount is a pointer so an
+	// unknown headcount is stored as null and matches no employee_count range.
+	Website       string   `json:"website"`
+	LinkedinURL   string   `json:"linkedin_url"`
+	EmployeeCount *int32   `json:"employee_count"`
+	JobCount      int32    `json:"job_count"`
+	Collections   []string `json:"collections"`
+	Regions       []string `json:"regions"`
+	Countries     []string `json:"countries"`
+	Domains       []string `json:"domains"`
+	CompanyTypes  []string `json:"company_types"`
+	CompanySizes  []string `json:"company_sizes"`
+	RemoteRegions []string `json:"remote_regions"`
+	YcBatch       []string `json:"yc_batch"`
+	YcStatus      []string `json:"yc_status"`
+	YcStage       []string `json:"yc_stage"`
+	YcFlags       []string `json:"yc_flags"`
+	Maturity      string   `json:"maturity"`
+	Subindustry   string   `json:"subindustry"`
 	// FeedbackCount/FeedbackRatingAvg mirror companies.feedback_count/feedback_rating_avg
 	// (internal/engage/companyfeedback), display-only. A rating of 0 means "no rating" (real
 	// ratings are 1-5). Neither is Meili-sortable, so "sort by rating" works only on the Postgres
@@ -70,6 +79,9 @@ func FromCompany(c db.Company) CompanyDocument {
 		Industries:        c.Industries,
 		IndustriesDerived: c.IndustriesDerived,
 		HqCountry:         c.HqCountry.String,
+		Website:           companyInfoString(c.CompanyInfo, "website", "homepage"),
+		LinkedinURL:       companyInfoString(c.CompanyInfo, "linkedin"),
+		EmployeeCount:     employeeCount(c.EmployeeCount),
 		JobCount:          c.JobCount,
 		Collections:       c.Collections,
 		Regions:           c.Regions,
@@ -92,6 +104,27 @@ func FromCompany(c db.Company) CompanyDocument {
 	}
 }
 
+// companyInfoString is the first non-blank string among keys of the company_info JSON ("" when none).
+func companyInfoString(raw json.RawMessage, keys ...string) string {
+	var m map[string]any
+	if json.Unmarshal(raw, &m) != nil {
+		return ""
+	}
+	for _, k := range keys {
+		if v, _ := m[k].(string); strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func employeeCount(n pgtype.Int4) *int32 {
+	if !n.Valid {
+		return nil
+	}
+	return &n.Int32
+}
+
 // companySettings is the companies index configuration. Ranking is relevance-first so an exact
 // name match beats a substring, with `job_count:desc` as the last tiebreaker to reproduce the
 // Postgres path's secondary order. Searchable attributes are ordered name, slug, tagline so a
@@ -105,7 +138,7 @@ func companySettings() *meilisearch.Settings {
 			"industries_derived",
 			"company_types", "company_sizes", "remote_regions",
 			"yc_batch", "yc_status", "yc_stage", "yc_flags",
-			"maturity", "subindustry",
+			"maturity", "subindustry", "hq_country", "employee_count",
 		},
 		SortableAttributes: []string{"job_count"},
 		RankingRules:       []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "job_count:desc"},
@@ -134,7 +167,11 @@ var companyFacets = []struct{ param, attr string }{
 	{"yc_flags", "yc_flags"},
 	{"maturity", "maturity"},
 	{"subindustries", "subindustry"},
+	{"hq_country", "hq_country"},
 }
+
+// companyRangeParams are the inclusive headcount bounds, in a fixed order.
+var companyRangeParams = []struct{ param, op string }{{"employee_count_min", ">="}, {"employee_count_max", "<="}}
 
 // CompanyFilterFromValues turns the facet params of a /companies request into a Meilisearch
 // filter: values within a facet are ORed, facets ANDed. An absent facet adds no constraint and
@@ -166,6 +203,12 @@ func CompanyFilterFromValues(v url.Values) any {
 			}
 		}
 		g = append(g, group)
+	}
+	for _, r := range companyRangeParams {
+		// The handler rejects a non-integer first; one slipping through is skipped, never interpolated.
+		if n, err := strconv.Atoi(v.Get(r.param)); err == nil {
+			g = append(g, []string{"employee_count " + r.op + " " + strconv.Itoa(n)})
+		}
 	}
 	return Filter(g...)
 }

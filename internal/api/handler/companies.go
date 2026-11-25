@@ -6,11 +6,13 @@ import (
 	"errors"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -201,17 +203,30 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 	ycFlags := facetValues(vals, "yc_flags")
 	maturity := facetValues(vals, "maturity")
 	subindustries := facetValues(vals, "subindustries")
+	hqCountries := facetValues(vals, "hq_country")
+	for i, c := range hqCountries {
+		hqCountries[i] = strings.ToUpper(c)
+	}
+	empMin, err := optIntParam(vals, "employee_count_min")
+	if err != nil {
+		return nil, err
+	}
+	empMax, err := optIntParam(vals, "employee_count_max")
+	if err != nil {
+		return nil, err
+	}
 
 	// One list feeds both isCompanyFilter calls: a second hand-written list once forgot `industries` and miscounted the
 	// request as unfiltered, silently since the argument is variadic.
 	facets := [][]string{collections, regions, countries, domains, industries,
 		companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage,
-		ycFlags, maturity, subindustries}
+		ycFlags, maturity, subindustries, hqCountries}
+	hasEmployeeRange := empMin.Valid || empMax.Valid
 
 	// Meilisearch serves the list when configured and a filter (q or any facet) is present: relevance-first, typo-tolerant,
 	// job_count as tiebreaker. The unfiltered catalogue stays on Postgres (job_count DESC, name; O(1) total estimate). Any Meili
 	// error falls through to Postgres. sort=rating also stays off Meili, which would silently ignore that order.
-	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, facets...) {
+	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, hasEmployeeRange, facets...) {
 		items, total, err := h.companyHitsViaMeili(ctx, search, vals, limit, offset)
 		if err == nil {
 			return companyListPage(items, total, limit, offset, vals)
@@ -220,24 +235,27 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 	}
 
 	companies, err := h.queries.ListCompanies(ctx, db.ListCompaniesParams{
-		Search:        search,
-		Collections:   collections,
-		Regions:       regions,
-		Countries:     countries,
-		Domains:       domains,
-		Industries:    industries,
-		CompanyTypes:  companyTypes,
-		CompanySizes:  companySizes,
-		RemoteRegions: remoteRegions,
-		YcBatch:       ycBatch,
-		YcStatus:      ycStatus,
-		YcStage:       ycStage,
-		YcFlags:       ycFlags,
-		Maturity:      maturity,
-		Subindustries: subindustries,
-		Sort:          sort,
-		Limit:         int32(limit),
-		Offset:        int32(offset),
+		Search:           search,
+		Collections:      collections,
+		Regions:          regions,
+		Countries:        countries,
+		Domains:          domains,
+		Industries:       industries,
+		CompanyTypes:     companyTypes,
+		CompanySizes:     companySizes,
+		RemoteRegions:    remoteRegions,
+		YcBatch:          ycBatch,
+		YcStatus:         ycStatus,
+		YcStage:          ycStage,
+		YcFlags:          ycFlags,
+		Maturity:         maturity,
+		Subindustries:    subindustries,
+		HqCountries:      hqCountries,
+		EmployeeCountMin: empMin,
+		EmployeeCountMax: empMax,
+		Sort:             sort,
+		Limit:            int32(limit),
+		Offset:           int32(offset),
 	})
 	if err != nil {
 		return nil, err
@@ -246,23 +264,26 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 	// The unfiltered count(*) is a cold-cache heap scan (tens of seconds on prod, see EstimateHiringCompanies); filters narrow
 	// to an index. So a filtered request gets the exact count and the unfiltered case the O(1) planner estimate, as /jobs does.
 	var total int64
-	if isCompanyFilter(search, facets...) {
+	if isCompanyFilter(search, hasEmployeeRange, facets...) {
 		total, err = h.queries.CountCompanies(ctx, db.CountCompaniesParams{
-			Search:        search,
-			Collections:   collections,
-			Regions:       regions,
-			Countries:     countries,
-			Domains:       domains,
-			Industries:    industries,
-			CompanyTypes:  companyTypes,
-			CompanySizes:  companySizes,
-			RemoteRegions: remoteRegions,
-			YcBatch:       ycBatch,
-			YcStatus:      ycStatus,
-			YcStage:       ycStage,
-			YcFlags:       ycFlags,
-			Maturity:      maturity,
-			Subindustries: subindustries,
+			Search:           search,
+			Collections:      collections,
+			Regions:          regions,
+			Countries:        countries,
+			Domains:          domains,
+			Industries:       industries,
+			CompanyTypes:     companyTypes,
+			CompanySizes:     companySizes,
+			RemoteRegions:    remoteRegions,
+			YcBatch:          ycBatch,
+			YcStatus:         ycStatus,
+			YcStage:          ycStage,
+			YcFlags:          ycFlags,
+			Maturity:         maturity,
+			Subindustries:    subindustries,
+			HqCountries:      hqCountries,
+			EmployeeCountMin: empMin,
+			EmployeeCountMax: empMax,
 		})
 	} else {
 		total, err = h.queries.EstimateHiringCompanies(ctx)
@@ -278,10 +299,23 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 	return companyListPage(items, total, limit, offset, vals)
 }
 
+// optIntParam reads one optional non-negative integer query param; a malformed value is a 400, not a silently dropped filter.
+func optIntParam(vals url.Values, key string) (pgtype.Int4, error) {
+	raw := vals.Get(key)
+	if raw == "" {
+		return pgtype.Int4{}, nil
+	}
+	n, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || n < 0 {
+		return pgtype.Int4{}, fiber.NewError(fiber.StatusBadRequest, key+" must be a non-negative integer")
+	}
+	return pgtype.Int4{Int32: int32(n), Valid: true}, nil
+}
+
 // isCompanyFilter reports whether a /companies request carries any name search or facet constraint: the exact-vs-estimate
 // meta.total gate in ListCompanies. Every facet is a non-nil slice, so len == 0 means unset.
-func isCompanyFilter(search string, facets ...[]string) bool {
-	if search != "" {
+func isCompanyFilter(search string, hasEmployeeRange bool, facets ...[]string) bool {
+	if search != "" || hasEmployeeRange {
 		return true
 	}
 	for _, f := range facets {

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -17,6 +19,9 @@ func companyListItemFromRow(r db.ListCompaniesRow) apigen.CompanyListItem {
 		Tagline:            nilString(pgconv.TextPtr(r.Tagline)),
 		Industries:         r.Industries,
 		HqCountry:          nilString(pgconv.TextPtr(r.HqCountry)),
+		Website:            nilString(presentOrNil(r.Website)),
+		LinkedinURL:        nilString(presentOrNil(r.LinkedinUrl)),
+		EmployeeCount:      nilInt64(int4Ptr(r.EmployeeCount)),
 		Collections:        r.Collections,
 		FeedbackCount:      int64(r.FeedbackCount),
 		FeedbackRatingAvg:  nilFloat32Ptr(pgconv.Float4Ptr(r.FeedbackRatingAvg)),
@@ -35,6 +40,9 @@ func companyListItemFromDoc(d search.CompanyDocument) apigen.CompanyListItem {
 		Tagline:           nilString(presentOrNil(d.Tagline)),
 		Industries:        orEmpty(d.Industries),
 		HqCountry:         nilString(presentOrNil(d.HqCountry)),
+		Website:           nilString(presentOrNil(d.Website)),
+		LinkedinURL:       nilString(presentOrNil(d.LinkedinURL)),
+		EmployeeCount:     nilInt64(int32Ptr(d.EmployeeCount)),
 		Collections:       orEmpty(d.Collections),
 		FeedbackCount:     int64(d.FeedbackCount),
 		FeedbackRatingAvg: nilFloat32Ptr(presentOrNilFloat(d.FeedbackRatingAvg)),
@@ -56,4 +64,20 @@ func orEmpty(v []string) []string {
 		return []string{}
 	}
 	return v
+}
+
+func int4Ptr(n pgtype.Int4) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := int64(n.Int32)
+	return &v
+}
+
+func int32Ptr(n *int32) *int64 {
+	if n == nil {
+		return nil
+	}
+	v := int64(*n)
+	return &v
 }

@@ -29,3 +29,7 @@ The rule is about **writes**. No worker may write a column the other model owns:
 - A dictionary change to `internal/dict/location` affects `hq_country` derivation for YC entries only on the next `cmd/import-yc` run, not automatically.
 - `remote_regions` lags behind a job's geography change until the next `cmd/recount-companies` recompute.
 - The searchable scope reproduces `search.DescriptionMissing` only approximately: that helper strips the body to plain text before testing it and the SQL cannot, so a posting whose body is empty markup still counts. The residual is small and self-limiting — such a company reaches the sitemap, and its page answers `noindex` off the same search that dropped the row.
+
+## Company identity on the list (website, linkedin_url, employee_count, hq_country)
+- `GET /api/v1/companies` items carry `website` (`company_info.website`, else `homepage`), `linkedin_url` (`company_info.linkedin`) and `employee_count` (`companies.employee_count`), all null when unknown. The filters `hq_country` (ISO alpha-2, case-insensitive: the column holds both `US` and `us`) and `employee_count_min`/`employee_count_max` (inclusive) filter the company itself, unlike `countries`/`company_size`, which describe its postings.
+- The companies Meili documents carry the same fields, so a deploy needs `cmd/reindex-companies` before the Meili path serves them or filters on `hq_country`/`employee_count` (until then Meili hits show null identity fields and the range filter matches nothing). The Postgres path works at once.

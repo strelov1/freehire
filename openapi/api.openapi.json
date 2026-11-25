@@ -1784,7 +1784,7 @@
       "get": {
         "operationId": "listCompanies",
         "summary": "List companies with job counts and denormalized facets; optional filters.",
-        "description": "Most active first. Facet params are repeatable and filter by array overlap (OR within a\nfacet, AND across facets), composably with `q`. `meta.total` reports the count matching\nthe full filter.",
+        "description": "Most active first. Facet params are repeatable and filter by array overlap (OR within a\nfacet, AND across facets), composably with `q`. `meta.total` reports the count matching\nthe full filter. `countries` and `company_size` describe where the company HIRES and the\nsize bands of its postings; to filter on the company itself use `hq_country` (ISO\nalpha-2, case-insensitive) and `employee_count_min` / `employee_count_max` (inclusive\nintegers over the stored headcount; companies with no headcount never match).",
         "parameters": [
           {
             "name": "q",
@@ -1861,6 +1861,9 @@
                         "payments"
                       ],
                       "hq_country": "DE",
+                      "website": "https://acme.example",
+                      "linkedin_url": "https://www.linkedin.com/company/acme",
+                      "employee_count": 40,
                       "collections": [
                         "yc"
                       ],
@@ -28773,6 +28776,9 @@
           "tagline",
           "industries",
           "hq_country",
+          "website",
+          "linkedin_url",
+          "employee_count",
           "collections",
           "feedback_count",
           "feedback_rating_avg"
@@ -28813,6 +28819,40 @@
                 "type": "null"
               }
             ]
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company's site as stored (`website`, else `homepage`); null when unknown."
+          },
+          "linkedin_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The company's LinkedIn page URL; null when unknown."
+          },
+          "employee_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`."
           },
           "collections": {
             "type": "array",

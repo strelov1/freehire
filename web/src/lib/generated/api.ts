@@ -523,7 +523,10 @@ export interface paths {
          * List companies with job counts and denormalized facets; optional filters.
          * @description Most active first. Facet params are repeatable and filter by array overlap (OR within a
          *     facet, AND across facets), composably with `q`. `meta.total` reports the count matching
-         *     the full filter.
+         *     the full filter. `countries` and `company_size` describe where the company HIRES and the
+         *     size bands of its postings; to filter on the company itself use `hq_country` (ISO
+         *     alpha-2, case-insensitive) and `employee_count_min` / `employee_count_max` (inclusive
+         *     integers over the stored headcount; companies with no headcount never match).
          */
         get: operations["listCompanies"];
         put?: never;
@@ -7808,6 +7811,12 @@ export interface components {
             tagline: string | null;
             industries: string[];
             hq_country: string | null;
+            /** @description The company's site as stored (`website`, else `homepage`); null when unknown. */
+            website: string | null;
+            /** @description The company's LinkedIn page URL; null when unknown. */
+            linkedin_url: string | null;
+            /** @description Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`. */
+            employee_count: number | null;
             /** @description Curated company tags; the catalogue card renders the backer marks from these. */
             collections: string[];
             /** Format: int64 */
@@ -12704,6 +12713,9 @@ export interface operations {
                      *             "payments"
                      *           ],
                      *           "hq_country": "DE",
+                     *           "website": "https://acme.example",
+                     *           "linkedin_url": "https://www.linkedin.com/company/acme",
+                     *           "employee_count": 40,
                      *           "collections": [
                      *             "yc"
                      *           ],
