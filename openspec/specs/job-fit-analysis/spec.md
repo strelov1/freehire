@@ -5,7 +5,7 @@ TBD - created by archiving change job-fit-analysis. Update Purpose after archive
 ## Requirements
 ### Requirement: On-demand LLM fit analysis
 
-The system SHALL provide an authenticated `POST /api/v1/jobs/:slug/fit` endpoint that runs a fixed
+The system SHALL provide an authenticated `POST /api/v1/jobs/:slug/match-analysis` endpoint that runs a fixed
 three-stage LLM prompt-chain comparing the job (title + description), the company context, and the
 caller's stored CV text, and returns a structured fit analysis. The chain MUST be a deterministic,
 server-orchestrated sequence of typed calls — not an autonomous, self-directing agent. The analysis
@@ -13,12 +13,12 @@ MUST be scoped to the calling user and the job addressed by `:slug`.
 
 #### Scenario: Signed-in user with a CV requests analysis
 
-- **WHEN** a signed-in user with a stored CV and a saved profile POSTs to `/api/v1/jobs/:slug/fit` for an open job
+- **WHEN** a signed-in user with a stored CV and a saved profile POSTs to `/api/v1/jobs/:slug/match-analysis` for an open job
 - **THEN** the system runs the three-stage chain and responds `200` with `{ "data": { "has_cv": true, "analysis": <verdict> } }`
 
 #### Scenario: Unknown job slug
 
-- **WHEN** the caller POSTs to `/api/v1/jobs/:slug/fit` for a slug that does not exist
+- **WHEN** the caller POSTs to `/api/v1/jobs/:slug/match-analysis` for a slug that does not exist
 - **THEN** the system responds `404`
 
 #### Scenario: Unauthenticated caller
@@ -40,7 +40,7 @@ scratch. The Skills coverage dimension MUST be consistent with the deterministic
 ### Requirement: Per-(user, job) cache with staleness invalidation
 
 The system SHALL cache each analysis per `(user_id, job_id)`, stamped with the CV's upload time,
-the job's `content_hash`, and the model that produced it at analysis time. `GET /api/v1/jobs/:slug/fit`
+the job's `content_hash`, and the model that produced it at analysis time. `GET /api/v1/jobs/:slug/match-analysis`
 MUST return a cached analysis only when all three stamps still equal the current CV upload time, job
 `content_hash`, and model; when any differs it MUST report the cached analysis as stale rather than
 serving it as current. A `content_hash` absent on both the stored stamp and the live job (a non-board
@@ -178,12 +178,12 @@ readable rather than a wall of large type.
 ### Requirement: Live-streaming fit computation
 
 The system SHALL provide an authenticated Server-Sent Events endpoint
-`GET /api/v1/jobs/:slug/fit/stream` that runs the three-stage chain and emits, in order, events for
+`GET /api/v1/jobs/:slug/match-analysis/stream` that runs the three-stage chain and emits, in order, events for
 each stage's start and completion, the model's thinking tokens when available, each stage's
 structured result (requirements after Stage 1, dimensions after Stage 2, the final verdict after
 Stage 3), and a terminal completion event carrying the full analysis. On successful completion it
 MUST cache the analysis exactly as the synchronous compute does (same per-(user, job) row and
-staleness stamps). The synchronous `POST /jobs/:slug/fit` MUST remain for non-browser clients, and
+staleness stamps). The synchronous `POST /jobs/:slug/match-analysis` MUST remain for non-browser clients, and
 both paths MUST produce the same final analysis for the same inputs.
 
 #### Scenario: Stream emits stages then the final analysis
@@ -259,7 +259,7 @@ fit-analysis page — see "Fit analysis surfaces in the tailoring workspace".
 
 ### Requirement: Per-user monthly fit-analysis quota
 
-The system SHALL limit each user to at most **10 AI fit analyses per rolling 30-day window**, enforced BEFORE the LLM prompt-chain runs on both the synchronous `POST /api/v1/jobs/:slug/fit` endpoint and the streaming `GET /api/v1/jobs/:slug/fit/stream` endpoint. Only the FIRST analysis of a distinct `(user, job)` pair consumes quota: a recompute of a pair the user has already analysed, and re-running the same job, MUST be allowed regardless of the count. Consumption is counted from the persisted `user_job_analysis` rows whose first-analysis timestamp falls within the last 30 days, so an analysis that fails or is never persisted MUST NOT consume quota. The limit applies to every role — there is no staff exemption.
+The system SHALL limit each user to at most **10 AI fit analyses per rolling 30-day window**, enforced BEFORE the LLM prompt-chain runs on both the synchronous `POST /api/v1/jobs/:slug/match-analysis` endpoint and the streaming `GET /api/v1/jobs/:slug/match-analysis/stream` endpoint. Only the FIRST analysis of a distinct `(user, job)` pair consumes quota: a recompute of a pair the user has already analysed, and re-running the same job, MUST be allowed regardless of the count. Consumption is counted from the persisted `user_job_analysis` rows whose first-analysis timestamp falls within the last 30 days, so an analysis that fails or is never persisted MUST NOT consume quota. The limit applies to every role — there is no staff exemption.
 
 #### Scenario: New job under the limit
 
@@ -288,11 +288,11 @@ The system SHALL limit each user to at most **10 AI fit analyses per rolling 30-
 
 ### Requirement: Quota state on the read endpoint
 
-The read endpoint `GET /api/v1/jobs/:slug/fit` SHALL return a `quota` object carrying `used`, `limit`, and `remaining` (where `remaining = max(0, limit - used)`) computed over the caller's last 30 days, without invoking the LLM, so the client can display usage and pre-block a new-job analysis when no quota remains.
+The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return a `quota` object carrying `used`, `limit`, and `remaining` (where `remaining = max(0, limit - used)`) computed over the caller's last 30 days, without invoking the LLM, so the client can display usage and pre-block a new-job analysis when no quota remains.
 
 #### Scenario: Quota reported on read
 
-- **WHEN** a signed-in caller reads `GET /api/v1/jobs/:slug/fit`
+- **WHEN** a signed-in caller reads `GET /api/v1/jobs/:slug/match-analysis`
 - **THEN** the response includes `quota` with `used`, `limit` (10), and `remaining` reflecting the caller's distinct-job analyses in the last 30 days, and no LLM call is made
 
 #### Scenario: Remaining never negative
