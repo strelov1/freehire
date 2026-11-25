@@ -57,7 +57,10 @@ func TestWriteViewCountsStopsAtDeadline(t *testing.T) {
 	for i := range int64(2*viewCountChunk + 1) {
 		counts = append(counts, countedJob{id: i, n: 5 + i})
 	}
-	deadline := time.Now().Add(20 * time.Millisecond)
+	// The budget has to cover sorting the 100k counts, which happens before the first
+	// deadline check: under -race that sort alone takes ~8ms on a fast core and several
+	// times more on a shared runner, so the earlier 20ms could pass before the first push.
+	deadline := time.Now().Add(500 * time.Millisecond)
 	// The first task runs past the deadline: the push stops before the next one.
 	idx := &recordIndex{tick: func() { time.Sleep(time.Until(deadline)) }}
 	pushed, skipped, err := writeViewCounts(context.Background(), idx, counts, deadline)
