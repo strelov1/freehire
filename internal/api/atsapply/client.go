@@ -44,8 +44,8 @@ var fillProviders = map[string]bool{}
 // this deployment is enforcing (in shadow mode it sends nothing).
 //
 // Exported because the OJCP surface publishes it as `supports_agent_submission`. Do not copy
-// it: jobview.AutoApplyProviders (a fill may be ATTEMPTED) and handler's enqueue set (may be
-// QUEUED) are different sets; only this one means submitted.
+// it: jobview.AutoApplyProviders (a fill may be ATTEMPTED) and autoapply.Queueable (an
+// attempt may be QUEUED) are different sets; only this one means submitted.
 //
 // A copy is returned so a caller cannot mutate the map this package routes on.
 func SubmittableProviders() map[string]bool {

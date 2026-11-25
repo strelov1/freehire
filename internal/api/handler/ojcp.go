@@ -51,8 +51,8 @@ type ojcpHandlers struct {
 // submittable is what this deployment can complete an application on without a person, and
 // feeds `supports_agent_submission`. Callers pass atsapply.SubmittableProviders() rather than
 // a list: the repo holds three easily confused sets (jobview.AutoApplyProviders, where a fill
-// may be ATTEMPTED; the enqueue set, where it may be QUEUED; and this one, the only set
-// meaning "submitted"), and a hand-written copy would go stale.
+// may be ATTEMPTED; autoapply.Queueable, where an attempt may be QUEUED; and this one, the
+// only set meaning "submitted"), and a hand-written copy would go stale.
 func newOJCPHandlers(s searcher, store ojcpStore, origin string, submittable map[string]bool) *ojcpHandlers {
 	h := &ojcpHandlers{
 		search:    s,

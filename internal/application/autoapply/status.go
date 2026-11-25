@@ -1,8 +1,8 @@
 package autoapply
 
 // Status is the seven-value candidate-facing status for a live auto-apply attempt, richer
-// than the job-detail overlay's three-value derivation (internal/api/handler's
-// autoApplyEntryStatus), which is left untouched.
+// than the job-detail overlay's three-value EntryStatus, which folds every undecided entry
+// into one.
 type Status string
 
 const (
@@ -44,7 +44,7 @@ type DerivedFrom struct {
 }
 
 // DeriveStatus derives the candidate-facing status from an attempt's raw state, mirroring
-// internal/api/handler's autoApplyEntryStatus precedence. Declined is checked first:
+// EntryStatus precedence. Declined is checked first:
 // DeclineAutoApplyReview also sets blocked_at, so checking blocked/failed first would report
 // a candidate's own decline as an operational failure.
 //

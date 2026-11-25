@@ -1,9 +1,10 @@
-// Package autoapply drains the queued submission attempts in auto_apply_queue: claim a
-// wave, assemble each candidate's known answers, ask the browser-automation sidecar to submit
-// the application, and record what happened. It is deliberately incurious about ATS
-// specifics: the sidecar owns DOM structure, react-select verification, upload confirmation
-// and submission text markers. What populates the queue is out of scope; Run only claims what
-// is already there.
+// Package autoapply is the auto-apply queue: Enqueuer creates an attempt for a candidate
+// (the use case behind the job page's start route and the MCP auto_apply_start tool), and Run
+// drains the queued submission attempts in auto_apply_queue: claim a wave, assemble each
+// candidate's known answers, ask the browser-automation sidecar to submit the application,
+// and record what happened. The drain is deliberately incurious about ATS specifics: the
+// sidecar owns DOM structure, react-select verification, upload confirmation and submission
+// text markers. Run only claims what is already there.
 package autoapply
 
 import (
