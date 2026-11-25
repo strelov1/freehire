@@ -131,6 +131,10 @@ func TestEmployerVacancyScope(t *testing.T) {
 	if _, err := queries.GetJobBySlug(ctx, "own-role"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("public lookup of a deleted vacancy: err = %v, want ErrNoRows", err)
 	}
+	// The candidates' own history still reads it.
+	if _, err := queries.GetJobBySlugForApplicant(ctx, "own-role"); err != nil {
+		t.Fatalf("applicant lookup of a deleted vacancy: %v", err)
+	}
 	var reason string
 	var queued bool
 	if err := pool.QueryRow(ctx, `SELECT closed_reason, EXISTS (SELECT 1 FROM search_delete_outbox WHERE job_id = jobs.id)

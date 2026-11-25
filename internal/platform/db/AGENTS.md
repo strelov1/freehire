@@ -13,7 +13,7 @@ The `internal/platform/db` package — generated sqlc code, hand-written SQL que
   `job_activity`. The physical `jobs` model is `db.JobRow`. Return explicit columns from
   base-table writes; `RETURNING *` or `sqlc.embed(jobs)` would expand legacy columns and
   keep the base row independent of observation fields. A new `jobs` column also needs a replacement `jobs_read`
-  projection; `TestJobsReadCoversEveryJobsColumn` checks it. Read observation predicates
+  projection (`jobs_read_all`, then `jobs_read` over it, migration 0319; the latter hides employer-deleted vacancies); `TestJobsReadCoversEveryJobsColumn` checks it. Read observation predicates
   from activity, including inside writers, so compatible workers can overlap a writer
   cutover. Freshness-dependent closers lock jobs then activity with `FOR NO KEY UPDATE`.
 - Full posting writes go through `job.Upsert` in a `pgx.Tx`: `UpsertJob` then
