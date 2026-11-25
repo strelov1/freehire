@@ -391,13 +391,22 @@ the listing (their card carries `closed_at`). An unknown `filter` value
 SHALL be a `400`.
 
 The card SHALL carry what a list row draws and no more: `public_slug`, `title`, `company`,
-`closed_at`, and the stated facets of its tag row (`work_mode`, `seniority`, `employment_type`,
-`countries`, `regions`). It SHALL NOT carry the posting's description. The full public job view
+`closed_at`, the stated facets of its tag row (`work_mode`, `seniority`, `employment_type`,
+`countries`, `regions`), and its ghost signal (`ghost`, present only when the job's own
+derivation finds something to say — see the ghost signal's own requirements for what
+produces it). It SHALL NOT carry the posting's description. The full public job view
 remains available at `GET /api/v1/me/tracking/:slug`, which is the read a caller makes for one
 application it has opened.
 
 The listing query SHALL read only the card's columns from `jobs`. Reading the description and
-discarding it later would keep the database cost while saving only the transfer.
+discarding it later would keep the database cost while saving only the transfer. The ghost
+signal's own inputs SHALL be resolved without reading the job's description either — the
+existing derivation needs it only to classify a job's reality, and that classification SHALL
+come from a source that has already computed it, not from re-reading the posting text into
+this listing.
+
+A ghost-signal lookup failure SHALL degrade to omitting the signal from the affected cards,
+never to failing the listing request.
 
 Each row that represents an application SHALL additionally carry its
 `last_activity_at`, its `days_silent`, and its `silence_state`. A row that is not
@@ -423,6 +432,27 @@ silence derivation would clear the marker at the moment it matters most.
 
 - **WHEN** any `GET /api/v1/me/tracking` response is serialized
 - **THEN** no row carries the job's description, however large the page
+
+#### Scenario: A tracked job the ghost derivation flags carries the signal
+
+- **WHEN** a job on the caller's board has a non-`none` ghost level
+- **THEN** its card's `ghost` field carries that level and the criteria that produced it,
+  the same shape the job's own detail page would show
+
+#### Scenario: A ghost-stamp lookup failure never fails the listing
+
+- **WHEN** the listing's own rows resolve successfully but the ghost signal's absence-stamp
+  lookup fails
+- **THEN** the response is still `200`, with every card's `ghost` field omitted
+
+#### Scenario: A reality-class lookup failure narrows the ghost signal rather than suppressing it
+
+- **WHEN** the listing's own rows resolve successfully but the ghost signal's Meilisearch
+  reality-class lookup fails
+- **THEN** the response is still `200`; a card's `ghost` field is omitted only when the
+  reality criterion was needed for enough evidence to converge — a job whose non-reality
+  criteria (ATS absence, silent applications, user reports) already converge on their own
+  still carries the signal, without the reality criterion among those listed
 
 #### Scenario: The full posting is one read away
 
