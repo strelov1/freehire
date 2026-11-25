@@ -4840,7 +4840,8 @@ Starts a claim: reserves the company and mails a code to the work email.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `company_name` | string | no |  |
+| `company_name` | string | no | The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set. |
+| `company_slug` | string | no | The slug of a company the catalogue lists (`company_slug` of a job or company page). |
 | `work_email` | string | no |  |
 
 ```bash

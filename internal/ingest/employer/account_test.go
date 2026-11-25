@@ -222,6 +222,38 @@ func TestClaim_MintsANewSlugForAnUnknownCompany(t *testing.T) {
 	}
 }
 
+func TestClaimBySlug_UsesTheCataloguesCompany(t *testing.T) {
+	repo := newFakeRepo()
+	repo.aliases["acme-corp"] = "acme"
+	repo.companies["acme"] = struct{ name, website string }{name: "Acme Inc."}
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+
+	// A retired alias resolves to the canonical company, like a typed name does.
+	acc, err := s.ClaimBySlug(context.Background(), 1, "acme-corp", "hr@acme.test")
+	if err != nil {
+		t.Fatalf("ClaimBySlug: %v", err)
+	}
+	if acc.CompanySlug != "acme" || acc.CompanyName != "Acme Inc." {
+		t.Errorf("account = %+v, want the catalogue's acme / Acme Inc.", acc)
+	}
+}
+
+func TestClaimBySlug_RefusesAnUnknownCompanyAndWebmail(t *testing.T) {
+	repo := newFakeRepo()
+	repo.companies["acme"] = struct{ name, website string }{name: "Acme"}
+	s := New(repo, newFakeCodeIssuer(), &fakeClaimMailer{}, nil, nil)
+
+	if _, err := s.ClaimBySlug(context.Background(), 1, "ghost", "hr@ghost.test"); !errors.Is(err, ErrInvalid) {
+		t.Errorf("unknown slug err = %v, want ErrInvalid", err)
+	}
+	if _, err := s.ClaimBySlug(context.Background(), 1, "acme", "me@gmail.com"); !errors.Is(err, ErrPublicWebmailDomain) {
+		t.Errorf("webmail err = %v, want ErrPublicWebmailDomain", err)
+	}
+	if len(repo.accounts) != 0 {
+		t.Errorf("accounts = %+v, want none reserved", repo.accounts)
+	}
+}
+
 func TestClaim_MailsAVerificationCodeToTheWorkEmail(t *testing.T) {
 	repo := newFakeRepo()
 	mailer := &fakeClaimMailer{}

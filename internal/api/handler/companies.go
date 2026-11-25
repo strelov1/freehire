@@ -64,6 +64,8 @@ type companyDetailResponse struct {
 	Jobs    []jobview.Job `json:"jobs"`
 	// ReferralAvailable is true when the company has an approved employee referrer.
 	ReferralAvailable bool `json:"referral_available"`
+	// CompanyClaimed is true when an employer account (any status) holds the company.
+	CompanyClaimed bool `json:"company_claimed"`
 	// Response is how many of the applications whose outcome we can OBSERVE were answered. Absent below the sample gate.
 	Response *companyResponse `json:"response,omitempty"`
 	// Parent owns this company and Subsidiaries are the companies it owns (company_parents). They stay separate
@@ -410,6 +412,7 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 		Company:           view,
 		Jobs:              views,
 		ReferralAvailable: referralAvailable,
+		CompanyClaimed:    companyClaimed(c.Context(), h.queries, slug),
 		Response:          companyResponseRate(c.Context(), h.queries, slug),
 		Parent:            parent,
 		Subsidiaries:      subsidiaries,

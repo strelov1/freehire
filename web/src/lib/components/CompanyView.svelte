@@ -24,6 +24,7 @@
     slug,
     currentPage,
     referralAvailable = false,
+    claimed = true,
     parent,
     subsidiaries,
   }: {
@@ -34,13 +35,15 @@
     // results — so it is required here too rather than defaulting to page one.
     currentPage: number;
     referralAvailable?: boolean;
+    // Whether an employer account holds the company; the header offers a claim until one does.
+    claimed?: boolean;
     // The company that owns this one and the ones it owns: separate employers, linked.
     parent: CompanyRef | null;
     subsidiaries: CompanyRef[];
   } = $props();
 </script>
 
-<CompanyHeader {company} {slug} />
+<CompanyHeader {company} {slug} {claimed} />
 <CompanyRelations name={company.name} {slug} {parent} {subsidiaries} />
 
 <CompanyTabs {slug} active="jobs">
