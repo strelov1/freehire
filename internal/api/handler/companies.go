@@ -174,7 +174,7 @@ func companyViewFrom(c db.Company) companyView {
 
 // ListCompanies returns a page of companies with denormalized job counts, most active first. `q` filters by a
 // case-insensitive name substring; the repeatable facet params (collections, regions, countries, domains, company_type,
-// company_size, remote_regions, yc_batch, yc_status) overlap the denormalized facet arrays (OR within a facet, AND across,
+// company_size, remote_regions, yc_batch, yc_status, hq_country) overlap the denormalized facet arrays (OR within a facet, AND across,
 // composable with `q`). meta.total counts the full filter.
 func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.ListCompaniesParams) (*apigen.ListCompaniesOK, error) {
 	limit, offset, err := contractPageWindowed(ctx, defaultLimit, maxLimit)
@@ -203,9 +203,10 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 	ycFlags := facetValues(vals, "yc_flags")
 	maturity := facetValues(vals, "maturity")
 	subindustries := facetValues(vals, "subindustries")
+	// Stored hq_country codes are mixed case; the query lowers the column, so lower the request.
 	hqCountries := facetValues(vals, "hq_country")
-	for i, c := range hqCountries {
-		hqCountries[i] = strings.ToUpper(c)
+	for i, code := range hqCountries {
+		hqCountries[i] = strings.ToLower(code)
 	}
 	empMin, err := optIntParam(vals, "employee_count_min")
 	if err != nil {
@@ -390,6 +391,7 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	hideOrigins(c.Context(), views)
 
 	// Referral availability is best-effort: a lookup error degrades to false (block hidden).
 	referralAvailable, _ := h.queries.CompanyHasApprovedReferrer(c.Context(), slug)
@@ -451,6 +453,7 @@ func (h *companiesHandlers) CompanyClosedJobs(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	hideOrigins(c.Context(), views)
 	return c.JSON(fiber.Map{
 		"data": views,
 		"meta": fiber.Map{"limit": limit, "offset": offset, "has_more": hasMore},

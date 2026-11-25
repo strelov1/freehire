@@ -258,6 +258,26 @@ export const COMPANY_FILTERS: FilterRow[] = [
     values: values.length > 30 ? `e.g. ${values.slice(0, 5).join(', ')}` : valuesOf(f.options),
   };
 });
+// API-only: the SPA's catalogue does not render it.
+COMPANY_FILTERS.push({
+  param: 'hq_country',
+  label: 'Headquarters country',
+  values:
+    'ISO 3166-1 alpha-2 codes, any case — where the company is headquartered, as opposed to `countries` (where its open jobs are)',
+});
+COMPANY_FILTERS.push(
+  {
+    param: 'employee_count_min',
+    label: 'Minimum headcount',
+    values:
+      'A non-negative integer, inclusive — the headcount of the company itself, as opposed to `company_size` (the size bands of its postings); a company with no known headcount never matches',
+  },
+  {
+    param: 'employee_count_max',
+    label: 'Maximum headcount',
+    values: 'A non-negative integer, inclusive; combine with `employee_count_min` for a range',
+  },
+);
 
 /** Worked filter recipes shown as ready-to-run examples. */
 export interface Recipe {

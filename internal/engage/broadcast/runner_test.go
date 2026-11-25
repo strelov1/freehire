@@ -184,6 +184,25 @@ func TestSend_InterviewBuddiesLinksTheLanding(t *testing.T) {
 	}
 }
 
+// The Data plan letter goes only to Data plan holders and links the plan's own reference.
+func TestDataPlanLetterReachesOnlyTheDataPlan(t *testing.T) {
+	store := &fakeStore{ids: []int64{1}}
+	sender := &fakeSender{}
+	c := campaign(t, "data-plan-endpoints")
+	if _, err := newRunner(store, sender, 10).Run(context.Background(), c); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !store.lastQuery.DataPlanOnly {
+		t.Error("candidates queried without the Data plan filter")
+	}
+	sent := sender.sent[0]
+	for name, body := range map[string]string{"html": sent.html, "text": sent.text} {
+		if !strings.Contains(body, "/docs/api/data") || !strings.Contains(body, "/api/v1/data/jobs/search") {
+			t.Errorf("%s body misses the Data plan reference or endpoint", name)
+		}
+	}
+}
+
 // testLinks signs the unsubscribe URLs a campaign carries. The secret only has to
 // clear emailprefs' length floor — nothing here verifies a token, it just has to be
 // mintable.

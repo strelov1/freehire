@@ -73,8 +73,8 @@ func TestGemProvider(t *testing.T) {
 func TestGemFetchListsThenFetchesDetailAndMaps(t *testing.T) {
 	fake := &gqlHTTP{
 		list: gemListResp(
-			`{"extId":"X1","title":"Backend Engineer","locations":[{"city":"San Diego","isoCountry":"USA","isRemote":false}],"job":{"locationType":"IN_OFFICE"}}`,
-			`{"extId":"X2","title":"Remote SRE","locations":[{"city":"","isoCountry":"COL","isRemote":true}],"job":{"locationType":"REMOTE"}}`,
+			`{"extId":"X1","title":"Backend Engineer","locations":[{"city":"San Diego","isoCountry":"USA","isRemote":false}],"job":{"locationType":"IN_OFFICE","employmentType":"FULL_TIME","department":{"name":" Product Design "}}}`,
+			`{"extId":"X2","title":"Remote SRE","locations":[{"city":"","isoCountry":"COL","isRemote":true}],"job":{"locationType":"REMOTE","employmentType":"CONTRACT","department":null}}`,
 		),
 		detail: map[string]string{
 			"X1": gemDetailResp(`<h2>Role</h2><p>Build it.</p><script>alert(1)</script>`, 1775770388),
@@ -120,7 +120,14 @@ func TestGemFetchListsThenFetchesDetailAndMaps(t *testing.T) {
 		t.Errorf("X1 PostedAt = %v, want 2026-04-10T...", x1.PostedAt)
 	}
 
+	if x1.EmploymentType != "full_time" || x1.Team != "Product Design" {
+		t.Errorf("X1 employment/team = %q/%q, want full_time/Product Design", x1.EmploymentType, x1.Team)
+	}
+
 	x2 := byID["X2"]
+	if x2.EmploymentType != "contract" || x2.Team != "" {
+		t.Errorf("X2 employment/team = %q/%q, want contract and no team", x2.EmploymentType, x2.Team)
+	}
 	if !x2.Remote {
 		t.Errorf("X2 Remote = false, want true (locationType REMOTE / isRemote)")
 	}

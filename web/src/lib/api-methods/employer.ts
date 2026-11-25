@@ -114,6 +114,11 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/close`, { method: 'POST' });
   }
 
+  /** Delete a vacancy the caller's team published. Final; a collected vacancy is a 404. */
+  async function deleteEmployerVacancy(slug: string): Promise<void> {
+    await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+  }
+
   /** Undo the caller's own close of their vacancy. A close someone else made is a 400. */
   async function reopenEmployerVacancy(slug: string): Promise<void> {
     await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/reopen`, { method: 'POST' });
@@ -269,6 +274,7 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     createEmployerVacancy,
     updateEmployerVacancy,
     closeEmployerVacancy,
+    deleteEmployerVacancy,
     reopenEmployerVacancy,
     listEmployerApplications,
     employerApplicationCVUrl,

@@ -16,11 +16,11 @@ model CompanyListItem {
   industries: string[];
   hq_country: string | null;
 
-  /** The company's site as stored (`website`, else `homepage`); null when unknown. */
+  /** The company's own site as recorded (its website, else its homepage); null when unknown. */
   website: string | null;
 
-  /** The company's LinkedIn page URL; null when unknown. */
-  linkedin_url: string | null;
+  /** The company's LinkedIn page; null when unknown. */
+  linkedin: string | null;
 
   /** Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`. */
   employee_count: int64 | null;
@@ -50,12 +50,9 @@ model CompanySubindustry {
 // comma-joined or repeated; a param the listing does not read is reported in
 // `meta.ignored_params`.
 /**
- * Most active first. Facet params are repeatable and filter by array overlap (OR within a
- * facet, AND across facets), composably with `q`. `meta.total` reports the count matching
- * the full filter. `countries` and `company_size` describe where the company HIRES and the
- * size bands of its postings; to filter on the company itself use `hq_country` (ISO
- * alpha-2, case-insensitive) and `employee_count_min` / `employee_count_max` (inclusive
- * integers over the stored headcount; companies with no headcount never match).
+ * Most active first. Facet params repeat and filter by array overlap (OR within a facet,
+ * AND across), composable with `q`; `meta.total` counts the full filter. `countries` is
+ * where open jobs are, `hq_country` the headquarters (ISO alpha-2).
  */
 @summary("List companies with job counts and denormalized facets; optional filters.")
 @useAuth(NoAuth)
@@ -73,7 +70,7 @@ model CompanySubindustry {
           ],
           hq_country: "DE",
           website: "https://acme.example",
-          linkedin_url: "https://www.linkedin.com/company/acme",
+          linkedin: "https://www.linkedin.com/company/acme",
           employee_count: 40,
           collections: #[
             "yc",

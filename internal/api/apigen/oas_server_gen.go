@@ -531,6 +531,13 @@ type Handler interface {
 	//
 	// POST /me/emails/{id}/delete
 	DeleteEmail(ctx context.Context, params DeleteEmailParams) error
+	// DeleteEmployerVacancy implements deleteEmployerVacancy operation.
+	//
+	// Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen
+	// does not bring it back.
+	//
+	// DELETE /employer/jobs/{slug}
+	DeleteEmployerVacancy(ctx context.Context, params DeleteEmployerVacancyParams) (*DeleteEmployerVacancyOK, error)
 	// DeleteEmployment implements deleteEmployment operation.
 	//
 	// 409 for a keyed caller while the place still holds achievements.
@@ -820,6 +827,13 @@ type Handler interface {
 	//
 	// GET /me/cvs/{id}/tailor-context
 	GetCVTailorContext(ctx context.Context, params GetCVTailorContextParams) (*GetCVTailorContextOK, error)
+	// GetDataJob implements getDataJob operation.
+	//
+	// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the Data plan:
+	// any other account gets `403`.
+	//
+	// GET /data/jobs/{slug}
+	GetDataJob(ctx context.Context, params GetDataJobParams) (*GetDataJobOK, error)
 	// GetDirectApplyForm implements getDirectApplyForm operation.
 	//
 	// Only for a posting whose `direct_apply` is true — its employer published it here and receives
@@ -1437,12 +1451,9 @@ type Handler interface {
 	ListChangeWebhooks(ctx context.Context) (*ListChangeWebhooksOK, error)
 	// ListCompanies implements listCompanies operation.
 	//
-	// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
-	// across facets), composably with `q`. `meta.total` reports the count matching the full filter.
-	// `countries` and `company_size` describe where the company HIRES and the size bands of its postings;
-	// to filter on the company itself use `hq_country` (ISO alpha-2, case-insensitive) and
-	// `employee_count_min` / `employee_count_max` (inclusive integers over the stored headcount; companies
-	// with no headcount never match).
+	// Most active first. Facet params repeat and filter by array overlap (OR within a facet, AND across),
+	// composable with `q`; `meta.total` counts the full filter. `countries` is where open jobs are,
+	// `hq_country` the headquarters (ISO alpha-2).
 	//
 	// GET /companies
 	ListCompanies(ctx context.Context, params ListCompaniesParams) (*ListCompaniesOK, error)
@@ -1499,7 +1510,9 @@ type Handler interface {
 	ListEmployerPendingClaims(ctx context.Context) (*ListEmployerPendingClaimsOK, error)
 	// ListEmployerVacancies implements listEmployerVacancies operation.
 	//
-	// Every vacancy the caller published, newest first.
+	// The caller's dashboard list, open first: the vacancies its team published (`source` is `employer`,
+	// editable; at most 200) and the open ones of its company collected from other sources (read-only; at
+	// most 200).
 	//
 	// GET /employer/jobs
 	ListEmployerVacancies(ctx context.Context) (*ListEmployerVacanciesOK, error)
@@ -2301,6 +2314,15 @@ type Handler interface {
 	//
 	// GET /geo/cities
 	SearchCities(ctx context.Context, params SearchCitiesParams) (*SearchCitiesOK, error)
+	// SearchDataJobs implements searchDataJobs operation.
+	//
+	// The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with each
+	// job's `url` (the employer's own posting) and `source_url` where it differs. The public job reads
+	// leave both out and link only through `apply_url`. Needs the Data plan: any other account gets `403`.
+	// Never cached: the answer is private to the plan holder.
+	//
+	// GET /data/jobs/search
+	SearchDataJobs(ctx context.Context, params SearchDataJobsParams) (*JobSearchPageHeaders, error)
 	// SearchEmployerApplications implements searchEmployerApplications operation.
 	//
 	// Search delivered applications before pagination. An unknown stage returns 400.

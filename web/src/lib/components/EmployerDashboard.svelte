@@ -269,6 +269,10 @@
     }
   }
 
+  // Deleting is final, so it asks first.
+  let deleteTarget = $state<Job | null>(null);
+  let deleteOpen = $state(false);
+
   let reopeningSlug = $state<string | null>(null);
   let reopenError = $state<{ slug: string; message: string } | null>(null);
   async function reopenVacancy(job: Job) {
@@ -529,6 +533,10 @@
                     confirmOpen = true;
                   }}
                   onReopen={() => reopenVacancy(job)}
+                  onDelete={() => {
+                    deleteTarget = job;
+                    deleteOpen = true;
+                  }}
                 />
               {/each}
             </ul>
@@ -547,5 +555,20 @@
   cancelLabel={s.cancel}
   onConfirm={async () => {
     if (closeTarget) await closeVacancy(closeTarget);
+  }}
+/>
+
+<ConfirmDialog
+  bind:open={deleteOpen}
+  title={s.deleteConfirmTitle}
+  description={s.deleteConfirmBody}
+  confirmLabel={s.deleteVacancy}
+  cancelLabel={s.cancel}
+  variant="destructive"
+  onConfirm={async () => {
+    if (!deleteTarget) return;
+    const { public_slug: slug } = deleteTarget;
+    await api.deleteEmployerVacancy(slug);
+    vacanciesData.value = vacanciesData.value.filter((j) => j.public_slug !== slug);
   }}
 />

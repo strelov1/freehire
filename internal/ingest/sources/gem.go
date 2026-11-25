@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -21,7 +22,7 @@ const (
       extId
       title
       locations { city isoCountry isRemote }
-      job { locationType }
+      job { locationType employmentType department { name } }
     }
   }
 }`
@@ -84,7 +85,23 @@ type gemPosting struct {
 	} `json:"locations"`
 	Job struct {
 		LocationType string `json:"locationType"`
+		// EmploymentType is the job's enum: FULL_TIME, PART_TIME and CONTRACT were observed
+		// across 40 boards (2026-11-24).
+		EmploymentType string `json:"employmentType"`
+		Department     struct {
+			Name string `json:"name"`
+		} `json:"department"`
 	} `json:"job"`
+}
+
+// gemEmploymentType maps Gem's employmentType enum onto the freehire vocabulary. Gem spells
+// contract work CONTRACT, which the schema.org mapper does not know; the rest is schema.org's
+// spelling. An unknown value maps to "".
+func gemEmploymentType(t string) string {
+	if strings.EqualFold(strings.TrimSpace(t), "CONTRACT") {
+		return "contract"
+	}
+	return schemaEmploymentType(t)
 }
 
 func (g gem) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -158,5 +175,8 @@ func (g gem) detail(ctx context.Context, e CompanyEntry, p gemPosting) (Job, boo
 		Remote:      remote || p.Job.LocationType == "REMOTE",
 		WorkMode:    workplaceTypeMode(p.Job.LocationType),
 		PostedAt:    parseEpochSeconds(int64(resp.Data.Posting.FirstPublishedTsSec)),
+		// The department the board files the posting under, verbatim.
+		Team:           strings.TrimSpace(p.Job.Department.Name),
+		EmploymentType: gemEmploymentType(p.Job.EmploymentType),
 	}, true
 }

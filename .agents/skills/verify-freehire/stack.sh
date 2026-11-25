@@ -33,7 +33,7 @@ DB_NAME=verify_$API_PORT
 # Swap only the path's database name; the user, host and query string stay as they are.
 ADMIN_BASE=${ADMIN_URL%%\?*}
 DATABASE_URL="${ADMIN_BASE%/*}/$DB_NAME${ADMIN_URL#"$ADMIN_BASE"}"
-# Made per instance by `up` (a literal key here trips gitleaks), read back by the other verbs.
+# Made per instance by `up` (a literal key here trips the secret scanner), read back by the other verbs.
 MEILI_KEY=$(cat "$STATE/meili-key" 2>/dev/null || true)
 MEILI_CONTAINER=verify-freehire-meili-$API_PORT
 SEED_PROVIDER=${VERIFY_SEED_PROVIDER:-greenhouse}

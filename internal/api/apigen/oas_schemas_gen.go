@@ -6354,10 +6354,10 @@ type CompanyListItem struct {
 	Tagline    NilString `json:"tagline"`
 	Industries []string  `json:"industries"`
 	HqCountry  NilString `json:"hq_country"`
-	// The company's site as stored (`website`, else `homepage`); null when unknown.
+	// The company's own site as recorded (its website, else its homepage); null when unknown.
 	Website NilString `json:"website"`
-	// The company's LinkedIn page URL; null when unknown.
-	LinkedinURL NilString `json:"linkedin_url"`
+	// The company's LinkedIn page; null when unknown.
+	Linkedin NilString `json:"linkedin"`
 	// Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`.
 	EmployeeCount NilInt64 `json:"employee_count"`
 	// Curated company tags; the catalogue card renders the backer marks from these.
@@ -6404,9 +6404,9 @@ func (s *CompanyListItem) GetWebsite() NilString {
 	return s.Website
 }
 
-// GetLinkedinURL returns the value of LinkedinURL.
-func (s *CompanyListItem) GetLinkedinURL() NilString {
-	return s.LinkedinURL
+// GetLinkedin returns the value of Linkedin.
+func (s *CompanyListItem) GetLinkedin() NilString {
+	return s.Linkedin
 }
 
 // GetEmployeeCount returns the value of EmployeeCount.
@@ -6469,9 +6469,9 @@ func (s *CompanyListItem) SetWebsite(val NilString) {
 	s.Website = val
 }
 
-// SetLinkedinURL sets the value of LinkedinURL.
-func (s *CompanyListItem) SetLinkedinURL(val NilString) {
-	s.LinkedinURL = val
+// SetLinkedin sets the value of Linkedin.
+func (s *CompanyListItem) SetLinkedin(val NilString) {
+	s.Linkedin = val
 }
 
 // SetEmployeeCount sets the value of EmployeeCount.
@@ -9143,6 +9143,21 @@ func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 
 // DeleteEmailNoContent is response for DeleteEmail operation.
 type DeleteEmailNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type DeleteEmployerVacancyOK struct {
+	Data EmployerRemoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DeleteEmployerVacancyOK) GetData() EmployerRemoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DeleteEmployerVacancyOK) SetData(val EmployerRemoved) {
+	s.Data = val
+}
 
 // DeleteEmploymentNoContent is response for DeleteEmployment operation.
 type DeleteEmploymentNoContent struct{}
@@ -13568,6 +13583,21 @@ func (s *GetCVTailorContextOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetCVTailorContextOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetDataJobOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetDataJobOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetDataJobOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 

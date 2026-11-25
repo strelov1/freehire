@@ -19,10 +19,14 @@
 -- postings the JOB SEARCH INDEX holds (see the facet recount in company_facets.sql), so the number here
 -- is the number the company's own page shows — the two used to disagree, listing
 -- Stripe at 570 against 444 on its page.
+--
+-- website and linkedin are how a caller outside freehire recognises the company: the site
+-- (company_info website, else homepage, trimmed the way ListCompaniesBySiteHost trims it)
+-- and the LinkedIn page. '' when unknown; the handler serves that as null.
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
        feedback_count, feedback_rating_avg, ai_interview_reports, employee_count,
-       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), btrim(company_info ->> 'homepage'), '')::text AS website,
-       COALESCE(btrim(company_info ->> 'linkedin'), '')::text AS linkedin_url
+       COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(regexp_replace(company_info ->> 'linkedin', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '')::text AS linkedin
 FROM companies
 WHERE job_count > 0
   AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
@@ -55,9 +59,12 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
-  -- hq_country: the company's own HQ (stored in mixed case, so compared upper-cased; the
-  -- caller upper-cases the values). employee_count bounds are inclusive; NULL never matches.
-  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR upper(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  -- hq_country is where the company is headquartered (`countries` is where its open jobs
+  -- are). A NULLABLE SCALAR stored in mixed case ("US", "us"): the handler lowercases the
+  -- requested codes and the column is lowered here; NULL matches none.
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  -- employee_count is the company's own headcount (`company_size` is the size bands of its
+  -- postings). Both bounds are inclusive; a NULL headcount matches no range.
   AND (sqlc.narg('employee_count_min')::int IS NULL OR employee_count >= sqlc.narg('employee_count_min')::int)
   AND (sqlc.narg('employee_count_max')::int IS NULL OR employee_count <= sqlc.narg('employee_count_max')::int)
 -- `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
@@ -107,9 +114,7 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('yc_flags')::text[]), 0) = 0 OR yc_flags && sqlc.arg('yc_flags')::text[])
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
-  -- hq_country: the company's own HQ (stored in mixed case, so compared upper-cased; the
-  -- caller upper-cases the values). employee_count bounds are inclusive; NULL never matches.
-  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR upper(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
+  AND (coalesce(cardinality(sqlc.arg('hq_countries')::text[]), 0) = 0 OR lower(hq_country) = ANY(sqlc.arg('hq_countries')::text[]))
   AND (sqlc.narg('employee_count_min')::int IS NULL OR employee_count >= sqlc.narg('employee_count_min')::int)
   AND (sqlc.narg('employee_count_max')::int IS NULL OR employee_count <= sqlc.narg('employee_count_max')::int);
 
@@ -143,6 +148,15 @@ FROM companies
 WHERE slug > sqlc.arg(after_slug) AND job_count > 0
 ORDER BY slug
 LIMIT sqlc.arg(batch_size);
+
+-- name: GetCompanySite :one
+-- A company's site as recorded (company_info website, else homepage, trimmed the way
+-- ListCompaniesBySiteHost trims it) and that site's bare host; '' for either when none.
+-- The job detail names the employer's site and logo from it.
+SELECT COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
+       COALESCE(company_site_host(company_info), '')::text AS host
+FROM companies
+WHERE slug = $1;
 
 -- name: GetCompany :one
 -- SELECT * (not an explicit column list) so the generated row stays db.Company as

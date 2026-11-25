@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { t } from '#lib/i18n/t.js';
-  import { messages } from './Sponsored.messages.js';
   import { supersedesReality } from '#lib/ghost.js';
   import type { Job } from '#lib/types.js';
   import GhostChecklist from './GhostChecklist.svelte';
@@ -14,19 +11,6 @@
   // ways to reach someone at the company (a referral, its recruiters, a mentor).
   let { job, onTailor }: { job: Job; onTailor: () => void } = $props();
 </script>
-
-<!-- Quiet, secondary: a paid placement for an open posting. Under /my so a signed-out
-     reader is sent through sign-in and brought back to the form. -->
-{#if job.closed_at == null}
-  <!-- eslint-disable svelte/no-navigation-without-resolve -- resolved route plus a query string -->
-  <a
-    href={`${resolve('/my/sponsored/new')}?job=${encodeURIComponent(job.public_slug)}`}
-    class="w-fit text-xs text-muted-foreground hover:text-foreground hover:underline"
-  >
-    {t(messages, locale()).promote}
-  </a>
-  <!-- eslint-enable svelte/no-navigation-without-resolve -->
-{/if}
 
 <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
      once for the whole page: a gauge and the hedged wording here, the criteria and

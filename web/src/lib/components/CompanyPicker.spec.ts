@@ -23,7 +23,7 @@ const ringCentral: CompanyListItem = {
   industries: [],
   hq_country: null,
   website: null,
-  linkedin_url: null,
+  linkedin: null,
   employee_count: null,
   collections: [],
   feedback_count: 0,

@@ -140,11 +140,17 @@ func TestCompanyFilterFromValues_CommaJoinedAndRepeatedMeanTheSame(t *testing.T)
 	}
 }
 
-func TestCompanyFilterFromValues_HqCountryAndEmployeeRange(t *testing.T) {
-	g := groups(t, CompanyFilterFromValues(url.Values{
-		"hq_country": {"AU"}, "employee_count_min": {"11"}, "employee_count_max": {"50"}, "employee_count_x": {"1"},
-	}))
-	want := [][]string{{`hq_country = "AU"`}, {"employee_count >= 11"}, {"employee_count <= 50"}}
+// hq_country is the headquarters, a facet of its own beside `countries` (where the jobs are).
+func TestCompanyFilterFromValues_HQCountry(t *testing.T) {
+	g := groups(t, CompanyFilterFromValues(url.Values{"hq_country": {"AU,nz"}}))
+	if !hasGroup(g, Eq("hq_country", "AU"), Eq("hq_country", "nz")) || len(g) != 1 {
+		t.Errorf("filter = %v, want one hq_country group", g)
+	}
+}
+
+func TestCompanyFilterFromValues_EmployeeRange(t *testing.T) {
+	g := groups(t, CompanyFilterFromValues(url.Values{"employee_count_min": {"11"}, "employee_count_max": {"50"}}))
+	want := [][]string{{"employee_count >= 11"}, {"employee_count <= 50"}}
 	if !reflect.DeepEqual(g, want) {
 		t.Fatalf("got %v, want %v", g, want)
 	}

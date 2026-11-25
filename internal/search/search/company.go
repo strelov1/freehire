@@ -39,31 +39,33 @@ type CompanyDocument struct {
 	// CompanyFilterFromValues ORs it into the Industries group; queried only, never served.
 	IndustriesDerived []string `json:"industries_derived"`
 	HqCountry         string   `json:"hq_country"`
-	// Website/LinkedinURL come from company_info (empty when unknown); EmployeeCount is a pointer so an
-	// unknown headcount is stored as null and matches no employee_count range.
-	Website       string   `json:"website"`
-	LinkedinURL   string   `json:"linkedin_url"`
-	EmployeeCount *int32   `json:"employee_count"`
-	JobCount      int32    `json:"job_count"`
-	Collections   []string `json:"collections"`
-	Regions       []string `json:"regions"`
-	Countries     []string `json:"countries"`
-	Domains       []string `json:"domains"`
-	CompanyTypes  []string `json:"company_types"`
-	CompanySizes  []string `json:"company_sizes"`
-	RemoteRegions []string `json:"remote_regions"`
-	YcBatch       []string `json:"yc_batch"`
-	YcStatus      []string `json:"yc_status"`
-	YcStage       []string `json:"yc_stage"`
-	YcFlags       []string `json:"yc_flags"`
-	Maturity      string   `json:"maturity"`
-	Subindustry   string   `json:"subindustry"`
+	JobCount          int32    `json:"job_count"`
+	Collections       []string `json:"collections"`
+	Regions           []string `json:"regions"`
+	Countries         []string `json:"countries"`
+	Domains           []string `json:"domains"`
+	CompanyTypes      []string `json:"company_types"`
+	CompanySizes      []string `json:"company_sizes"`
+	RemoteRegions     []string `json:"remote_regions"`
+	YcBatch           []string `json:"yc_batch"`
+	YcStatus          []string `json:"yc_status"`
+	YcStage           []string `json:"yc_stage"`
+	YcFlags           []string `json:"yc_flags"`
+	Maturity          string   `json:"maturity"`
+	Subindustry       string   `json:"subindustry"`
 	// FeedbackCount/FeedbackRatingAvg mirror companies.feedback_count/feedback_rating_avg
 	// (internal/engage/companyfeedback), display-only. A rating of 0 means "no rating" (real
 	// ratings are 1-5). Neither is Meili-sortable, so "sort by rating" works only on the Postgres
 	// path (ListCompanies in internal/platform/db/queries/companies.sql).
 	FeedbackCount     int32   `json:"feedback_count"`
 	FeedbackRatingAvg float32 `json:"feedback_rating_avg"`
+	// Website and LinkedIn identify the company to a caller outside freehire, display-only:
+	// company_info's website (else homepage) and linkedin, the ListCompanies row's columns.
+	Website  string `json:"website"`
+	LinkedIn string `json:"linkedin"`
+	// EmployeeCount is companies.employee_count, filterable by range. A pointer so an unknown
+	// headcount is stored as null and matches no employee_count bound.
+	EmployeeCount *int32 `json:"employee_count"`
 	// UpdatedAt is the row's last write, carried only for the company sitemap's <lastmod>
 	// (see sitemap.go). Not searchable, filterable or sortable.
 	UpdatedAt time.Time `json:"updated_at"`
@@ -72,6 +74,7 @@ type CompanyDocument struct {
 // FromCompany maps a stored company row to its index document. pgtype.Text scalars unwrap to
 // their string (empty when NULL); facet arrays pass through, and an empty one matches no filter.
 func FromCompany(c db.Company) CompanyDocument {
+	site := companySite(c.CompanyInfo)
 	return CompanyDocument{
 		Slug:              c.Slug,
 		Name:              c.Name,
@@ -79,8 +82,8 @@ func FromCompany(c db.Company) CompanyDocument {
 		Industries:        c.Industries,
 		IndustriesDerived: c.IndustriesDerived,
 		HqCountry:         c.HqCountry.String,
-		Website:           companyInfoString(c.CompanyInfo, "website", "homepage"),
-		LinkedinURL:       companyInfoString(c.CompanyInfo, "linkedin"),
+		Website:           site.website(),
+		LinkedIn:          strings.Trim(site.LinkedIn, siteSpace),
 		EmployeeCount:     employeeCount(c.EmployeeCount),
 		JobCount:          c.JobCount,
 		Collections:       c.Collections,
@@ -104,25 +107,38 @@ func FromCompany(c db.Company) CompanyDocument {
 	}
 }
 
-// companyInfoString is the first non-blank string among keys of the company_info JSON ("" when none).
-func companyInfoString(raw json.RawMessage, keys ...string) string {
-	var m map[string]any
-	if json.Unmarshal(raw, &m) != nil {
-		return ""
-	}
-	for _, k := range keys {
-		if v, _ := m[k].(string); strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
-}
-
 func employeeCount(n pgtype.Int4) *int32 {
 	if !n.Valid {
 		return nil
 	}
 	return &n.Int32
+}
+
+// companyInfoSite is the part of companies.company_info that says where the company lives on
+// the web. A malformed blob reads as empty: the document then carries no site, as for a company
+// nobody enriched.
+type companyInfoSite struct {
+	Website  string `json:"website"`
+	Homepage string `json:"homepage"`
+	LinkedIn string `json:"linkedin"`
+}
+
+func companySite(info json.RawMessage) companyInfoSite {
+	var s companyInfoSite
+	_ = json.Unmarshal(info, &s)
+	return s
+}
+
+// siteSpace is the whitespace ListCompanies' SQL trims ('^[ \t\n\v\f\r]+'): ASCII only, so a
+// no-break space survives on both backends. strings.TrimSpace would strip it here alone.
+const siteSpace = " \t\n\v\f\r"
+
+// website mirrors ListCompanies' column: the website, else the homepage, whitespace-trimmed.
+func (s companyInfoSite) website() string {
+	if w := strings.Trim(s.Website, siteSpace); w != "" {
+		return w
+	}
+	return strings.Trim(s.Homepage, siteSpace)
 }
 
 // companySettings is the companies index configuration. Ranking is relevance-first so an exact
@@ -167,6 +183,8 @@ var companyFacets = []struct{ param, attr string }{
 	{"yc_flags", "yc_flags"},
 	{"maturity", "maturity"},
 	{"subindustries", "subindustry"},
+	// Where the company is headquartered, unlike `countries` (where its open jobs are). Stored
+	// codes are mixed case ("US", "us"); Meilisearch compares filter strings case-insensitively.
 	{"hq_country", "hq_country"},
 }
 
