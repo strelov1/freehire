@@ -72,44 +72,39 @@ func TestStart_WithoutACVBuilderRefusesBeforeAnyRead(t *testing.T) {
 	}
 }
 
-// TestQueueable_CoversTheFacetProviders pins the relationship between the two provider
-// lists (moved from internal/api/handler with the set). They are deliberately different sets,
-// not two copies of one:
+// Queueable is the auto_apply_available facet plus an explicit, exact extra. The facet is
+// jobview.AutoApplyProviders, which atsapply's own test holds equal to its executor sets
+// (fillProviders ∪ browserUseProviders) — so this is the one place the queueable set is
+// named, and a provider that becomes submittable is queueable with no edit here.
 //
-//   - queueableSources: an attempt may be QUEUED. Every entry here is tailored and reviewed,
-//     whatever it can do afterwards.
-//   - jobview.AutoApplyProviders: the "auto-apply available" facet, where a fill may be
-//     SUBMITTED. atsapply's own test holds it equal to fillProviders ∪ browserUseProviders.
-//
-// Every provider the facet advertises must be queueable, or the filter offers a posting whose
-// button can never start an attempt. The reverse is wider by exactly recruitee: it is queued
-// and reviewed, then parks because no submit path drives it.
-//
-// Without this test a provider added to the facet but not here, or removed from here while
-// still advertised, passes every check in both packages.
-func TestQueueable_CoversTheFacetProviders(t *testing.T) {
-	var unqueueable []string
+// The exact set is pinned rather than only "the facet is covered": a second
+// queueable-but-unsubmittable provider spends a daily tailoring turn on attempts that cannot
+// end in a submission, which is a product decision to make on purpose, not one to drift into.
+func TestQueueable_IsTheFacetPlusRecruitee(t *testing.T) {
 	for provider := range jobview.AutoApplyProviders {
 		if !Queueable(provider) {
-			unqueueable = append(unqueueable, provider)
+			t.Errorf("the auto-apply facet advertises %q, which cannot be queued", provider)
 		}
 	}
-	if len(unqueueable) > 0 {
-		slices.Sort(unqueueable)
-		t.Errorf("the auto-apply facet advertises providers that cannot be queued: %v", unqueueable)
+	for source, want := range map[string]bool{
+		"greenhouse": true, "lever": true, "ashby": true, "workable": true, "recruitee": true,
+		"smartrecruiters": false, "workday": false, "": false,
+	} {
+		if got := Queueable(source); got != want {
+			t.Errorf("Queueable(%q) = %v, want %v", source, got, want)
+		}
 	}
 
-	var notAdvertised []string
-	for provider := range queueableSources {
-		if !jobview.AutoApplyProviders[provider] {
-			notAdvertised = append(notAdvertised, provider)
+	var extra []string
+	for provider := range queueableUnadvertised {
+		if jobview.AutoApplyProviders[provider] {
+			t.Errorf("%q is listed in queueableUnadvertised but the facet advertises it; drop the stale entry", provider)
 		}
+		extra = append(extra, provider)
 	}
-	slices.Sort(notAdvertised)
-	// An exact set, not a subset: a second queueable-but-unsubmittable provider is a product
-	// decision to make on purpose (and to document), not one to drift into.
-	if want := []string{"recruitee"}; !slices.Equal(notAdvertised, want) {
-		t.Errorf("queueable but absent from the auto-apply facet = %v, want exactly %v", notAdvertised, want)
+	slices.Sort(extra)
+	if want := []string{"recruitee"}; !slices.Equal(extra, want) {
+		t.Errorf("queueable but not advertised = %v, want exactly %v", extra, want)
 	}
 }
 

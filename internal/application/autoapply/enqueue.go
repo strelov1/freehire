@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -14,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
+	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -235,22 +237,44 @@ type AllowanceRefusal struct{ Decision plan.Decision }
 
 func (r *AllowanceRefusal) Error() string { return "autoapply: start refused: allowance spent" }
 
-// queueableSources are the ATS providers auto-apply can queue an attempt against.
-// Which of them can SUBMIT depends on the deployment's executor and enforcement
-// (atsapply.SubmittableProviders); an attempt that cannot still tailors and gets reviewed,
-// then parks with a named reason in cmd/auto-apply.
-// Widening this list is a product decision: each attempt spends a daily tailoring turn.
-var queueableSources = map[string]bool{
-	"greenhouse": true,
-	"ashby":      true,
-	"workable":   true,
-	"lever":      true,
-	"recruitee":  true,
+// queueableUnadvertised are the providers auto-apply queues but the auto_apply_available
+// facet does not advertise. Recruitee: its attempts tailor and are reviewed, then park with a
+// named reason because no submit path drives them (atsapply has no schema fetcher for it).
+//
+// A product decision to make on purpose, never one to drift into: each entry spends a daily
+// tailoring turn on attempts that cannot end in a submission.
+var queueableUnadvertised = map[string]bool{
+	"recruitee": true,
 }
 
-// Queueable reports whether auto-apply may queue an attempt against a posting from source.
+// Queueable reports whether auto-apply may queue an attempt against a posting from source:
+// every provider the auto_apply_available facet advertises, plus queueableUnadvertised.
+//
+// Derived from the facet (jobview.AutoApplyProviders) rather than listed again because one
+// direction is an invariant, not a coincidence: a provider the search filter advertises must
+// be startable, or the filter offers a posting whose button can only refuse. That facet is
+// itself held equal to atsapply's executor sets by a test there, so a provider that becomes
+// submittable is queueable with no edit here.
+//
+// Queueable does NOT mean submittable. Which provider can SUBMIT depends on the deployment's
+// executor and enforcement (atsapply.SubmittableProviders); an attempt that cannot still
+// tailors and gets reviewed, then parks with a named reason in cmd/auto-apply.
 func Queueable(source string) bool {
-	return queueableSources[source]
+	return jobview.AutoApplyProviders[source] || queueableUnadvertised[source]
+}
+
+// QueueableSources lists every queueable provider, sorted, for callers that must enumerate
+// the set (a test over each source) instead of asking about one.
+func QueueableSources() []string {
+	out := make([]string, 0, len(jobview.AutoApplyProviders)+len(queueableUnadvertised))
+	for provider := range jobview.AutoApplyProviders {
+		out = append(out, provider)
+	}
+	for provider := range queueableUnadvertised {
+		out = append(out, provider)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // EligibilityEnforce gates whether an eligibility mismatch (see Enqueuer.eligibilityBlocker)
