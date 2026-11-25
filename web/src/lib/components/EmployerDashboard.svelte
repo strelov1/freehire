@@ -3,6 +3,8 @@
   import { Briefcase, Building2, ClipboardList, Globe, MapPin, Plus } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
+  import { htmlToMarkdown } from '#lib/htmlToMarkdown.js';
+  import { fillEmpty } from '#lib/prefill.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { EMPLOYMENT_TYPE_OPTIONS, SENIORITY_OPTIONS, WORK_MODE_OPTIONS } from '#lib/facets.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -15,9 +17,12 @@
     EmployerQuestion,
     EmployerVacancyInput,
     Job,
+    PrefillResult,
   } from '#lib/types.js';
   import { resolve } from '$app/paths';
   import { Button, ConfirmDialog, Input, TabStrip, cn, tabStripId } from '#lib/ui/index.js';
+  import EmployerApplyUrlField from './EmployerApplyUrlField.svelte';
+  import CityCombobox from './CityCombobox.svelte';
   import States from './States.svelte';
   import EmployerApplications from './EmployerApplications.svelte';
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
@@ -139,6 +144,15 @@
   const canSubmit = $derived(
     !!title.trim() && !!descriptionMd.trim() && (!needsUrl || !!url.trim()) && questionsLoaded,
   );
+
+  function applyPrefill(result: PrefillResult) {
+    title = fillEmpty(title, result.title);
+    location = fillEmpty(location, result.location);
+    workMode = fillEmpty(workMode, result.work_mode);
+    employmentType = fillEmpty(employmentType, result.employment_type);
+    seniority = fillEmpty(seniority, result.seniority);
+    descriptionMd = fillEmpty(descriptionMd, result.description, htmlToMarkdown);
+  }
 
   function resetForm() {
     editingSlug = null;
@@ -415,11 +429,11 @@
                   {/each}
                 </fieldset>
                 {#if applyMode === 'external'}
-                  <label class="flex flex-col gap-1">
+                  <div class="flex flex-col gap-1">
                     <span class="text-sm font-medium">{s.fieldUrl}</span>
-                    <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+                    <EmployerApplyUrlField bind:url onResult={applyPrefill} />
                     <span class="text-xs text-muted-foreground">{s.fieldUrlHint}</span>
-                  </label>
+                  </div>
                 {/if}
               {/if}
               <div class="flex flex-col gap-4 sm:flex-row">
@@ -430,13 +444,13 @@
                   </span>
                   <Input bind:value={title} class="w-full" />
                 </label>
-                <label class="flex flex-1 flex-col gap-1">
-                  <span class="flex items-center gap-1.5 text-sm font-medium">
+                <div class="flex flex-1 flex-col gap-1">
+                  <label for="employer-vacancy-location" class="flex items-center gap-1.5 text-sm font-medium">
                     <MapPin class="size-3.5 text-muted-foreground" />
                     {s.fieldLocation}
-                  </span>
-                  <Input bind:value={location} class="w-full" />
-                </label>
+                  </label>
+                  <CityCombobox id="employer-vacancy-location" bind:value={location} />
+                </div>
               </div>
               <div class="flex flex-col gap-4 sm:flex-row">
                 {#if !editingSlug}
