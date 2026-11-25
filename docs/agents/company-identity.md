@@ -251,6 +251,16 @@ names fold apart: Forum Jobs' branches (all `forumjobs.be`), or a posting whose 
 is really a job title. It is a report and never a merge, because a job board's or a group's
 host can stand behind several employers. A person reads it and proposes the merges.
 
+**Namesakes enter through the board catalog's name.** Most ATS adapters post under
+`boards.company`, not a name from the payload, so two employers whose rows carry one name share a
+slug (inhire/exa and recruitee/exa on `exa`), and a row with a wrong name puts an employer on
+someone else's (greenhouse/xebialatam, named "LATAM Airlines"). The fold cannot see either case.
+Neither can a rule at ingest: 16,344 slugs take postings from two or more first-party boards
+(2026-11-24), and nearly all of them are one employer, chains and franchises above all.
+`cmd/report-suspicious-boards` is the read-only CSV of candidates. It scans every open job, so
+point it at the replica. A person repairs a row with `cmd/add-board --rename` (moves the board's
+postings off the slug), or proposes a `same` merge when the row is one employer under two slugs.
+
 ## Gotchas
 
 - **The canonical slug must be a fixed point of the rule, and job count alone does not give
