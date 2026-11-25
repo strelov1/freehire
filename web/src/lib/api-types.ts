@@ -21,7 +21,8 @@ export interface CompanyDetail {
   company: Company;
   jobs: Job[];
   referral_available: boolean;
-  company_claimed: boolean;
+  // Typed from the contract so a rename there breaks this build; the server always sends it.
+  company_claimed: NonNullable<components['schemas']['CompanyPage']['company_claimed']>;
   response?: CompanyResponse;
   parent?: CompanyRef;
   subsidiaries?: CompanyRef[];
