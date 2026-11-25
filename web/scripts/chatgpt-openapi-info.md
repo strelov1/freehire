@@ -1,8 +1,8 @@
 Public, read-only freehire API: search IT jobs, read the live filter
 vocabulary, inspect job and company details, and find similar jobs. Every
 operation here answers without a key (300 requests per minute per IP); a
-full-access key raises that to 300 per account on a free account and 1,200 on the
-API or Data plan, with up to 100 results per page. Keyless use is for personal and non-commercial use — showing the
+full-access key moves that to the account's budget: 300 on a free account, 1,200
+on the API or Data plan, with up to 100 results per page. Keyless use is for personal and non-commercial use — showing the
 postings in a product you offer to others needs an API plan (see the
 [data licence](https://freehire.me/terms#data-licence)). The authenticated tracking surface
 (saved jobs, application stages, CV tooling) is deliberately excluded — this
@@ -111,9 +111,13 @@ so it is ignored and reported.
 Facets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,
 `category`, `employment_type`, `education_level`, `company_type`,
 `company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,
-`source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `engagement`, `skills` and the boolean facets) still
+`source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `engagement`, `skills`) still
 apply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads
-exactly like an empty market. `meta.ignored_values` names such values per
+exactly like an empty market. Beside other values of the same facet an unknown
+one adds nothing to their OR, and in `_exclude` it excludes nothing. A boolean
+or modifier parameter reads a bad value its own way (`requires_clearance=flase`
+reads as true, `visa_sponsorship=yes` filters nothing), so the answer may be
+wider rather than empty; it is still reported. `meta.ignored_values` names such values per
 parameter (the `_exclude` form under its own name):
 
 ```json
