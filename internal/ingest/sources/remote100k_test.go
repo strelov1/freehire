@@ -131,4 +131,7 @@ func TestRemote100kIsABoardlessAggregator(t *testing.T) {
 	if _, ok := s.(interface{ Aggregator() }); !ok {
 		t.Error("not an aggregator")
 	}
+	if !isFullCatalog(s) {
+		t.Error("not fullCatalog: an employer whose every posting aged out would never be closed")
+	}
 }

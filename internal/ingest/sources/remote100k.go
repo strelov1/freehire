@@ -73,3 +73,10 @@ func (remote100k) Boardless() {}
 
 // Employers post here, each named per posting.
 func (remote100k) Aggregator() {}
+
+// fullCatalog: one sitemap lists the whole site and a run reads every stored posting, so one
+// left out (past remote100kMaxAge, or 404) is gone. A sitemap that fails or names nothing
+// fails the run, and a page that fails to read is an unreadable detail, which withholds the
+// source-scoped close. Without it an employer whose every posting aged out never enters the
+// company scope and its postings stay open.
+func (remote100k) FullCatalog() {}
