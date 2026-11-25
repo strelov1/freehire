@@ -6358,6 +6358,8 @@ type CompanyListItem struct {
 	Website NilString `json:"website"`
 	// The company's LinkedIn page; null when unknown.
 	Linkedin NilString `json:"linkedin"`
+	// Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`.
+	EmployeeCount NilInt64 `json:"employee_count"`
 	// Curated company tags; the catalogue card renders the backer marks from these.
 	Collections   []string `json:"collections"`
 	FeedbackCount int64    `json:"feedback_count"`
@@ -6405,6 +6407,11 @@ func (s *CompanyListItem) GetWebsite() NilString {
 // GetLinkedin returns the value of Linkedin.
 func (s *CompanyListItem) GetLinkedin() NilString {
 	return s.Linkedin
+}
+
+// GetEmployeeCount returns the value of EmployeeCount.
+func (s *CompanyListItem) GetEmployeeCount() NilInt64 {
+	return s.EmployeeCount
 }
 
 // GetCollections returns the value of Collections.
@@ -6465,6 +6472,11 @@ func (s *CompanyListItem) SetWebsite(val NilString) {
 // SetLinkedin sets the value of Linkedin.
 func (s *CompanyListItem) SetLinkedin(val NilString) {
 	s.Linkedin = val
+}
+
+// SetEmployeeCount sets the value of EmployeeCount.
+func (s *CompanyListItem) SetEmployeeCount(val NilInt64) {
+	s.EmployeeCount = val
 }
 
 // SetCollections sets the value of Collections.

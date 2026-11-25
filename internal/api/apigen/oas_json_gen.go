@@ -20106,6 +20106,10 @@ func (s *CompanyListItem) encodeFields(e *jx.Encoder) {
 		s.Linkedin.Encode(e)
 	}
 	{
+		e.FieldStart("employee_count")
+		s.EmployeeCount.Encode(e)
+	}
+	{
 		e.FieldStart("collections")
 		e.ArrStart()
 		for _, elem := range s.Collections {
@@ -20129,7 +20133,7 @@ func (s *CompanyListItem) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfCompanyListItem = [12]string{
+var jsonFieldsNameOfCompanyListItem = [13]string{
 	0:  "slug",
 	1:  "name",
 	2:  "job_count",
@@ -20138,10 +20142,11 @@ var jsonFieldsNameOfCompanyListItem = [12]string{
 	5:  "hq_country",
 	6:  "website",
 	7:  "linkedin",
-	8:  "collections",
-	9:  "feedback_count",
-	10: "feedback_rating_avg",
-	11: "ai_interview_reports",
+	8:  "employee_count",
+	9:  "collections",
+	10: "feedback_count",
+	11: "feedback_rating_avg",
+	12: "ai_interview_reports",
 }
 
 // Decode decodes CompanyListItem from json.
@@ -20249,8 +20254,18 @@ func (s *CompanyListItem) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"linkedin\"")
 			}
-		case "collections":
+		case "employee_count":
 			requiredBitSet[1] |= 1 << 0
+			if err := func() error {
+				if err := s.EmployeeCount.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"employee_count\"")
+			}
+		case "collections":
+			requiredBitSet[1] |= 1 << 1
 			if err := func() error {
 				s.Collections = make([]string, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
@@ -20270,7 +20285,7 @@ func (s *CompanyListItem) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"collections\"")
 			}
 		case "feedback_count":
-			requiredBitSet[1] |= 1 << 1
+			requiredBitSet[1] |= 1 << 2
 			if err := func() error {
 				v, err := d.Int64()
 				s.FeedbackCount = int64(v)
@@ -20282,7 +20297,7 @@ func (s *CompanyListItem) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"feedback_count\"")
 			}
 		case "feedback_rating_avg":
-			requiredBitSet[1] |= 1 << 2
+			requiredBitSet[1] |= 1 << 3
 			if err := func() error {
 				if err := s.FeedbackRatingAvg.Decode(d); err != nil {
 					return err
@@ -20312,7 +20327,7 @@ func (s *CompanyListItem) Decode(d *jx.Decoder) error {
 	var failures []validate.FieldError
 	for i, mask := range [2]uint8{
 		0b11111111,
-		0b00000111,
+		0b00001111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

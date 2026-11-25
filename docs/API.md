@@ -1242,6 +1242,7 @@ curl "https://freehire.me/api/v1/companies"
       "hq_country": "DE",
       "website": "https://acme.example",
       "linkedin": "https://www.linkedin.com/company/acme",
+      "employee_count": 40,
       "collections": [
         "yc"
       ],
