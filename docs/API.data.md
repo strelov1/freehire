@@ -157,7 +157,7 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 
 ## Data plan endpoints
 
-This reference covers only the endpoints of the [Data plan](https://freehire.me/jobs-api): job reads that carry each posting’s original links (`url`, the employer’s own page, and `source_url` where the application goes elsewhere), and the full-catalogue export. `GET /data/jobs/search` and `GET /data/jobs/{slug}` take the same parameters and return the same shapes as `GET /jobs/search` and `GET /jobs/{slug}`. On every other job read, a posting with an `apply_url` (a counted freehire redirect) has `url` empty and no `source_url`; a posting without one, and an Adzuna posting (whose `url` is Adzuna’s own page), keeps `url`. Wherever the overview says to refresh a posting with `GET /jobs/{slug}`, a Data plan mirror uses `GET /data/jobs/{slug}` so it keeps the links. Send a full-access key of the plan holder as `Authorization: Bearer <token>`; any other account gets `403`. The 6,000-request window applies to the two `/data/jobs` endpoints only, counted apart; every other endpoint, the catalogue export included, holds the 1,200-request window. The rest of the API is documented at [freehire.me/docs/api](https://freehire.me/docs/api).
+This reference covers only the endpoints of the [Data plan](https://freehire.me/jobs-api): job reads that carry each posting’s original links (`url`, where the application goes, and `source_url`, the original posting when it differs), and the full-catalogue export. `GET /data/jobs/search` and `GET /data/jobs/{slug}` take the same parameters and return the same shapes as `GET /jobs/search` and `GET /jobs/{slug}`. On every other job read, a posting with an `apply_url` (a counted freehire redirect) has `url` empty and no `source_url`; a posting without one, and an Adzuna posting (whose `url` is Adzuna’s own page), keeps `url`. Wherever the overview says to refresh a posting with `GET /jobs/{slug}`, a Data plan mirror uses `GET /data/jobs/{slug}` so it keeps the links. Send a full-access key of the plan holder as `Authorization: Bearer <token>`; any other account gets `403`. The 6,000-request window applies to the two `/data/jobs` endpoints only, counted apart; every other endpoint, the catalogue export included, holds the 1,200-request window. The rest of the API is documented at [freehire.me/docs/api](https://freehire.me/docs/api).
 
 ## Filtering jobs
 
@@ -348,7 +348,7 @@ curl "https://freehire.me/api/v1/catalogue/snapshots" -H "Authorization: Bearer 
 
 ## Data plan
 
-Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, the employer's own page, and `source_url` where the application goes elsewhere. Every other job read links only through `apply_url`, a freehire redirect. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`.
+Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Every other job read links only through `apply_url`, a freehire redirect. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`.
 
 ### `GET /data/jobs/search`
 

@@ -85,8 +85,8 @@ const AUDIENCE_INTRO = {
   data: [
     'Data plan endpoints',
     'This reference covers only the endpoints of the [Data plan](https://freehire.me/jobs-api): ' +
-      'job reads that carry each posting’s original links (`url`, the employer’s own page, and ' +
-      '`source_url` where the application goes elsewhere), and the full-catalogue export. ' +
+      'job reads that carry each posting’s original links (`url`, where the application goes, and ' +
+      '`source_url`, the original posting when it differs), and the full-catalogue export. ' +
       '`GET /data/jobs/search` and `GET /data/jobs/{slug}` take the same parameters and return the ' +
       'same shapes as `GET /jobs/search` and `GET /jobs/{slug}`. On every other job read, a posting ' +
       'with an `apply_url` (a counted freehire redirect) has `url` empty and no `source_url`; a ' +
