@@ -18,7 +18,7 @@ import (
 // TelegramNotifier delivers a nudge as a Telegram HTML message. Every link stays
 // on-platform: the tracking board for application kinds, the job's own page for
 // job-closed (nothing is left to track for a closed listing). The send itself is
-// the shared notify.Telegram; this package owns only the copy.
+// the shared batchnotify.Telegram; this package owns only the copy.
 type TelegramNotifier = batchnotify.Telegram[Message]
 
 // NewTelegramNotifier builds a TelegramNotifier sending through client, with links
@@ -169,7 +169,7 @@ func (n telegramCopy) renderOne(m Message) string {
 }
 
 // EmailNotifier delivers a nudge as an email. Like the Telegram notifier, its links
-// stay on-platform. The send itself is the shared notify.Email; this package owns
+// stay on-platform. The send itself is the shared batchnotify.Email; this package owns
 // only the copy.
 type EmailNotifier = batchnotify.Email[Message]
 

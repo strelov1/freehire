@@ -116,7 +116,7 @@ type EmailNotifier = batchnotify.Email[ReminderMessage]
 // the job link rooted at jobBaseURL and unsubscribe links signed by links.
 func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string, links *emailprefs.Links) *EmailNotifier {
 	return batchnotify.NewEmail(sender, from, links, "reminder",
-		func(ms []ReminderMessage) int64 { return ms[0].UserID }, newEmailCopy(jobBaseURL).send)
+		func(ms []ReminderMessage) int64 { return ms[0].UserID }, newEmailCopy(jobBaseURL).render)
 }
 
 // emailCopy is the reminder copy for the email channel.
@@ -160,16 +160,16 @@ var batchTemplate = template.Must(mailtpl.Partials().New("reminder-batch").Parse
 {{if gt .More 0}}{{template "muted" (printf "+ %d more not listed here." .More)}}{{end}}
 {{template "button" .CTA}}`))
 
-// send renders the batch: a single reminder keeps its own mail, several share one.
-func (n emailCopy) send(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
+// render renders the batch: a single reminder keeps its own mail, several share one.
+func (n emailCopy) render(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	if len(ms) == 1 {
-		return n.sendOne(ms[0], unsubscribe)
+		return n.renderOne(ms[0], unsubscribe)
 	}
-	return n.sendBatch(ms, unsubscribe)
+	return n.renderBatch(ms, unsubscribe)
 }
 
-// sendOne is the single-reminder mail, kept as it was before grouping.
-func (n emailCopy) sendOne(m ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
+// renderOne is the single-reminder mail, kept as it was before grouping.
+func (n emailCopy) renderOne(m ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	url := n.jobURL(m)
 	var content bytes.Buffer
 	if err = oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
@@ -189,8 +189,8 @@ func (n emailCopy) sendOne(m ReminderMessage, unsubscribe string) (subject, html
 	return subject, htmlBody, textBody, nil
 }
 
-// sendBatch is the multi-reminder mail: digest-style job rows, one reason line, one action.
-func (n emailCopy) sendBatch(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
+// renderBatch is the multi-reminder mail: digest-style job rows, one reason line, one action.
+func (n emailCopy) renderBatch(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
