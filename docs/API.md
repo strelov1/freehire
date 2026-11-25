@@ -89,7 +89,14 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+| Tier | Key | Account | Commercial use | Requests per 60 s | Results per page | Price |
+| --- | --- | --- | --- | --- | --- | --- |
+| Guest | none | none | no | 300 per IP for ordinary reads (`/jobs/search`, `/jobs/{slug}` and the rest), plus a separate 300 per IP for `/agent/jobs/search` | 100 | free |
+| Free account | full-access key or OAuth (without one, the request is a guest's) | free sign-up | no | 300 per account, shared by ordinary reads and agent search | 100 | free |
+| API plan | full-access key or OAuth | any freehire account | yes, under the data licence | 1,200 per account, shared by ordinary reads and agent search | 100 | $29 / month ($39 from 1 December 2026) |
+| Data plan | full-access key or OAuth | any freehire account | yes, under the data licence | 6,000 per account on the Data endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart; the API plan's 1,200 everywhere else | 100 | $99 / month ($129 from 1 December 2026) |
+
+Pro and Ultra accounts (the AI job-search plans, which do not license the data) read at 800 and 1,000 requests per 60 seconds. Every tier gets the same filters, and no paid or free tier has a daily request cap. Prices are monthly, as of November 2026; [freehire.me/pricing](https://freehire.me/pricing) shows what is charged today.
 
 Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
@@ -100,6 +107,8 @@ Pagination returns 20 listings by default and up to 100 with `limit=100`. Reques
 The gateway returns `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). A window starts with its first request. Exceeding a request limit returns HTTP 429. Gateway rejections include `Retry-After` in seconds; nginx rejections can omit these headers and return a non-JSON body. Pause for `Retry-After` when present; otherwise back off before retrying.
 
 ## Data freshness and closed jobs
+
+Freshness in one line: each posting is re-read on its source's crawl schedule (no fixed interval is promised), and a posting a complete crawl stops listing is closed after 48 hours unseen by default (some sources wait longer, up to 35 days, when the source itself keeps postings up that long).
 
 A posting is **open** until something closes it, and a closed posting carries `closed_at` and a `closed_reason`. Nothing is deleted. These are the closers, with the `closed_reason` each writes:
 

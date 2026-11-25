@@ -102,8 +102,13 @@
      the pane" into a swipeable table instead of a layout overflow. The Values
      column still wraps normally at its own commas/spaces either way — only a
      single unbroken word (a param name, a short label) was ever forced this
-     narrow. */
+     narrow.
+
+     `display: block` is what lets that `overflow-x` apply: a `display: table` box
+     ignores it, so the API plans tier table (seven columns) ran under the
+     right-hand request pane at 1280-1536px. */
   :global(.scalar-app .markdown table) {
+    display: block;
     table-layout: auto !important;
     overflow-x: auto !important;
     max-width: 100%;
