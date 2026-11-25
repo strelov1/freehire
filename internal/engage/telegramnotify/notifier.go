@@ -19,7 +19,7 @@ import (
 const MaxMessageLen = 4096
 
 // Compile-time guarantee that Notifier satisfies the channel abstraction.
-var _ notify.Notifier = (*Notifier)(nil)
+var _ notify.Notifier[notify.Message] = (*Notifier)(nil)
 
 // Notifier is the Telegram implementation of notify.Notifier: it renders a digest to an HTML
 // message and sends it to the recipient chat. Links point at the freehire job page, never a

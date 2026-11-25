@@ -50,7 +50,7 @@ func run() int {
 	// Push and webhook need no server credential, so they are always registered; their
 	// per-recipient soft-skips are handled inside recipient().
 	pushStore := pushnotify.NewQueriesStore(queries)
-	router := notify.Router{
+	router := notify.Router[notify.Message]{
 		notify.ChannelPush:    notify.NewPushNotifier(queries, pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore)),
 		notify.ChannelWebhook: webhooknotify.NewNotifier(),
 	}

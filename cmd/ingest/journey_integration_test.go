@@ -172,7 +172,7 @@ func TestJourneyCrawledBoardToDeliveredAlert(t *testing.T) {
 	mailer := &journeyMailer{}
 	const origin = "https://freehire.test"
 	links := emailprefs.NewLinks("journey-test-secret-at-least-32-bytes", origin)
-	router := notify.Router{notify.ChannelEmail: emailnotify.NewNotifier(mailer, "alerts@freehire.test", origin, links)}
+	router := notify.Router[notify.Message]{notify.ChannelEmail: emailnotify.NewNotifier(mailer, "alerts@freehire.test", origin, links)}
 	notified, err := notify.New(q, meili, router, notify.DefaultConfig()).Run(ctx)
 	if err != nil {
 		t.Fatal(err)

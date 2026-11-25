@@ -155,7 +155,7 @@ func (s prospective) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 	outOfTime, outOfBudget := 0, 0
 	for _, p := range fresh {
 		switch {
-		case s.nearDeadline(ctx):
+		case nearDeadline(ctx, s.deadlineMargin):
 			outOfTime++
 			continue
 		case !s.spend():
@@ -176,11 +176,6 @@ func (s prospective) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 // spend takes one page read from the run-wide budget, reporting false once it is gone.
 func (s prospective) spend() bool {
 	return s.runBudget == nil || s.runBudget.Add(-1) >= 0
-}
-
-func (s prospective) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // wait spaces every request of the run. When the limiter can already tell that no slot opens

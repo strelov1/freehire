@@ -2,9 +2,7 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -216,8 +214,7 @@ func (s shine) detail(ctx context.Context, p shinePosting) (Job, bool, error) {
 	}
 	root, err := s.http.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

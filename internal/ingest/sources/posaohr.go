@@ -2,10 +2,8 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -349,8 +347,7 @@ func (s posaoHR) detail(ctx context.Context, c posaoHRCard) (Job, bool, error) {
 	}
 	root, final, err := s.http.GetHTMLResolved(ctx, c.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

@@ -30,7 +30,7 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
 - **Structural evidence can NEVER produce `LevelLikely`.** `Classify` (classify.go:110) has
   two gates that are not the same gate: `convergence = 2` criteria must fire to say anything
   at all, and `ContributorGate = 2` DISTINCT people must have contributed outcome evidence
-  for the stronger claim (classify.go:125-134). Enough witnesses reach `possible` even as a
+  for the stronger claim (`Classify`). Enough witnesses reach `possible` even as a
   lone criterion — the outcome tier is the only one that observes reality, so it must be
   able to mark a posting by itself.
 - **`ContributorGate = 2` is one number with two consequences** (classify.go:48-59). The

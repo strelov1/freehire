@@ -16,6 +16,17 @@ type SnapshotJob struct {
 	Slug    string `json:"slug"`
 }
 
+// JobsSnapshotOf builds JobsSnapshot from any engine's batch, projecting each
+// message to its {title, company, slug}. nudge and reminder record their batches
+// this way; the digest uses digestJobsSnapshot, which skips a single-job digest.
+func JobsSnapshotOf[T any](ms []T, job func(T) SnapshotJob) json.RawMessage {
+	jobs := make([]SnapshotJob, len(ms))
+	for i, m := range ms {
+		jobs[i] = job(m)
+	}
+	return JobsSnapshot(jobs)
+}
+
 // JobsSnapshot marshals the job list a multi-job notification records for its own
 // page. It applies no bound: the caller's batch is capped before it is sent, so the
 // delivery and the record cannot disagree.
