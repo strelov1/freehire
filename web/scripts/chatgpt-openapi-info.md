@@ -2,7 +2,9 @@ Public, read-only freehire API: search IT jobs, read the live filter
 vocabulary, inspect job and company details, and find similar jobs. Every
 operation here answers without a key (300 requests per minute per IP); a
 full-access key moves that to the account's budget: 300 on a free account, 1,200
-on the API or Data plan, with up to 100 results per page. Keyless use is for personal and non-commercial use — showing the
+on the API or Data plan, with up to 100 results per page. The Data plan's
+`/data/jobs/search` and `/data/jobs/{slug}` have their own budget of 6,000 per minute,
+counted apart from those 1,200. Keyless use is for personal and non-commercial use — showing the
 postings in a product you offer to others needs an API plan (see the
 [data licence](https://freehire.me/terms#data-licence)). The authenticated tracking surface
 (saved jobs, application stages, CV tooling) is deliberately excluded — this
@@ -11,8 +13,8 @@ custom GPT imports as an Action.
 
 ## Filter grammar
 
-Facet parameters are **repeatable**, and the same grammar applies to all of
-them:
+Job-search facet parameters are **repeatable**, and the same grammar applies to
+all of them:
 
 * `?skills=go&skills=kubernetes` — values of one facet are **ORed**: match
   either.
@@ -22,6 +24,10 @@ them:
   string facet in this schema declares its `_exclude` twin.
 * Different facets **AND** together: `?work_mode=remote&seniority=senior` is
   remote *and* senior.
+
+Company search (`searchCompanies`) reads only the bare facet names
+(`company_type`, not `company_type_exclude` or `company_type_mode`); it lists
+an `_exclude` or `_mode` param in `meta.ignored_params` instead of applying it.
 
 ## Geography is one OR-group
 
@@ -118,9 +124,7 @@ one adds nothing to their OR, and in `_exclude` it excludes nothing. A boolean
 or modifier parameter reads a bad value its own way (`requires_clearance=flase`
 reads as true, `visa_sponsorship=yes` filters nothing), so the answer may be
 wider rather than empty; it is still reported. `meta.ignored_values` names such values per
-parameter (the `_exclude` form under its own name). The personal preferences
-`hide_applied_companies` and `hide_seen` are the exception: a value of theirs that is not
-a boolean drops the whole param, which `meta.ignored_params` names instead:
+parameter (the `_exclude` form under its own name):
 
 ```json
 "meta": { "total": 0, "limit": 10, "offset": 0,
@@ -135,3 +139,13 @@ not unknown — it is read as its canonical slug (`go`). Open facets
 legitimate. Absent on a clean request; capped at ten parameters of ten
 values each. Reported by `searchJobs`, `agentSearchJobs` and
 `getJobFacets`.
+
+The personal preferences `hide_applied_companies` and `hide_seen` are the
+exception: a value of theirs that is not a boolean drops the whole param, which
+`meta.ignored_params` names instead. `?hide_seen=maybe` answers the unhidden
+search with:
+
+```json
+"meta": { "total": 1475149, "limit": 10, "offset": 0,
+          "ignored_params": [ { "param": "hide_seen" } ] }
+```
