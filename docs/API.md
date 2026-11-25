@@ -6951,7 +6951,7 @@ curl "https://freehire.me/api/v1/catalogue/snapshots" -H "Authorization: Bearer 
 
 ## Data plan
 
-Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Every other job read links only through `apply_url`, a freehire redirect. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`.
+Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`.
 
 ### `GET /data/jobs/search`
 
