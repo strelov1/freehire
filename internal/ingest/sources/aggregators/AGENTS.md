@@ -3,7 +3,7 @@
 ## Scope
 
 The multi-employer feeds: job boards and public employment services that list postings from
-many companies, so each posting names its own employer. Today: `adzuna` (keyed search API),
+many companies, so each posting names its own employer. Today: `adzuna` and `careerjet` (keyed search APIs),
 `eures` (the EU network, board = country), `jobnet` (Denmark), `jobtech` (Sweden's JobSearch
 stream) and `nofluffjobs` (Poland). The rest of the family (the SEEK network, the Russian, BR
 and PL boards) still lives in `sources` and moves here one PR at a time (#4586).
@@ -25,4 +25,8 @@ and PL boards) still lives in `sources` and moves here one PR at a time (#4586).
 - **`adzuna` is credential-gated**: `sources.All` registers it only with
   `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` set (`registry_special.go`); the taxonomy registry always
   carries it.
-- Provider notes: [adzuna](../providers/adzuna.md), [jobnet](../providers/jobnet.md).
+- **`careerjet` is credential-gated** on `CAREERJET_API_KEY` and `CAREERJET_USER_IP` (the server's
+  public egress IP, its required `user_ip`). Its urls are click-tracking links, so like `adzuna` it
+  cannot be probed: a 14-day `SweepGrace`, and `cmd/liveness` age-expires it
+  (`expireDespiteRegisteredPrefixes`; optional there, so a liveness host needs no credential).
+- Provider notes: [adzuna](../providers/adzuna.md), [careerjet](../providers/careerjet.md), [jobnet](../providers/jobnet.md).
