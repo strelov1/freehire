@@ -144,7 +144,12 @@ func runEUStartups(slugFile, statePath string) int {
 		log.Printf("harvest-ats: %v", err)
 		return 1
 	}
+	return walkEUS(existing, statePath, get, os.Stdout)
+}
 
+// walkEUS is runEUStartups past its arguments: get fetches a directory page, the unmatched JSON
+// goes to w.
+func walkEUS(existing map[string]bool, statePath string, get func(string) (string, error), w io.Writer) int {
 	st := eusState{pages: map[int][]string{}, cards: map[string]companySite{}}
 	if f, err := os.Open(statePath); err == nil { //nolint:gosec // the operator's own CLI argument
 		st, err = loadEUSState(f)
@@ -262,7 +267,7 @@ func runEUStartups(slugFile, statePath string) int {
 	}
 	unmatched := dedupeByWebsite(filterUnmatched(sites, existing))
 	log.Printf("harvest-ats: eustartups: %d cards, %d with a website, %d unmatched, %d failed (re-run to retry)", len(st.cards), len(sites), len(unmatched), failed)
-	if err := json.NewEncoder(os.Stdout).Encode(unmatched); err != nil {
+	if err := json.NewEncoder(w).Encode(unmatched); err != nil {
 		log.Printf("harvest-ats: encode: %v", err)
 		return 1
 	}
