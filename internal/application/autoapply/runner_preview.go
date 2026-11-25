@@ -51,7 +51,7 @@ func (s PreviewStats) Degraded() bool {
 // only that worker has.
 func RunPreviews(ctx context.Context, s PreviewStore, answers AnswerSource, sidecar PreviewSidecar, opts RunOptions) (PreviewStats, error) {
 	rn := &previewRun{store: s, answers: answers, sidecar: sidecar, opts: opts}
-	result, err := outbox.RunPool(ctx, &previewClaimer{store: s}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: outbox.ClaimFunc[Claimed](s.ClaimForPreview)}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,
@@ -67,21 +67,6 @@ func RunPreviews(ctx context.Context, s PreviewStore, answers AnswerSource, side
 		return stats, fmt.Errorf("claim auto-apply preview attempts: %w", err)
 	}
 	return stats, nil
-}
-
-// previewClaimer mirrors cancelAwareClaimer: guards every Claim call after the first against
-// a cancelled ctx, so a cancelled run stops at the next wave boundary.
-type previewClaimer struct {
-	store PreviewStore
-	calls int
-}
-
-func (c *previewClaimer) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
-	if c.calls > 0 && ctx.Err() != nil {
-		return nil, nil
-	}
-	c.calls++
-	return c.store.ClaimForPreview(ctx, batch, leaseSeconds)
 }
 
 type previewRun struct {

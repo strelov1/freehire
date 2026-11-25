@@ -2,9 +2,7 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -272,8 +270,7 @@ func (s bumeran) detail(ctx context.Context, c bumeranCard) (Job, bool, error) {
 	}
 	var d bumeranDetail
 	if err := s.get.GetJSONWithHeaders(ctx, fmt.Sprintf(bumeranDetailURL, c.ID), bumeranHeaders, &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

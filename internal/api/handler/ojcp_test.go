@@ -76,7 +76,7 @@ func (f fakeOJCPStore) ListJobLivenessBySlugs(context.Context, []string) ([]db.L
 }
 
 // ojcpJobView projects a stored row the way every read path does. Building a jobview.Job by
-// hand skips outboundurl.Tag and the facet normalisation, so a literal carries values no
+// hand skips the facet normalisation, so a literal carries values no
 // production read can produce — internal/api/ojcp/AGENTS.md forbids it for exactly that
 // reason, and two defects got through that way before a review caught them.
 func ojcpJobView(t *testing.T, row db.Job) jobview.Job {

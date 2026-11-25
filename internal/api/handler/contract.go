@@ -15,10 +15,12 @@ import (
 	"github.com/go-faster/jx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ogen-go/ogen/ogenerrors"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
 	"github.com/strelov1/freehire/internal/api/handler/jobs"
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -366,6 +368,66 @@ func nilDateTime(t *time.Time) apigen.NilDateTime {
 		return apigen.NilDateTime{Null: true}
 	}
 	return apigen.NewNilDateTime(*t)
+}
+
+// nilInt64 is an always-present nullable integer set from a domain pointer: null for nil.
+func nilInt64(p *int64) apigen.NilInt64 {
+	if p == nil {
+		return apigen.NilInt64{Null: true}
+	}
+	return apigen.NewNilInt64(*p)
+}
+
+// nilFloat32Ptr is an always-present nullable number set from a domain pointer: null for nil.
+func nilFloat32Ptr(p *float32) apigen.NilFloat32 {
+	if p == nil {
+		return apigen.NilFloat32{Null: true}
+	}
+	return apigen.NewNilFloat32(*p)
+}
+
+// nilFloat32 is an always-present nullable number set from a nullable real: null when invalid.
+func nilFloat32(v pgtype.Float4) apigen.NilFloat32 {
+	if !v.Valid {
+		return apigen.NilFloat32{Null: true}
+	}
+	return apigen.NewNilFloat32(v.Float32)
+}
+
+// presentOrNil treats the empty string as absent — the search document's way of spelling NULL.
+func presentOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// optInt64 is an optional integer: unset when zero, which the domain uses for "none".
+func optInt64(n int64) apigen.OptInt64 {
+	if n == 0 {
+		return apigen.OptInt64{}
+	}
+	return apigen.NewOptInt64(n)
+}
+
+// optTime renders a zero time as absent rather than as the year 1.
+func optTime(at time.Time) apigen.OptDateTime {
+	if at.IsZero() {
+		return apigen.OptDateTime{}
+	}
+	return apigen.NewOptDateTime(at)
+}
+
+// optPeriodDate is an optional period date: unset for nil, its month unset when unknown.
+func optPeriodDate(d *perioddate.PeriodDate) apigen.OptPeriodDate {
+	if d == nil {
+		return apigen.OptPeriodDate{}
+	}
+	out := apigen.PeriodDate{Year: int32(d.Year)} //nolint:gosec // a calendar year
+	if d.Month != 0 {
+		out.Month = apigen.NewOptInt32(int32(d.Month)) //nolint:gosec // 1..12
+	}
+	return apigen.NewOptPeriodDate(out)
 }
 
 // contractIgnoredValues is search's value-level report as the raw object encoding/json wrote

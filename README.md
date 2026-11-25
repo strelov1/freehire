@@ -319,7 +319,7 @@ new provider before any code.
 
 ## Frontend
 
-A server-rendered SvelteKit 2 app (Svelte 5 runes, Tailwind 4, `adapter-node`)
+A server-rendered SvelteKit 3 app (Svelte 5 runes, Tailwind 4, `adapter-node`)
 lives under `web/` and consumes the API same-origin; a dev Vite proxy forwards
 `/api` to the backend. Shared tokens and components come from the sibling
 `design-system/` package — install it before building `web/` or `extension/`,

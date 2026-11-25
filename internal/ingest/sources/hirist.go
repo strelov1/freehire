@@ -2,10 +2,8 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -289,8 +287,7 @@ func (s hirist) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	var d hiristDetail
 	u := fmt.Sprintf("%s/job/detail?jobcode=%s", s.site.api, base.ExternalID)
 	if err := s.http.GetJSONWithHeaders(ctx, u, nil, &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

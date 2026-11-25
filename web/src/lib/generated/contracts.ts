@@ -167,7 +167,17 @@ export interface Job {
    */
   manually_added: boolean;
   external_id: string;
+  /**
+   * URL is the employer's own application URL, as stored: the canonical address the
+   * extension matches pages against and API consumers deduplicate on.
+   */
   url: string;
+  /**
+   * ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts
+   * the click. Every link a person is sent out by uses it; URL is for matching, not clicking.
+   * Another surface rewrites src with outboundurl.ApplyURL(PublicSlug, src). Empty with URL.
+   */
+  apply_url?: string;
   /**
    * SourceURL is the original posting when URL points to a separately verified
    * application destination. Omitted when both links are the same.

@@ -113,10 +113,17 @@ jobs:
       # `--config` explicitly, though discovery would find the same file: a renamed or
       # deleted .gitleaks.toml then fails the job instead of quietly falling back to the
       # default rule set and reporting the ten allowlisted fixtures as fresh leaks.
+      #
+      # `--log-opts=HEAD`: the history of what was checked out, not every ref the clone
+      # holds. gitleaks' default is `git log --all`, and `fetch-depth: 0` fetches every
+      # branch, so each run also scanned every OTHER open branch: one PR's unmerged commit
+      # (a scanner config full of sample tokens, 2026-11-24) failed this job on main and
+      # on every unrelated PR. A branch's own commits are still scanned, by its own PR's
+      # run (HEAD is the PR merge ref) and again on main once merged.
       - name: Scan history
         run: |
           set -o pipefail
-          gitleaks git --config .gitleaks.toml --no-banner --redact 2>&1 | tee /tmp/gitleaks.log
+          gitleaks git --config .gitleaks.toml --no-banner --redact --log-opts=HEAD 2>&1 | tee /tmp/gitleaks.log
           scanned=$(sed -n 's/.*[^0-9]\([0-9][0-9]*\) commits scanned.*/\1/p' /tmp/gitleaks.log | tail -1)
           if [ -z "$scanned" ] || [ "$scanned" -lt 1 ]; then
             echo "gitleaks reported no commits scanned — the scan was blind, not clean."

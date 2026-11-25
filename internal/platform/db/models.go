@@ -1299,6 +1299,20 @@ type JobDailyView struct {
 	AgentUniques int32 `json:"agent_uniques"`
 }
 
+type JobOutboundClick struct {
+	ID           int64              `json:"id"`
+	JobID        int64              `json:"job_id"`
+	ClickedAt    pgtype.Timestamptz `json:"clicked_at"`
+	Src          string             `json:"src"`
+	IsLikelyBot  bool               `json:"is_likely_bot"`
+	DeviceType   string             `json:"device_type"`
+	OsFamily     string             `json:"os_family"`
+	UaFamily     string             `json:"ua_family"`
+	ReferrerHost string             `json:"referrer_host"`
+	Country      string             `json:"country"`
+	VisitorHash  string             `json:"visitor_hash"`
+}
+
 type JobRecruiterContact struct {
 	JobID    int64              `json:"job_id"`
 	Contacts []byte             `json:"contacts"`
@@ -1676,6 +1690,8 @@ type OauthExchangeCode struct {
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
 	ConsumedAt           pgtype.Timestamptz `json:"consumed_at"`
+	LinkProvider         pgtype.Text        `json:"link_provider"`
+	LinkProviderUserID   pgtype.Text        `json:"link_provider_user_id"`
 }
 
 type OauthGrant struct {

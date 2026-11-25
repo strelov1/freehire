@@ -19,7 +19,7 @@ const testOrigin = "https://freehire.me"
 
 // aJob builds a fixture the way a read path does, through jobview.FromRow.
 //
-// NEVER as a jobview.Job literal. The literal skips outboundurl.Tag and the facet
+// NEVER as a jobview.Job literal. The literal skips the facet
 // normalisation, so it carries values no production read can produce — which is exactly how
 // a utm-tagged official_job_url passed green on the OJCP surface until a review caught it
 // (internal/api/ojcp/AGENTS.md records the two defects that got through that way).
@@ -85,6 +85,25 @@ func TestEverySearchResultNamesItsSourceAndBothURLs(t *testing.T) {
 	// `url` keeps it.
 	if got.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/1" {
 		t.Errorf("official_job_url = %q, want the employer's own posting untagged", got.OfficialJobURL)
+	}
+}
+
+func TestApplyURLIsTheRedirectAndOfficialJobURLStaysCanonical(t *testing.T) {
+	got := NewProjector(testOrigin).JobSummary(aJob(t))
+
+	if want := "https://freehire.me/api/v1/go/senior-go-engineer-acme-abc123?src=mcp"; got.ApplyURL != want {
+		t.Errorf("apply_url = %q, want %q", got.ApplyURL, want)
+	}
+	if got.OfficialJobURL != "https://boards.greenhouse.io/acme/jobs/1" {
+		t.Errorf("official_job_url = %q, want the canonical employer URL", got.OfficialJobURL)
+	}
+}
+
+func TestAnUnconfiguredOriginResearchLinkIsTheRedirect(t *testing.T) {
+	got := NewProjector("").JobSummary(aJob(t))
+
+	if want := "https://freehire.me/api/v1/go/senior-go-engineer-acme-abc123?src=mcp"; researchURL(got) != want {
+		t.Errorf("research url = %q, want %q", researchURL(got), want)
 	}
 }
 

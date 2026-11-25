@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -310,8 +309,7 @@ func sortInfostudFreshestFirst(cards []infostudCard) {
 func (s infostud) detail(ctx context.Context, c infostudCard) (Job, bool, error) {
 	body, err := s.http.GetText(ctx, infostudPostingURL(c))
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

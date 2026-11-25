@@ -74,6 +74,9 @@ var (
 	collapseSpace            = kit.CollapseSpace
 	countriesFromCodes       = kit.CountriesFromCodes
 	countryFromCode          = kit.CountryFromCode
+	isGone                   = kit.IsGone
+	nearDeadline             = kit.NearDeadline
+	errNoPosting             = kit.ErrNoPosting
 	detailUnreadable         = kit.DetailUnreadable
 	firstNonEmpty            = kit.FirstNonEmpty
 	firstSubmatch            = kit.FirstSubmatch
