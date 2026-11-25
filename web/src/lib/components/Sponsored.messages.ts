@@ -48,7 +48,7 @@ export const messages = defineMessages(
     campaigns: {
       title: 'Sponsored jobs',
       description: 'Campaigns that promote your jobs in search. Every campaign is reviewed before it starts.',
-      empty: 'No campaigns yet. Open a job and choose "Promote this job".',
+      empty: 'No campaigns yet.',
       loadFailed: "Couldn't load your campaigns.",
       topupSuccess: 'Payment received. The budget is added once Stripe confirms it, usually within a minute.',
       topupCancel: 'Payment cancelled. Nothing was charged.',
@@ -124,7 +124,7 @@ export const messages = defineMessages(
       campaigns: {
         title: 'Продвижение вакансий',
         description: 'Кампании, которые продвигают ваши вакансии в поиске. Каждая кампания проверяется перед запуском.',
-        empty: 'Кампаний пока нет. Откройте вакансию и нажмите «Продвинуть вакансию».',
+        empty: 'Кампаний пока нет.',
         loadFailed: 'Не удалось загрузить кампании.',
         topupSuccess: 'Оплата получена. Бюджет добавится, когда Stripe подтвердит платёж, обычно за минуту.',
         topupCancel: 'Оплата отменена. Деньги не списаны.',
