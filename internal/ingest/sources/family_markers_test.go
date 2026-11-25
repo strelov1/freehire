@@ -20,7 +20,7 @@ func TestMovedATSAdaptersKeepTheirMarkers(t *testing.T) {
 func TestMovedAggregatorsKeepTheirRegistryStanding(t *testing.T) {
 	reg := All(nil)
 	filterable, aggregators := FilterableProviders(), AggregatorProviders(reg)
-	for _, p := range []string{"adzuna", "eures", "jobnet", "jobtech", "nofluffjobs"} {
+	for _, p := range []string{"adzuna", "eures", "indeed", "jobnet", "jobtech", "nofluffjobs"} {
 		if _, ok := reg[p]; !ok {
 			t.Errorf("All() does not register %s", p)
 		}

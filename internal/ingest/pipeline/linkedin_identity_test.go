@@ -33,3 +33,18 @@ func TestLinkedInIdentityRejectsConflictingNativeID(t *testing.T) {
 		}
 	}
 }
+
+func TestIndeedIdentityIsTheGlobalJobKey(t *testing.T) {
+	for _, keyword := range []string{"software engineer", "golang"} {
+		e := sources.CompanyEntry{Provider: "indeed", Board: keyword}
+		if source, id := jobIdentity(e, sources.Job{ExternalID: "b2d02bb2a34565d6"}); source != "indeed" || id != "b2d02bb2a34565d6" {
+			t.Errorf("keyword %q: identity=%s/%s, want indeed/b2d02bb2a34565d6", keyword, source, id)
+		}
+		if seenScope(e) != "" || seenKey(e, "b2d02bb2a34565d6") != "b2d02bb2a34565d6" {
+			t.Errorf("keyword %q: seen lookup scope %q key %q, want provider-wide by job key", keyword, seenScope(e), seenKey(e, "b2d02bb2a34565d6"))
+		}
+	}
+	if _, id := jobIdentity(sources.CompanyEntry{Provider: "indeed", Board: "golang"}, sources.Job{ExternalID: "not-a-key"}); id != "" {
+		t.Errorf("malformed key received writable identity %q", id)
+	}
+}

@@ -152,9 +152,13 @@ const staleCutoff = sources.DefaultSweepGrace
 // unseenWindow). Sharing the telegram rule closed postings the crawl still listed and the
 // next crawl reopened them.
 //
+// indeed belongs here too: its posting page (/viewjob) redirects a signed-out reader to
+// sign-in, so nothing a probe can fetch says live or gone, and a keyword search lists only its
+// 15 newest cards, so a live posting is not listed again once it ages out of them.
+//
 // A prefix, not a list: whatjobs runs one registered provider per country ("whatjobs" for
 // the US, "whatjobs-<cc>" otherwise), so a new market is covered automatically.
-var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna"}
+var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna", "indeed"}
 
 func main() {
 	worker.Main(run)
