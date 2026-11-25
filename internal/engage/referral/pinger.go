@@ -80,9 +80,9 @@ func (p *ChannelPinger) PingReferrer(ctx context.Context, r Recipient, cabinetUR
 
 	if p.email != nil && r.Email != "" && !emailSilenced {
 		var content bytes.Buffer
-		// Trusted template, data escaped in context: a failure here is a template bug,
-		// caught by the golden previews.
-		_ = requestHTML.Execute(&content, cabinetURL)
+		if err := requestHTML.Execute(&content, cabinetURL); err != nil {
+			return fmt.Errorf("referral: render request notice for user %d: %w", r.UserID, err)
+		}
 
 		// GroupActivity, not GroupNews: a referral request is somebody asking THIS person for
 		// something, so declining product news must not switch it off.
