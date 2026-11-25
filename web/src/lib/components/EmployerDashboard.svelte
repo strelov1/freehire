@@ -6,7 +6,6 @@
   import { htmlToMarkdown } from '#lib/htmlToMarkdown.js';
   import { fillEmpty } from '#lib/prefill.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import { EMPLOYMENT_TYPE_OPTIONS, SENIORITY_OPTIONS, WORK_MODE_OPTIONS } from '#lib/facets.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
   import { messages } from './EmployerView.messages';
@@ -20,7 +19,8 @@
     PrefillResult,
   } from '#lib/types.js';
   import { resolve } from '$app/paths';
-  import { Button, ConfirmDialog, Input, TabStrip, cn, tabStripId } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog, Input, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import EmployerVacancyFacets from './EmployerVacancyFacets.svelte';
   import EmployerApplyUrlField from './EmployerApplyUrlField.svelte';
   import CityCombobox from './CityCombobox.svelte';
   import States from './States.svelte';
@@ -61,9 +61,6 @@
       href: resolve('/my/employer/vacancies/applications'),
     },
   ]);
-
-  const selectClass =
-    'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30';
 
   // ── Profile tab ────────────────────────────────────────────────────────
   let tagline = $state(company.tagline ?? '');
@@ -454,33 +451,7 @@
               </div>
               <div class="flex flex-col gap-4 sm:flex-row">
                 {#if !editingSlug}
-                  <label class="flex flex-1 flex-col gap-1">
-                    <span class="text-sm font-medium">{s.fieldWorkMode}</span>
-                    <select bind:value={workMode} class={cn(selectClass, 'w-full')}>
-                      <option value="">—</option>
-                      {#each WORK_MODE_OPTIONS as o (o.value)}
-                        <option value={o.value}>{o.label}</option>
-                      {/each}
-                    </select>
-                  </label>
-                  <label class="flex flex-1 flex-col gap-1">
-                    <span class="text-sm font-medium">{s.fieldEmploymentType}</span>
-                    <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>
-                      <option value="">—</option>
-                      {#each EMPLOYMENT_TYPE_OPTIONS as o (o.value)}
-                        <option value={o.value}>{o.label}</option>
-                      {/each}
-                    </select>
-                  </label>
-                  <label class="flex flex-1 flex-col gap-1">
-                    <span class="text-sm font-medium">{s.fieldSeniority}</span>
-                    <select bind:value={seniority} class={cn(selectClass, 'w-full')}>
-                      <option value="">—</option>
-                      {#each SENIORITY_OPTIONS as o (o.value)}
-                        <option value={o.value}>{o.label}</option>
-                      {/each}
-                    </select>
-                  </label>
+                  <EmployerVacancyFacets bind:workMode bind:employmentType bind:seniority />
                 {/if}
               </div>
               <label class="flex flex-col gap-1">
