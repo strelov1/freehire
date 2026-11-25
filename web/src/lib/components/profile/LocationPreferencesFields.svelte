@@ -6,14 +6,12 @@
   // the caller decides whether that means "buffer until Save" or "write it now".
   import { COUNTRY_OPTIONS, countryLabel, REGION_OPTIONS, WORK_MODE_OPTIONS } from '#lib/facets.js';
   import { searchCities } from '#lib/facetOptions.js';
-  import { api } from '#lib/api.js';
-  import { ComboboxNav } from '#lib/comboboxNav.svelte.js';
   import { buildLocationPreferences } from '#lib/profileLocation.js';
   import type { DerivedLocation, LocationPreferences } from '#lib/types.js';
-  import { Input } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { messages } from './LocationPreferencesFields.messages';
+  import CityCombobox from '../CityCombobox.svelte';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
   import SearchSelect from '../facets/SearchSelect.svelte';
 
@@ -67,19 +65,9 @@
   // — picking a result sets both at once. Mirrors CompanyPicker.svelte's typeahead pattern.
   // svelte-ignore state_referenced_locally
   let baseQuery = $state(baseCity && baseCountry ? `${baseCity}, ${countryLabel(baseCountry)}` : baseCity);
-  let baseResults = $state.raw<{ value: string; country: string; label: string }[]>([]);
-  let baseLoading = $state(false);
-  let baseReqToken = 0;
   // Per instance — ProfileForm and the Location view can both be mounted.
   const baseId = $props.id();
   const baseInputId = `${baseId}-base`;
-  const baseNav = new ComboboxNav({
-    id: baseInputId,
-    items: () => baseResults,
-    loading: () => baseLoading,
-    pick: pickBase,
-  });
-  let baseTimer: ReturnType<typeof setTimeout> | undefined;
 
   function onBaseInput() {
     // Typing invalidates whatever was picked before — half a city/country pair is
@@ -89,45 +77,11 @@
       baseCountry = '';
       emit();
     }
-    baseNav.open = true;
-    baseNav.active = -1;
-    clearTimeout(baseTimer);
-    const q = baseQuery.trim();
-    if (q.length < 2) {
-      baseReqToken++;
-      baseResults = [];
-      baseLoading = false;
-      return;
-    }
-    baseLoading = true;
-    const mine = ++baseReqToken;
-    baseTimer = setTimeout(async () => {
-      try {
-        const rows = await api.searchCities(q);
-        if (mine !== baseReqToken) return;
-        baseResults = rows.map((r) => ({
-          value: r.value,
-          country: r.country,
-          label: `${r.value}, ${countryLabel(r.country)}`,
-        }));
-      } catch {
-        if (mine !== baseReqToken) return;
-        baseResults = [];
-      } finally {
-        if (mine === baseReqToken) {
-          baseLoading = false;
-          baseNav.active = -1;
-        }
-      }
-    }, 250);
   }
 
-  function pickBase(row: { value: string; country: string; label: string }) {
+  function pickBase(row: { value: string; country: string }) {
     baseCity = row.value;
     baseCountry = row.country;
-    baseQuery = row.label;
-    baseNav.close();
-    baseResults = [];
     emit();
   }
 
@@ -223,63 +177,13 @@
        in a single pick — instead of a country dropdown beside a separate city search. -->
   <div class="flex flex-col gap-1.5">
     <label for={baseInputId} class="text-xs font-medium text-muted-foreground">{s.whereBased}</label>
-    <div class="relative">
-      <Input
-        id={baseInputId}
-        bind:value={baseQuery}
-        oninput={onBaseInput}
-        onfocus={() => baseQuery.trim().length >= 2 && (baseNav.open = true)}
-        onblur={() => setTimeout(baseNav.close, 120)}
-        onkeydown={baseNav.onKeydown}
-        placeholder={s.cityOrCountry}
-        autocomplete="off"
-        role="combobox"
-        aria-expanded={baseNav.listOpen}
-        aria-controls={baseNav.listId}
-        aria-autocomplete="list"
-        aria-activedescendant={baseNav.activeDescendant}
-        class="w-full"
-      />
-      {#if baseNav.listOpen}
-        <ul
-          id={baseNav.listId}
-          role="listbox"
-          class="absolute inset-x-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg"
-        >
-          {#if baseLoading && baseResults.length === 0}
-            <li
-              role="option"
-              aria-selected="false"
-              aria-disabled="true"
-              class="px-2 py-1.5 text-sm text-muted-foreground"
-            >
-              {s.searching}
-            </li>
-          {/if}
-          {#each baseResults as row, i (row.value + row.country)}
-            <!-- mousedown (not click) so the pick lands before the input's blur closes the
-                 list; tabindex -1 keeps the rows out of the Tab order. -->
-            <li
-              id={baseNav.optionId(i)}
-              role="option"
-              tabindex="-1"
-              aria-selected={baseNav.active === i}
-              onmouseenter={() => (baseNav.active = i)}
-              onmousedown={(e) => {
-                e.preventDefault();
-                pickBase(row);
-              }}
-              class="flex w-full cursor-pointer items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent {baseNav.active ===
-              i
-                ? 'bg-accent'
-                : ''}"
-            >
-              {row.label}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
+    <CityCombobox
+      id={baseInputId}
+      bind:value={baseQuery}
+      placeholder={s.cityOrCountry}
+      onInput={onBaseInput}
+      onPick={pickBase}
+    />
   </div>
 
   {#if workModes.length === 0}

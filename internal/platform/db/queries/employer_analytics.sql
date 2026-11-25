@@ -9,6 +9,7 @@ ON CONFLICT (job_id, day) DO UPDATE
 SET clicks = daily.clicks + EXCLUDED.clicks;
 
 -- name: GetEmployerVacancyAnalytics :one
+-- Read through jobs_read, so a vacancy the employer deleted (migration 0318) has no report.
 -- Use one UTC window for all three counts. The view rollup processes completed days,
 -- and its (day, job_id) primary key supports one point lookup per day.
 WITH report_window AS (
@@ -25,20 +26,20 @@ SELECT
      WHERE a.job_id = j.id
        AND a.sent_at >= ((w.today - 30)::timestamp AT TIME ZONE 'UTC')
        AND a.sent_at < (w.today::timestamp AT TIME ZONE 'UTC')) AS applications
-FROM public.jobs j
+FROM public.jobs_read j
 CROSS JOIN report_window w
 WHERE j.public_slug = sqlc.arg(public_slug)
-  AND j.source = 'employer' AND NOT j.is_private
-  AND j.created_by IN (SELECT public.active_employer_team(sqlc.arg(actor_id)::bigint));
+  AND j.company_slug = public.active_employer_company(sqlc.arg(actor_id)::bigint)
+  AND NOT j.is_private;
 
 -- name: GetEmployerOwnedJobID :one
--- The job id behind a public slug, only for an employer vacancy the actor's active team owns:
--- the same guard as GetEmployerVacancyAnalytics, so a stranger's slug is indistinguishable
--- from a missing one.
-SELECT j.id FROM public.jobs j
+-- The job id behind a public slug, only for a vacancy of the actor's active company, authored
+-- by its team or collected from another source: the same guard as GetEmployerVacancyAnalytics,
+-- so a stranger's slug is indistinguishable from a missing one.
+SELECT j.id FROM public.jobs_read j
 WHERE j.public_slug = sqlc.arg(public_slug)
-  AND j.source = 'employer' AND NOT j.is_private
-  AND j.created_by IN (SELECT public.active_employer_team(sqlc.arg(actor_id)::bigint));
+  AND j.company_slug = public.active_employer_company(sqlc.arg(actor_id)::bigint)
+  AND NOT j.is_private;
 
 -- name: GetJobOutboundClickStats :many
 -- One job's human outbound clicks in [from_at, to_at), as rows of (dim, key, clicks, visitors).

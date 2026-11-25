@@ -103,7 +103,7 @@ model SubmissionPrefill {
   skills?: string[];
   source?: string;
 
-  /** Set, with every other field empty, when the catalogue already carries the vacancy. */
+  /** Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is then empty; on `/employer/jobs/prefill` they hold the stored vacancy. */
   existing_job_slug?: string;
 }
 
