@@ -12,6 +12,11 @@ func TestDeriveLanguageWorkSkills(t *testing.T) {
 		want        []string
 	}{
 		{"Audio Transcription Adjudicator V2 - Spanish (Spain)", "", []string{"audio-transcription", "spanish"}},
+		{"Audio Transcription Adjudicator V2\u200b- Spanish (Spain)", "", []string{"audio-transcription", "spanish"}},
+		{"AI Video Annotator - Spanish", "", []string{"data-annotation", "spanish"}},
+		{"AI Video QC Annotator - Spanish", "", []string{"data-annotation", "spanish"}},
+		{"AI Video Annotator", "", []string{"data-annotation"}},
+		{"Linguistic AI Auditor - Tamil", "", []string{"linguistic-qa", "tamil"}},
 		{"AI Linguistic Evaluator - Marathi", "", []string{"linguistic-qa", "marathi"}},
 		{"Bengali Audio Transcription QA", "", []string{"audio-transcription", "bengali"}},
 		{"Freelance Translator - Tagalog (Philippines)- Medical Benefits", "Language Pair: English into Tagalog (Philippines)", []string{"tagalog"}},

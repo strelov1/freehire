@@ -1,6 +1,18 @@
 package classify
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
+
+func TestCategoriesPreservesPhraseBoundariesWhenCollapsingSpaces(t *testing.T) {
+	if got := Categories("AI Linguistic  Quality Evaluator - Tamil (Singapore)"); !slices.Contains(got, "qa") {
+		t.Errorf("Categories() = %v, want qa", got)
+	}
+	if got := Categories("Linguistic  \nQuality Evaluator"); slices.Contains(got, "qa") {
+		t.Errorf("Categories() = %v, want no cross-line alias", got)
+	}
+}
 
 func TestLanguageWorkCategory(t *testing.T) {
 	tests := []struct {

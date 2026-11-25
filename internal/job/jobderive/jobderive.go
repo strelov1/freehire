@@ -106,7 +106,7 @@ func Derive(in Input) Derived {
 		// title dictionary supplied the category, the common case since most
 		// sources carry no structured category signal.
 		Skills: unionSkills(in.Skills, skilltag.Parse(in.Description,
-			skilltag.WithAcronymCategory(category), skilltag.WithJobTitle(in.Title))),
+			skilltag.WithAcronymCategory(category), skilltag.WithJobTitle(title))),
 		Seniority:          seniority,
 		Category:           category,
 		IsTech:             isTech,
