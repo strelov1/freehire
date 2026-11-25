@@ -4,11 +4,9 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"log"
-	"net/http"
 	"net/url"
 	"slices"
 	"strings"
@@ -240,10 +238,6 @@ type dualooLD struct {
 	} `json:"hiringOrganization"`
 }
 
-// errDualooNoPosting marks a page that answered 200 without a JobPosting. The site answers a
-// removed posting with a 404, so this is not a "gone" answer and counts as no answer.
-var errDualooNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410); an error is the absence of an answer.
 func (s dualoo) detail(ctx context.Context, p dualooPosting) (Job, bool, error) {
@@ -252,15 +246,15 @@ func (s dualoo) detail(ctx context.Context, p dualooPosting) (Job, bool, error) 
 	}
 	root, err := s.pages.GetHTML(ctx, p.url)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	var ld dualooLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errDualooNoPosting
+		// Not a gone answer: the site answers a removed posting with a 404.
+		return Job{}, false, errNoPosting
 	}
 	job, ok := dualooJob(ld, p)
 	return job, ok, nil

@@ -173,6 +173,7 @@ Deploy order (schema before code, per this repo's `migrate` convention):
    once the backfill and the new code have both landed and been verified in
    production (kept as a separate migration file, not squashed into step 1, so
    the drop is reviewable and reversible independently of the additive step).
+   Done: `0317_drop_dead_columns.sql`.
 
 `resume_structured`/`cv_documents` need no equivalent backfill — see Decisions
 ("self-healing on read").

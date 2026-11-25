@@ -93,15 +93,19 @@ type Hydration struct {
 	Deadline     time.Duration
 }
 
-// nearDeadline reports that the run is inside the margin hydration leaves to the pipeline. A zero
-// margin leaves everything to the run and stops nothing early.
-func (h Hydration) nearDeadline(ctx context.Context) bool {
-	if h.Deadline == 0 {
+// NearDeadline reports that the run is inside the margin a hydrating adapter leaves to the
+// pipeline's own writes. A zero margin leaves everything to the run and stops nothing early.
+// Adapters that keep their own walk (see AGENT-REFERENCE.md, "A crawl that reads nothing of
+// what it listed must fail") call it instead of carrying a copy of the comparison.
+func NearDeadline(ctx context.Context, margin time.Duration) bool {
+	if margin == 0 {
 		return false
 	}
 	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < h.Deadline
+	return ok && time.Until(d) < margin
 }
+
+func (h Hydration) nearDeadline(ctx context.Context) bool { return NearDeadline(ctx, h.Deadline) }
 
 // HydrateNew is the walk every such adapter shares: list, refresh the postings the catalogue
 // already holds, yield body-less the ones the coverage gate condemns, and read up to
@@ -222,6 +226,19 @@ func DetailUnreadable(err error) bool {
 	}
 	return se.Code != http.StatusNotFound && se.Code != http.StatusGone
 }
+
+// IsGone reports whether a failed request is the platform's own answer that the page no
+// longer exists (404 or 410) — the one failure DetailUnreadable does not count as unreadable.
+// An adapter's detail read answers it by yielding the posting as gone, not as an error.
+func IsGone(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone)
+}
+
+// ErrNoPosting marks a page that answered without a JobPosting. It is never the platform's
+// answer that the posting is gone — a taken-down posting answers 404 or 410 (IsGone) — and
+// counts as no answer rather than a removal, so the posting is deferred, never closed.
+var ErrNoPosting = errors.New("page carries no JobPosting")
 
 // UnreadableDetail is the marker a link-only adapter yields in place of a posting whose detail
 // it could not read (see Job.Unreadable). It carries the identity the adapter holds without the

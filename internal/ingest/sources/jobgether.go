@@ -190,7 +190,7 @@ func (s jobgether) detail(ctx context.Context, loc string) (Job, bool, error) {
 	}
 	var p jobgetherPosting
 	if !ldJobPosting(root, &p) {
-		return Job{}, false, errors.New("page carries no JobPosting")
+		return Job{}, false, errNoPosting
 	}
 	title := strings.TrimSpace(p.Title)
 	company := strings.TrimSpace(p.HiringOrganization.Name)

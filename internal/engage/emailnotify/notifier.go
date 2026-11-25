@@ -14,9 +14,10 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mailtpl"
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/job/outboundurl"
 )
 
-var _ notify.Notifier = (*Notifier)(nil)
+var _ notify.Notifier[notify.Message] = (*Notifier)(nil)
 
 // Sender is the email transport: it delivers one Message. *Client (AWS SES)
 // satisfies it in production; tests inject a fake.
@@ -208,9 +209,13 @@ func (n *Notifier) viewAllURL(d notify.Digest) string {
 	return n.jobBaseURL + "/my/notifications/" + strconv.FormatInt(d.NotificationID, 10) + "/jobs?utm_source=email"
 }
 
-// jobURL is the on-platform job page, tagged with an email UTM source. Slugs are
-// our own normalized values, so the URL needs no escaping.
+// jobURL is the job's click redirect to the employer, counted as an email click. A job with no
+// employer destination (direct-apply or private) keeps its page, tagged with an
+// email UTM source. Slugs are our own normalized values, so the URL needs no escaping.
 func (n *Notifier) jobURL(j notify.DigestJob) string {
+	if !j.StaysOnSite {
+		return outboundurl.ApplyURL(j.Slug, outboundurl.SrcEmail)
+	}
 	return n.jobBaseURL + "/jobs/" + j.Slug + "?utm_source=email"
 }
 

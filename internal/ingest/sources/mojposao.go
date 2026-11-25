@@ -3,9 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -303,8 +301,7 @@ func (s mojposao) detail(ctx context.Context, m mojposaoMarket, c mojposaoCard) 
 	}
 	var d mojposaoDetail
 	if err := s.getter(m).GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoDetailPath, c.ID), m.headers(), &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

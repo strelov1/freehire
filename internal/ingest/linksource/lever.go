@@ -1,17 +1,15 @@
 package linksource
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"net/url"
-	"strings"
 
 	"github.com/MoeForge/moego/regexp"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/ingest/sources/ats"
 	"github.com/strelov1/freehire/internal/platform/externalid"
-	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
 // lever resolves Lever-hosted vacancies. Lever is multi-tenant, so a TG link points at an
@@ -54,23 +52,7 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	company, id := m[1], m[2]
 
 	api := fmt.Sprintf("https://api.lever.co/v0/postings/%s/%s?mode=json", company, id)
-	var p struct {
-		ID          string `json:"id"`
-		Text        string `json:"text"`
-		HostedURL   string `json:"hostedUrl"`
-		CreatedAt   int64  `json:"createdAt"`
-		Description string `json:"description"`
-		Additional  string `json:"additional"`
-		Lists       []struct {
-			Text    string `json:"text"`
-			Content string `json:"content"`
-		} `json:"lists"`
-		Categories struct {
-			Location   string `json:"location"`
-			Team       string `json:"team"`
-			Department string `json:"department"`
-		} `json:"categories"`
-	}
+	var p ats.LeverPosting
 	if err := l.http.GetJSON(ctx, api, &p); err != nil {
 		return sources.Job{}, false, err
 	}
@@ -78,29 +60,11 @@ func (l lever) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		return sources.Job{}, false, nil // not a live posting (closed/removed) — skip
 	}
 
-	// Lever splits the body across description + lists (each a heading and its HTML items) +
-	// additional; assemble them into one document, mirroring the ingest adapter.
-	var body strings.Builder
-	body.WriteString(p.Description)
-	for _, list := range p.Lists {
-		if list.Text != "" {
-			body.WriteString("<h3>")
-			body.WriteString(list.Text)
-			body.WriteString("</h3>")
-		}
-		body.WriteString(list.Content)
-	}
-	body.WriteString(p.Additional)
-
-	return sources.Job{
-		ExternalID:  externalid.Namespace(company, p.ID),
-		URL:         p.HostedURL,
-		Title:       p.Text,
-		Company:     sources.HumanizeBoard(company), // the per-posting API carries no company name
-		Location:    p.Categories.Location,
-		Team:        strings.TrimSpace(cmp.Or(strings.TrimSpace(p.Categories.Team), p.Categories.Department)),
-		Description: htmltext.Sanitize(body.String()),
-		Remote:      sources.IsRemote(p.Categories.Location),
-		PostedAt:    sources.ParseEpochMillis(p.CreatedAt),
-	}, true, nil
+	// The posting→Job mapping is shared with the lever board adapter so the two produce
+	// identical facets; only the identity differs (namespaced id, and the company humanized
+	// from the board slug — the per-posting API carries no name).
+	job := ats.MapLeverPosting(p)
+	job.ExternalID = externalid.Namespace(company, p.ID)
+	job.Company = sources.HumanizeBoard(company)
+	return job, true, nil
 }

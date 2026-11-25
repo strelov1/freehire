@@ -30,7 +30,7 @@ func TestNotificationCenter_SingleJobDigestRecordsOneRowWithSlug(t *testing.T) {
 	insertNotifyPendingMatch(t, pool, subID, jobID)
 	insertNotifyPushToken(t, pool, userID, "ExponentPushToken[notif-center-1]")
 
-	router := Router{ChannelPush: NewPushNotifier(queries, &fakePushIntegrationTransport{})}
+	router := Router[Message]{ChannelPush: NewPushNotifier(queries, &fakePushIntegrationTransport{})}
 	runner := New(queries, &fakeSearcher{}, router, DefaultConfig())
 
 	stats, err := runner.Run(ctx)
@@ -73,7 +73,7 @@ func TestNotificationCenter_MultiJobDigestRecordsRowWithoutSlug(t *testing.T) {
 	insertNotifyPendingMatch(t, pool, subID, job2)
 	insertNotifyPushToken(t, pool, userID, "ExponentPushToken[notif-center-2]")
 
-	router := Router{ChannelPush: NewPushNotifier(queries, &fakePushIntegrationTransport{})}
+	router := Router[Message]{ChannelPush: NewPushNotifier(queries, &fakePushIntegrationTransport{})}
 	runner := New(queries, &fakeSearcher{}, router, DefaultConfig())
 
 	if _, err := runner.Run(ctx); err != nil {
@@ -116,7 +116,7 @@ func TestNotificationCenter_ThreeChannelsRecordOneRow(t *testing.T) {
 	insertNotifyTelegramLink(t, pool, userID, 424242)
 
 	channels := &fakeNotifier{}
-	router := Router{
+	router := Router[Message]{
 		ChannelPush:     NewPushNotifier(queries, &fakePushIntegrationTransport{}),
 		ChannelEmail:    channels,
 		ChannelTelegram: channels,

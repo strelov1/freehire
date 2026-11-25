@@ -86,7 +86,7 @@ func TestRunNeverLeasesAHeldSubscription(t *testing.T) {
 	before := map[pending]string{quiet: matchXmin(t, pool, quiet.sub, quiet.job), noDevice: matchXmin(t, pool, noDevice.sub, noDevice.job)}
 
 	transport := &fakePushIntegrationTransport{}
-	runner := New(queries, &fakeSearcher{}, Router{ChannelPush: NewPushNotifier(queries, transport)}, DefaultConfig())
+	runner := New(queries, &fakeSearcher{}, Router[Message]{ChannelPush: NewPushNotifier(queries, transport)}, DefaultConfig())
 	// 12:00 UTC is inside 00:00-23:59.
 	runner.now = func() time.Time { return time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC) }
 

@@ -26,16 +26,22 @@ var ErrChannelNotConfigured = errors.New("notify: channel not configured")
 // into it, and the nudge and reminder engines alias it.
 var ErrRecipientGone = errors.New("notify: recipient will not accept messages")
 
-// Router is a Notifier that dispatches to the notifier registered for the
-// subscription's channel, keeping the engine channel-agnostic. A channel with no
-// notifier yields ErrChannelNotConfigured.
-type Router map[string]Notifier
+// Notifier delivers one message to a destination over a channel. It is generic
+// because the three engines carry different payloads — a Message for a digest,
+// a slice for a reminder or nudge batch — and share this Router and the channel
+// wrappers in channels.go.
+type Notifier[M any] interface {
+	Send(ctx context.Context, channel, dest string, m M) error
+}
 
-var _ Notifier = (Router)(nil)
+// Router dispatches a message to the notifier registered for its channel.
+type Router[M any] map[string]Notifier[M]
+
+var _ Notifier[Message] = (Router[Message])(nil)
 
 // Send routes to the notifier registered for channel, or returns
 // ErrChannelNotConfigured when none is.
-func (r Router) Send(ctx context.Context, channel, dest string, m Message) error {
+func (r Router[M]) Send(ctx context.Context, channel, dest string, m M) error {
 	n, ok := r[channel]
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrChannelNotConfigured, channel)

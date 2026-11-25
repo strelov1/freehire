@@ -186,21 +186,17 @@ func (m Message) Total() int {
 // fields are projected from the job's enrichment; a zero SalaryMin/SalaryMax (or
 // empty Currency) means the compensation is unknown and the renderer omits it.
 type DigestJob struct {
-	Title          string
-	Company        string
-	Slug           string
-	URL            string
+	Title   string
+	Company string
+	Slug    string
+	URL     string
+	// StaysOnSite marks a job with no employer destination to redirect to (it takes applications
+	// on freehire itself, or is a user's private job): its link stays the freehire page.
+	StaysOnSite    bool `json:"-"`
 	SalaryMin      int
 	SalaryMax      int
 	SalaryCurrency string
 	SalaryPeriod   string
-}
-
-// Notifier delivers a message over a channel to a destination. The matching engine
-// depends only on this, so a new channel is a new implementation, not a change
-// here. (Telegram resolves dest as a chat_id string; webhook/email as a URL/address.)
-type Notifier interface {
-	Send(ctx context.Context, channel, dest string, m Message) error
 }
 
 // Searcher is the search backend the matcher runs filters against. *search.Client
@@ -353,14 +349,14 @@ func (s Stats) MatchingCollapsed() bool {
 type Runner struct {
 	store    Store
 	searcher Searcher
-	notifier Notifier
+	notifier Notifier[Message]
 	cfg      Config
 	now      func() time.Time
 	ads      adConfig
 }
 
 // New builds a Runner.
-func New(store Store, searcher Searcher, notifier Notifier, cfg Config) *Runner {
+func New(store Store, searcher Searcher, notifier Notifier[Message], cfg Config) *Runner {
 	return &Runner{store: store, searcher: searcher, notifier: notifier, cfg: cfg, now: time.Now}
 }
 

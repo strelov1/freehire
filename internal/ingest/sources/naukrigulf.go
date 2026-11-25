@@ -292,8 +292,7 @@ type naukrigulfDetail struct {
 func (s naukrigulf) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	var d naukrigulfDetail
 	if err := s.get(ctx, fmt.Sprintf(naukrigulfDetailURL, url.PathEscape(base.ExternalID)), &d); err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

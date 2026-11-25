@@ -295,8 +295,7 @@ var arcStrongRun = regexp.MustCompile(`(?s)<strong>(\s*)(.*?)(\s*)</strong>`)
 func (s arc) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	root, final, err := s.http.GetHTMLResolved(ctx, base.URL)
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err

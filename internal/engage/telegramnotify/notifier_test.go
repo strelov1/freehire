@@ -35,13 +35,13 @@ func TestNotifier_Render(t *testing.T) {
 	if !strings.Contains(got, "Go &amp; &lt;remote&gt;") {
 		t.Errorf("saved-search name not HTML-escaped: %q", got)
 	}
-	// Line: a bullet whose escaped title links to the freehire job page (trailing
-	// slash trimmed) tagged with the telegram UTM, then " — Company · salary".
-	if want := `• <a href="https://freehire.me/jobs/go-dev-acme?utm_source=telegram-bot">Go Dev &lt;x&gt;</a> — Acme · $130K—$170K / year`; !strings.Contains(got, want) {
+	// Line: a bullet whose escaped title links to the click redirect (trailing
+	// slash trimmed) counted as a telegram click, then " — Company · salary".
+	if want := `• <a href="https://freehire.me/api/v1/go/go-dev-acme?src=telegram">Go Dev &lt;x&gt;</a> — Acme · $130K—$170K / year`; !strings.Contains(got, want) {
 		t.Errorf("line missing %q in: %q", want, got)
 	}
 	// A job with no company/salary omits those suffixes but still renders the link.
-	if want := `• <a href="https://freehire.me/jobs/rustacean-foo?utm_source=telegram-bot">Rustacean</a>` + "\n"; !strings.Contains(got, want) {
+	if want := `• <a href="https://freehire.me/api/v1/go/rustacean-foo?src=telegram">Rustacean</a>` + "\n"; !strings.Contains(got, want) {
 		t.Errorf("company/salary-less line wrong: %q", got)
 	}
 	if strings.Contains(got, " — ·") || strings.Count(got, "·") != 1 {
@@ -401,5 +401,14 @@ func TestNotifier_RenderFoldsAlertsThatDoNotFit(t *testing.T) {
 	}
 	if !strings.Contains(got, "more job alerts</a>") || !strings.Contains(got, "/my/notifications\">") {
 		t.Errorf("want a folded closing line for the alerts that did not fit:\n%s", got[len(got)-300:])
+	}
+}
+
+// A job with no employer destination (direct-apply or private) keeps the
+// freehire page.
+func TestNotifier_PageOnlyJobKeepsItsPage(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	if got, want := n.applyURL(notify.DigestJob{Slug: "native-acme", StaysOnSite: true}), "https://freehire.me/jobs/native-acme?utm_source=telegram-bot"; got != want {
+		t.Errorf("applyURL = %q, want %q", got, want)
 	}
 }

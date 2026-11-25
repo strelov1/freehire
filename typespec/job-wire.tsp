@@ -1,12 +1,20 @@
+import "@typespec/openapi";
+
+using TypeSpec.OpenAPI;
+
 namespace Freehire;
 
-// The wire shapes the operations pass through as `unknown`: the job (internal/job/jobview,
-// shared with the MCP tools), the facet distribution and the company detail. Typing them in
-// an operation would make ogen build them, so no operation names these models. They
-// describe the answers for readers: web/scripts/gen-api-docs.mjs puts them under `data` in
-// the public schema at web/static/openapi.yaml (the ChatGPT Actions schema).
+// The wire shapes the job operations answer with: the job (internal/job/jobview, shared
+// with the MCP tools), the facet distribution and the company detail. The models are the
+// contract — the API reference, the generated clients and Schemathesis all read them — but
+// the handlers keep writing them with encoding/json (`x-raw-json`: ogen receives the type as
+// raw JSON, so apigen still holds jx.Raw and the response bytes do not move).
 
-/** One posting, as every job endpoint serves it. */
+/**
+ * One posting, as every job endpoint serves it. TestJobSchemaCoversWireShape
+ * (internal/job/jobview) fails when jobview.Job serves a key this model lacks.
+ */
+@extension("x-raw-json", true)
 model Job {
   /** Stable public identifier. The freehire page is https://freehire.me/jobs/{public_slug}. */
   public_slug: string;
@@ -43,6 +51,12 @@ model Job {
 
   /** The source's own identifier for the posting. */
   external_id?: string;
+
+  /**
+   * The original posting when `url` points at a separately verified application
+   * destination. Absent when both links are the same.
+   */
+  source_url?: string;
 
   /** Source-stated last application day, inclusive. Absent when the source states no deadline. */
   application_deadline?: plainDate;
@@ -121,6 +135,13 @@ model Job {
   engagement?: string[];
 
   /**
+   * How many people reported that the company screens with an AI interviewer. Absent at
+   * zero, so "no reports" is a missing field rather than a zero a badge could render.
+   */
+  @minValue(0)
+  ai_interview_reports?: integer;
+
+  /**
    * Present and `true` only when the posting's ATS provider is one freehire's auto-apply
    * feature can currently attempt to fill and submit for. Absent otherwise — a best-effort
    * provider-eligibility signal, never a guarantee of successful submission.
@@ -179,6 +200,75 @@ model Job {
   applied_count?: integer;
   upvote_count?: integer;
   downvote_count?: integer;
+
+  /**
+   * True when the company has an approved employee referrer. Served by `getJob` only;
+   * absent on every list and search row.
+   */
+  referral_available?: boolean;
+
+  /**
+   * True when a recruiter-contact lookup can run for the posting: the feature is configured
+   * and the company has a website on record. Served by `getJob` only.
+   */
+  recruiter_contacts_available?: boolean;
+
+  /**
+   * The caller's own auto-apply status for the posting: `queued` (live, undecided),
+   * `failed` (given up: dead-lettered, or parked for missing form data) or `declined`
+   * (the candidate's permanent decision). Served by `getJob` to a signed-in caller with
+   * an attempt; absent for everyone else.
+   */
+  auto_apply_status?: "queued" | "failed" | "declined";
+}
+
+/**
+ * The listing card of a posting: what a list row draws, without the description. Served
+ * only inside `TrackedJob` (`/me/tracking`), from internal/job/jobview's `Card` — a
+ * narrower projection than `Job`, not a subset of its shape: `seniority` and
+ * `employment_type` sit at the top level here, not under `enrichment`. TestJobSchemaCoversWireShape
+ * (internal/job/jobview) fails when `jobview.Card` serves a key this model lacks.
+ */
+@extension("x-raw-json", true)
+model JobCard {
+  public_slug: string;
+  title: string;
+  company: string;
+
+  /** Source-stated last application day (`YYYY-MM-DD`), inclusive. */
+  application_deadline?: plainDate;
+
+  /** Always present: when the posting closed, `null` while it is open. */
+  closed_at: utcDateTime | null;
+
+  /** The posting's own location line, verbatim. */
+  location?: string;
+
+  /** The stated facets of the tag row; each absent when the posting does not state it. */
+  work_mode?: string;
+  seniority?: string;
+  employment_type?: string;
+
+  countries?: string[];
+  regions?: string[];
+
+  /** The row's skills and collections, and the line under the title: the enrichment's
+   * summary, or the opening of the description with tags stripped, cut server-side to
+   * about 220 characters. These three and `ghost` are dropped by `?compact=1` (the Kanban
+   * board's read). */
+  skills?: string[];
+  collections?: string[];
+  blurb?: string;
+
+  /** How many people reported that the company screens with an AI interviewer; absent at zero. */
+  @minValue(0)
+  ai_interview_reports?: integer;
+
+  /** The effective posting date: the stated date, or the row's creation when the source gave none. */
+  posted_at?: utcDateTime;
+
+  /** The ghost signal, computed at read time; absent when there is nothing to say. */
+  ghost?: JobGhost;
 }
 
 /**
@@ -208,6 +298,19 @@ model JobEnrichment {
   posting_language?: string;
   company_type?: string;
   company_size?: string;
+
+  /**
+   * Requirements the posting states (at most 30, each at most 200 characters): the
+   * model's list, or the deterministic extractor's when the model has not reached the
+   * posting. `priority` is `required` or `preferred`.
+   */
+  requirements?: JobRequirement[];
+}
+
+/** One requirement the posting states. */
+model JobRequirement {
+  text: string;
+  priority: "required" | "preferred";
 }
 
 /**

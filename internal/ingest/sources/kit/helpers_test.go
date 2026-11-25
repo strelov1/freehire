@@ -60,6 +60,21 @@ func TestDetailUnreadable(t *testing.T) {
 	}
 }
 
+// IsGone is DetailUnreadable's complement on a *StatusError: the same cases, read for the
+// platform's answer that the page is gone.
+func TestIsGone(t *testing.T) {
+	for _, code := range []int{404, 410} {
+		if !IsGone(&StatusError{Code: code}) || !IsGone(fmt.Errorf("detail: %w", &StatusError{Code: code})) {
+			t.Errorf("IsGone(status %d) = false, want true", code)
+		}
+	}
+	for _, err := range []error{nil, &StatusError{Code: 403}, &StatusError{Code: 500}, errors.New("dial tcp: i/o timeout")} {
+		if IsGone(err) {
+			t.Errorf("IsGone(%v) = true, want false", err)
+		}
+	}
+}
+
 func TestCollapseSpace(t *testing.T) {
 	if got := CollapseSpace("  Senior \n\t Engineer  "); got != "Senior Engineer" {
 		t.Errorf("CollapseSpace = %q", got)

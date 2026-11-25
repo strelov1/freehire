@@ -175,7 +175,7 @@ func (s clearedjobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ext
 	picked := hydrationLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
 	var answered, outOfTime atomic.Int64
 	read := fetchDetails(picked, clearedjobsDetailWorkers, func(p clearedjobsPosting) (Job, bool) {
-		if s.nearDeadline(ctx) {
+		if nearDeadline(ctx, s.deadlineMargin) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
@@ -199,13 +199,6 @@ func (s clearedjobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ext
 		log.Printf("clearedjobs: %d new postings past this run's bound of %d, deferred to later runs", deferred, len(picked))
 	}
 	return append(jobs, read...), nil
-}
-
-// nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
-// the pipeline's own writes.
-func (s clearedjobs) nearDeadline(ctx context.Context) bool {
-	d, ok := ctx.Deadline()
-	return ok && time.Until(d) < s.deadlineMargin
 }
 
 // list returns every posting the sitemap and the newest-postings page name, newest (highest id)
@@ -306,11 +299,6 @@ type clearedjobsLD struct {
 	} `json:"hiringOrganization"`
 }
 
-// errClearedjobsNoPosting marks a page that answered without a JobPosting. It is not the site's
-// answer that the posting is gone — a taken-down posting answers 410 — and a challenge page
-// answers without one too, so it counts as no answer.
-var errClearedjobsNoPosting = errors.New("page carries no JobPosting")
-
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410) or carries no usable posting; an error is the absence of an answer.
 func (s clearedjobs) detail(ctx context.Context, p clearedjobsPosting) (Job, bool, error) {
@@ -325,14 +313,15 @@ func (s clearedjobs) detail(ctx context.Context, p clearedjobsPosting) (Job, boo
 		return nil
 	})
 	if err != nil {
-		var se *StatusError
-		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
+		if isGone(err) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
 	}
 	if !found {
-		return Job{}, false, errClearedjobsNoPosting
+		// Not a gone answer: a taken-down posting answers 410, and a challenge page answers without
+		// one too.
+		return Job{}, false, errNoPosting
 	}
 	job, ok := clearedjobsJob(ld, p)
 	return job, ok, nil

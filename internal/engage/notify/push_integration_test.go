@@ -150,7 +150,7 @@ func TestPushDelivery_UserWithRegisteredDeviceIsDelivered(t *testing.T) {
 	insertNotifyPushToken(t, pool, userID, "ExponentPushToken[has-device]")
 
 	transport := &fakePushIntegrationTransport{}
-	router := Router{ChannelPush: NewPushNotifier(queries, transport)}
+	router := Router[Message]{ChannelPush: NewPushNotifier(queries, transport)}
 	runner := New(queries, &fakeSearcher{}, router, DefaultConfig())
 
 	stats, err := runner.Run(ctx)
@@ -187,7 +187,7 @@ func TestPushDelivery_UserWithNoDeviceSoftSkips(t *testing.T) {
 	// soft-skip rather than dead-letter.
 
 	transport := &fakePushIntegrationTransport{}
-	router := Router{ChannelPush: NewPushNotifier(queries, transport)}
+	router := Router[Message]{ChannelPush: NewPushNotifier(queries, transport)}
 	runner := New(queries, &fakeSearcher{}, router, DefaultConfig())
 
 	stats, err := runner.Run(ctx)

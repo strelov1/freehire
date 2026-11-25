@@ -28,15 +28,13 @@ WHERE u.id = $1;
 
 -- name: ClearUserResume :exec
 -- Clear the user's résumé pointer (after deleting the object from storage), any
--- cached ATS review, the derived CV embedding (no CV → no recommendations), the
--- derived structured résumé (the structure must not outlive the CV it describes), and
+-- cached ATS review, the derived structured résumé (the structure must not outlive the CV it describes), and
 -- the geography derived from that structure (which must not outlive it either — a
 -- country left behind here would keep answering "where is this candidate" from a CV
 -- that no longer exists). Candidate contacts are intentionally kept: they are
 -- owner-edited identity, not an extract artifact.
 UPDATE users
 SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
-    resume_embedding = NULL, resume_embedding_model = NULL,
     resume_structured = NULL, resume_structured_model = NULL,
     resume_structured_uploaded_at = NULL,
     resume_countries = NULL, resume_regions = NULL, resume_cities = NULL,

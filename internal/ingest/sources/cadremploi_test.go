@@ -187,8 +187,8 @@ func TestCadremploiPageWithoutPostingIsNoAnswer(t *testing.T) {
 			t.Errorf("a challenge page was read as a posting: %+v", j)
 		}
 	}
-	if _, _, err := s.detail(context.Background(), cadremploiPosting{id: "156588566186949459", url: cadremploiBaseURL + "/emploi/detail_offre?offreId=156588566186949459"}); !errors.Is(err, errCadremploiNoPosting) {
-		t.Errorf("detail error = %v, want errCadremploiNoPosting", err)
+	if _, _, err := s.detail(context.Background(), cadremploiPosting{id: "156588566186949459", url: cadremploiBaseURL + "/emploi/detail_offre?offreId=156588566186949459"}); !errors.Is(err, errNoPosting) {
+		t.Errorf("detail error = %v, want errNoPosting", err)
 	}
 }
 
