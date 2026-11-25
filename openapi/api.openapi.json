@@ -16,6 +16,14 @@
       "name": "Booking links"
     },
     {
+      "name": "Catalogue export",
+      "description": "Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /data/jobs/{slug}` (full `description` and `url` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /data/jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence."
+    },
+    {
+      "name": "Data plan",
+      "description": "Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`."
+    },
+    {
       "name": "Jobs",
       "description": "Public, unauthenticated reads. Jobs are returned in one wire shape (addressed by `public_slug`, never an internal id) shared by the list, detail, company, and search responses. Closed postings are excluded from open lists and search. The detail endpoint keeps serving them. Interview prep can serve a closed posting to the account tracking it at the interview stage."
     },
@@ -161,14 +169,6 @@
     },
     {
       "name": "Watchlist"
-    },
-    {
-      "name": "Catalogue export",
-      "description": "Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /data/jobs/{slug}` (full `description` and `url` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /data/jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence."
-    },
-    {
-      "name": "Data plan",
-      "description": "Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`."
     },
     {
       "name": "Change webhooks",
