@@ -304,7 +304,7 @@ export interface Job {
   application_deadline?: string;
   /**
    * Team is the department or team the source ATS files the posting under (Greenhouse,
-   * Lever and Ashby state one), verbatim. Omitted when the source states none.
+   * Lever, Ashby, Gem, Recruitee and Employment Hero state one), verbatim. Omitted when the source states none.
    */
   team?: string;
   /**
