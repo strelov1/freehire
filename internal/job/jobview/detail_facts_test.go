@@ -19,8 +19,15 @@ func TestDetailFacts_LiftsEmploymentTypeSalaryAndSite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
+	// The fixture's enrichment carries employment_type too, so read it off the root object.
+	var root map[string]any
+	if err := json.Unmarshal(raw, &root); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if root["employment_type"] != "contract" {
+		t.Errorf("top-level employment_type = %v, want contract", root["employment_type"])
+	}
 	for _, want := range []string{
-		`"employment_type":"contract"`,
 		`"salary":{"min":1500,"max":2500,"currency":"USD","period":"month"}`,
 		`"company_website":"https://hirehangar.com"`,
 		`"company_logo":"https://logo.freehire.me/Hire%20Hangar?domain=hirehangar.com"`,
