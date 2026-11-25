@@ -318,6 +318,16 @@ export interface Job {
    */
   apply_questions?: number /* int */;
   /**
+   * ExperienceLevel, Category, EducationLevel and Remote are top-level mirrors of facts
+   * already served (enrichment.seniority, .category, .education_level, and work_mode), for
+   * consumers that read a flat posting; EmploymentType below is the fourth. Remote is a
+   * pointer: false ("hybrid"/"onsite") is an answer, absent means work_mode is unknown.
+   */
+  experience_level?: string;
+  category?: string;
+  education_level?: string;
+  remote?: boolean;
+  /**
    * Sponsored marks a search hit placed as a paid slot (never an organic one), and
    * SponsoredURL is the click-tracking redirect the "Sponsored" card must link to
    * (/api/v1/sponsored/go/<token>); URL stays the organic link for crawlers. Both are set
@@ -387,9 +397,9 @@ export interface Job {
    */
   auto_apply_status?: string;
   /**
-   * EmploymentType and Salary repeat enrichment.employment_type and enrichment.salary_*
-   * at the top level of the detail, where a reader of one posting looks for them first.
-   * Detail handler only (DetailFacts); list rows and search documents keep the nested copy.
+   * EmploymentType repeats enrichment.employment_type at the top level of every row
+   * (FromDomain). Salary repeats enrichment.salary_* on the detail only (DetailFacts);
+   * list rows and search documents keep the nested pay range.
    */
   employment_type?: string;
   salary?: Salary;

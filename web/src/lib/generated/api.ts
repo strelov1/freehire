@@ -9294,6 +9294,17 @@ export interface components {
              *     database may omit it.
              */
             apply_questions?: number;
+            /** @description Mirror of `enrichment.seniority`. Absent when unknown. */
+            experience_level?: string;
+            /** @description Mirror of `enrichment.category`. Absent when unknown. */
+            category?: string;
+            /** @description Mirror of `enrichment.education_level`. Absent when unknown. */
+            education_level?: string;
+            /**
+             * @description `true` when `work_mode` is `remote`, `false` for `hybrid` and `onsite`. Absent when
+             *     `work_mode` is.
+             */
+            remote?: boolean;
             /**
              * @description True only on a search hit placed as a paid slot (never on an organic hit). Render a
              *     visible "Sponsored" label, and link the card to `sponsored_url`.
@@ -9306,7 +9317,7 @@ export interface components {
             sponsored_url?: string;
             /**
              * @description The employment type, the same value as `enrichment.employment_type`, lifted to the top
-             *     level. Served by `getJob` only; absent when not known.
+             *     level for flat readers. Absent when not known.
              */
             employment_type?: string;
             /** @description The pay range, the same values as `enrichment.salary_*`. Served by `getJob` only; absent when no bound is stated. */

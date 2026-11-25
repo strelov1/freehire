@@ -161,6 +161,21 @@ model Job {
   @minValue(0)
   apply_questions?: integer;
 
+  /** Mirror of `enrichment.seniority`. Absent when unknown. */
+  experience_level?: string;
+
+  /** Mirror of `enrichment.category`. Absent when unknown. */
+  category?: string;
+
+  /** Mirror of `enrichment.education_level`. Absent when unknown. */
+  education_level?: string;
+
+  /**
+   * `true` when `work_mode` is `remote`, `false` for `hybrid` and `onsite`. Absent when
+   * `work_mode` is.
+   */
+  remote?: boolean;
+
   /**
    * True only on a search hit placed as a paid slot (never on an organic hit). Render a
    * visible "Sponsored" label, and link the card to `sponsored_url`.
@@ -175,7 +190,7 @@ model Job {
 
   /**
    * The employment type, the same value as `enrichment.employment_type`, lifted to the top
-   * level. Served by `getJob` only; absent when not known.
+   * level for flat readers. Absent when not known.
    */
   employment_type?: string;
 
