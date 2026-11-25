@@ -33,6 +33,9 @@ type employerHandlers struct {
 	// candidate. Its routes then answer 501 (employer_applications.go).
 	inbox    *directapply.Inbox
 	messages *directapply.ApplicationMessages
+	// prefiller reads a pasted vacancy link for the publish form; nil in tests that do not
+	// exercise it.
+	prefiller *jobPrefiller
 	// adminOnly lives here, not in the shared middleware: revoke is the only admin-gated route.
 	adminOnly fiber.Handler
 }
@@ -65,6 +68,7 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Get("/employer/jobs/:slug/analytics", mw.cookie, employerNoStore, contract)
 	api.Get("/employer/jobs/:slug/outbound-clicks", mw.cookie, employerNoStore, contract)
 	api.Post("/employer/jobs", mw.cookie, contract)
+	api.Post("/employer/jobs/prefill", mw.cookie, contract)
 	api.Patch("/employer/jobs/:slug", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/reopen", mw.cookie, contract)

@@ -1271,6 +1271,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employer/jobs/prefill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in the catalogue returns its stored fields. */
+        post: operations["prefillEmployerVacancy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employer/jobs/{slug}": {
         parameters: {
             query?: never;
@@ -11112,7 +11129,7 @@ export interface components {
             seniority?: string;
             skills?: string[];
             source?: string;
-            /** @description Set, with every other field empty, when the catalogue already carries the vacancy. */
+            /** @description Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is then empty; on `/employer/jobs/prefill` they hold the stored vacancy. */
             existing_job_slug?: string;
         };
         /** @description A vacancy to submit. url, title and company are required; the service refuses a body without them with a 400. */
@@ -14635,6 +14652,46 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["Job"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    prefillEmployerVacancy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "url": "https://example.com/jobs/123"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PrefillRequest"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SubmissionPrefill"];
                     };
                 };
             };
