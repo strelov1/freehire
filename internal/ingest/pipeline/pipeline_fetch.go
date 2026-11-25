@@ -91,10 +91,10 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 }
 
 // seenScope is the board argument of the seen-set lookup: the namespace the provider's rows are
-// stored under. LinkedIn rows are keyed by the global posting id, not board:id (jobIdentity), so
-// no board pattern matches them and the lookup is provider-wide.
+// stored under. LinkedIn and Indeed rows are keyed by the global posting id, not board:id
+// (jobIdentity), so no board pattern matches them and the lookup is provider-wide.
 func seenScope(e sources.CompanyEntry) string {
-	if e.Provider == "linkedin" {
+	if e.Provider == "linkedin" || e.Provider == "indeed" {
 		return ""
 	}
 	return e.Board

@@ -110,13 +110,18 @@ func (r Runner) completeListingFingerprint(ctx context.Context, src sources.Sour
 // the upsert (via normalizeJob) and the stream-driven close derive identity here, so a
 // removal closes exactly the row a live emit would have upserted.
 func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID string) {
-	if e.Provider == "linkedin" {
+	switch e.Provider {
+	case "linkedin":
 		// LinkedIn posting IDs are global; search keywords and regions only select
 		// discovery slices and must not create another identity for the same job.
 		if id := sources.LinkedInPostingID(j.URL); id != "" && id == j.ExternalID {
 			return e.Provider, id
 		}
 		return e.Provider, ""
+	case "indeed":
+		// An Indeed job key is global the same way: one posting two keyword searches find is
+		// one row.
+		return e.Provider, sources.IndeedJobKey(j.ExternalID)
 	}
 	return e.Provider, externalid.Namespace(e.Board, j.ExternalID)
 }

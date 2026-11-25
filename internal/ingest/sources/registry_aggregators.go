@@ -119,6 +119,9 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		// and partner-board feeds across EU/EFTA countries. Board-based (board =
 		// country), aggregator-marked (see eures.go for the confirmed re-listing evidence).
 		aggregators.NewEures(c),
+		// Indeed: a keyword search per board, read as a signed-out visitor through the crawl
+		// host's Scrapling browser (scraplingProviders); see aggregators/indeed.go.
+		aggregators.NewIndeed(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
 		NewAmazon(c),
@@ -415,3 +418,7 @@ func aggregatorSources(c HTTPClient, seekNetworkDetail *seekDetailNetwork) []Sou
 		singleUseConnSource(c, NewProfession),
 	}
 }
+
+// IndeedJobKey re-exports the Indeed adapter's identity rule for the pipeline, which stores an
+// Indeed posting under its global job key rather than a board-namespaced id.
+var IndeedJobKey = aggregators.IndeedJobKey

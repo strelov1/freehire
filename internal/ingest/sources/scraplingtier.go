@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/ingest/sources/aggregators"
 	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
 
@@ -34,6 +35,11 @@ type scraplingProvider struct {
 // It is applied after the proxy and fingerprint tiers and overrides them for these providers;
 // without SCRAPLING_FETCH_URL nothing here runs and each keeps the transport those tiers gave it.
 var scraplingProviders = map[string]scraplingProvider{
+	// Indeed answers plain and fingerprinted HTTP with Cloudflare's "Security Check" and the
+	// proxy pool with 401; the crawl host's own browser is served the search page (2026-11-24).
+	"indeed": {scraplingRoute{mode: scraplingfetch.ModeBrowser, proxy: false}, func(f *Client) Source {
+		return aggregators.NewIndeed(f)
+	}},
 	// The public CharityJob listing and posting paths are served to the crawl-host browser.
 	"charityjob": {scraplingRoute{mode: scraplingfetch.ModeBrowser}, func(f *Client) Source {
 		return pacedCharityJob(f)
