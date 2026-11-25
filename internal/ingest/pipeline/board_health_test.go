@@ -117,9 +117,9 @@ func (f *fakeHealth) CooledBoards(_ context.Context, provider string, limit int)
 // ClearCooldowns drops the provider's cooldown entries (so the gate then treats those
 // boards as eligible) and records the call.
 func (f *fakeHealth) ClearCooldowns(_ context.Context, provider string) (int, error) {
-	f.cleared = append(f.cleared, provider)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.cleared = append(f.cleared, provider)
 	n := 0
 	for k := range f.cooldowns {
 		if p, _, ok := strings.Cut(k, "/"); ok && p == provider {
