@@ -100,7 +100,13 @@ func TestBroadcastCandidates_DataPlanAudience(t *testing.T) {
 		t.Errorf("count = %d, want 1", count)
 	}
 
-	// An API-plan campaign reaches the API-plan holder and not the Data one.
+	// An API-plan campaign reaches the API-plan holder and not a Data one, even one that holds
+	// a live API plan too.
+	both := insertUser(t, pool, "both-plans@example.test")
+	verifyEmail(t, pool, both)
+	if _, err := pool.Exec(ctx, `UPDATE users SET api_until_stripe = now() + interval '30 days', api_data_until_stripe = now() + interval '30 days' WHERE id = $1`, both); err != nil {
+		t.Fatal(err)
+	}
 	rows, err = q.ListBroadcastCandidates(ctx, ListBroadcastCandidatesParams{Campaign: "api-test", ApiPlanOnly: true, MaxRows: 100})
 	if err != nil {
 		t.Fatalf("ListBroadcastCandidates: %v", err)
