@@ -38,3 +38,8 @@ store, tracking, the eligibility gate and the Inngest publisher, all already on
 `assistantHandlers`. Moving them into `internal/application` would mean re-plumbing five
 dependencies for no second consumer outside this package; the transport-free method is the
 seam, and both the route and the tool call it.
+
+> Superseded: the enqueue sequence now lives in `internal/application/autoapply` as
+> `Enqueuer.Start`, with typed refusals that the handler maps (`autoApplyEnqueueError`) for
+> both the route and the tool. The ports take the five dependencies as they are; nothing was
+> re-plumbed.
