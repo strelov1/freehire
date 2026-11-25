@@ -180,7 +180,10 @@ jobs:
           # -race: the coverage counters were already atomic, but nothing watched the code's own
           # shared state. Unit tests only: the integration shards are the long pole and would
           # need their own race cleanup first.
-          go test -race ./... -coverprofile=coverage/unit.out -covermode=atomic
+          # dict/classify runs without -race: it is pure regex code with no shared state, and
+          # the detector slows its Unicode tables past the 10m test timeout (1s → 400-600s).
+          go test -race $(go list ./... | grep -vx github.com/strelov1/freehire/internal/dict/classify) -coverprofile=coverage/unit.out -covermode=atomic
+          go test ./internal/dict/classify -coverprofile=coverage/unit-classify.out -covermode=atomic
           (cd tools && go test ./...)
 
       # Separate the largest packages, command workers and user-facing services.
