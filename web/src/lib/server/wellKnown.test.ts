@@ -28,6 +28,24 @@ describe('proxyDiscoveryDocument', () => {
     expect(res.status).toBe(404);
   });
 
+  // The OAuth metadata routes, which the deleted wellKnownProxy.ts used to serve: the same
+  // JSON content type it hard-coded, and the same 404 pass-through as every other document
+  // rather than the 503 it answered.
+  it('serves the OAuth metadata as JSON and passes its 404 through too', async () => {
+    const type = 'application/json; charset=utf-8';
+    const served = await proxyDiscoveryDocument(
+      upstream(200, '{"issuer":"https://x"}'),
+      '/api/v1/oauth/metadata/protected-resource',
+      type,
+    );
+    expect(served.headers.get('content-type')).toBe(type);
+    expect(served.headers.get('cache-control')).toBe('public, max-age=3600');
+
+    const missing = await proxyDiscoveryDocument(upstream(404), '/api/v1/oauth/metadata/protected-resource', type);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
   it('refuses with 503 when the backend fails', async () => {
     const failing = vi.fn(async () => {
       throw new Error('timeout');
