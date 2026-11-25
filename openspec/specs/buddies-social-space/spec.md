@@ -42,3 +42,10 @@ The feed SHALL show two or more applications by the same member on the same day 
 - **WHEN** a member applied to four postings yesterday
 - **THEN** the feed shows one post under "Yesterday" listing the four postings
 
+### Requirement: Network shows who applied where you did
+The network page SHALL list the companies the viewer shares with the members shown, each with how many of those members applied there, most first, linking to the company.
+
+#### Scenario: Three members share GitLab
+- **WHEN** three of the members listed applied to GitLab, as the viewer did, within the last 90 days
+- **THEN** GitLab is listed first with 3 members
+
