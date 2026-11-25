@@ -73,7 +73,7 @@ func TestFreeAlertsAreDailyAndPaidKeepTheirFasterPreference(t *testing.T) {
 			insertNotifyPendingMatch(t, pool, sub, job)
 
 			transport := &fakePushIntegrationTransport{}
-			runner := New(queries, &fakeSearcher{}, Router{ChannelPush: NewPushNotifier(queries, transport)}, DefaultConfig())
+			runner := New(queries, &fakeSearcher{}, Router[Message]{ChannelPush: NewPushNotifier(queries, transport)}, DefaultConfig())
 			runner.now = func() time.Time { return tc.now }
 			if _, err := runner.Run(ctx); err != nil {
 				t.Fatalf("Run: %v", err)

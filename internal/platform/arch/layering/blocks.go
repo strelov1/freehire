@@ -190,6 +190,10 @@ var blocks = map[string][]string{
 		// mentorship/busysync is named in full, per the auth/oauth convention; its sync worker
 		// reaches into application (gmailsync) as mentorship does for calendar-write consent.
 		"mentorship/busysync",
+		// batchnotify is the Telegram and email wrapper the nudge and reminder engines share.
+		// It sits above telegramnotify/emailnotify (which implement notify.Notifier) and so
+		// cannot live in notify itself, which they import.
+		"batchnotify",
 		"applicationdigest", "inboxdigest", "interviewscheduling", "notify", "nudge", "onboarding", "problemreport",
 		// ga4mp sends one sign-up event to Google Analytics, imports only the standard library,
 		// and is called by the auth handlers; a growth measurement, so engage.

@@ -36,7 +36,7 @@ const (
 const requestTimeout = 10 * time.Second
 
 // Compile-time guarantee that Notifier satisfies the channel abstraction.
-var _ notify.Notifier = (*Notifier)(nil)
+var _ notify.Notifier[notify.Message] = (*Notifier)(nil)
 
 // Notifier delivers a digest as a plain HTTP POST to dest (the account's
 // webhook URL, see recipient() in internal/engage/notify).

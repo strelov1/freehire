@@ -151,7 +151,7 @@ func TestDeliver_RecordNotificationFailureDoesNotBlockDelivery(t *testing.T) {
 func TestRecipient_Push_SoftSkipsWithNoRegisteredDevice(t *testing.T) {
 	info := db.GetNudgeForDeliveryRow{UserID: 42, HasPushDevice: false}
 
-	dest, ok := recipient(notify.ChannelPush, info)
+	dest, ok := notify.Recipient(notify.ChannelPush, recipientInfo(info))
 	if ok {
 		t.Fatal("ok = true, want false (no registered device)")
 	}

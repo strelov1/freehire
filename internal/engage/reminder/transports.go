@@ -2,12 +2,12 @@ package reminder
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"html"
 	"html/template"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/engage/batchnotify"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mailtpl"
@@ -15,38 +15,24 @@ import (
 	"github.com/strelov1/freehire/internal/engage/telegramnotify"
 )
 
-// senderName is the display name on these mails: the product, not a person.
-const senderName = "freehire"
-
-// Compile-time proof the transports satisfy the engine's Notifier seam.
-var (
-	_ Notifier = (*TelegramNotifier)(nil)
-	_ Notifier = (*EmailNotifier)(nil)
-)
-
 // TelegramNotifier delivers an account's due reminders as one Telegram HTML
 // message. Links point at on-platform job pages, never a login-gated source URL.
-type TelegramNotifier struct {
-	client     *telegramnotify.Client
-	jobBaseURL string
-}
+// The send itself is the shared batchnotify.Telegram; this package owns only the
+// copy. A 403 is translated to ErrRecipientGone so the runner unlinks the chat
+// instead of retrying; the digest and nudge notifiers do the same.
+type TelegramNotifier = batchnotify.Telegram[ReminderMessage]
 
 // NewTelegramNotifier builds a TelegramNotifier sending through client, with the
 // job link rooted at jobBaseURL (the frontend origin).
 func NewTelegramNotifier(client *telegramnotify.Client, jobBaseURL string) *TelegramNotifier {
-	return &TelegramNotifier{client: client, jobBaseURL: strings.TrimRight(jobBaseURL, "/")}
+	return batchnotify.NewTelegram(client, newTelegramCopy(jobBaseURL).render)
 }
 
-// Send renders the batch and posts it to the chat encoded in dest. The channel
-// argument is ignored — this notifier only serves the telegram channel.
-//
-// A 403 is translated to ErrRecipientGone so the runner unlinks the chat instead
-// of retrying; the digest and nudge notifiers do the same.
-func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest string, ms []ReminderMessage) error {
-	if len(ms) == 0 {
-		return nil
-	}
-	return n.client.SendToChat(ctx, dest, n.render(ms))
+// telegramCopy is the reminder copy for the Telegram channel.
+type telegramCopy struct{ jobBaseURL string }
+
+func newTelegramCopy(jobBaseURL string) telegramCopy {
+	return telegramCopy{jobBaseURL: strings.TrimRight(jobBaseURL, "/")}
 }
 
 // render builds the HTML body. Titles and companies are user/source data and are
@@ -55,7 +41,7 @@ func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest string, ms [
 // A batch becomes a list bounded by notify.ListLimit and by Telegram's
 // MaxMessageLen: lines are added only while the next one plus the widest possible
 // tail fits, because an oversized body is rejected and every retry re-fails.
-func (n *TelegramNotifier) render(ms []ReminderMessage) string {
+func (n telegramCopy) render(ms []ReminderMessage) string {
 	if len(ms) == 1 {
 		return n.renderOne(ms[0])
 	}
@@ -86,14 +72,14 @@ func (n *TelegramNotifier) render(ms []ReminderMessage) string {
 
 // renderOne is the single-reminder body. Its link carries no UTM tag; a batch of
 // one must stay identical to the pre-grouping message.
-func (n *TelegramNotifier) renderOne(m ReminderMessage) string {
+func (n telegramCopy) renderOne(m ReminderMessage) string {
 	return fmt.Sprintf(
 		"⏰ Reminder: you saved <b>%s</b> at <b>%s</b>.\nStill interested? <a href=\"%s\">Open the job →</a>",
 		html.EscapeString(m.JobTitle), html.EscapeString(m.Company), n.jobBaseURL+"/jobs/"+m.Slug)
 }
 
 // jobLine renders one saved job as a bullet linking to its freehire page.
-func (n *TelegramNotifier) jobLine(m ReminderMessage) string {
+func (n telegramCopy) jobLine(m ReminderMessage) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "• <a href=%q>%s</a>", n.jobURL(m), html.EscapeString(m.JobTitle))
 	if m.Company != "" {
@@ -105,7 +91,7 @@ func (n *TelegramNotifier) jobLine(m ReminderMessage) string {
 
 // moreLine is the overflow tail, or "" when nothing is omitted. It links to the
 // saved-jobs list because the notification id does not exist until after the send.
-func (n *TelegramNotifier) moreLine(more int) string {
+func (n telegramCopy) moreLine(more int) string {
 	if more <= 0 {
 		return ""
 	}
@@ -113,35 +99,35 @@ func (n *TelegramNotifier) moreLine(more int) string {
 }
 
 // savedURL is the saved-jobs list, for jobs the batch could not itemize.
-func (n *TelegramNotifier) savedURL() string { return n.jobBaseURL + "/my/activity" }
+func (n telegramCopy) savedURL() string { return n.jobBaseURL + "/my/activity" }
 
 // jobURL is the on-platform freehire job page, tagged with a telegram UTM source.
 // Slugs are our own normalized values, so the URL needs no escaping.
-func (n *TelegramNotifier) jobURL(m ReminderMessage) string {
+func (n telegramCopy) jobURL(m ReminderMessage) string {
 	return n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=telegram-bot"
 }
 
 // EmailNotifier delivers an account's due reminders as one email. Links stay
-// on-platform.
-type EmailNotifier struct {
-	sender     emailnotify.Sender
-	from       string
-	jobBaseURL string
-	layout     *mailtpl.Layout
-	links      *emailprefs.Links
-}
+// on-platform. The send itself is the shared batchnotify.Email; this package owns
+// only the copy.
+type EmailNotifier = batchnotify.Email[ReminderMessage]
 
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
 // the job link rooted at jobBaseURL and unsubscribe links signed by links.
 func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string, links *emailprefs.Links) *EmailNotifier {
+	return batchnotify.NewEmail(sender, from, links, "reminder",
+		func(ms []ReminderMessage) int64 { return ms[0].UserID }, newEmailCopy(jobBaseURL).render)
+}
+
+// emailCopy is the reminder copy for the email channel.
+type emailCopy struct {
+	jobBaseURL string
+	layout     *mailtpl.Layout
+}
+
+func newEmailCopy(jobBaseURL string) emailCopy {
 	base := strings.TrimRight(jobBaseURL, "/")
-	return &EmailNotifier{
-		sender:     sender,
-		from:       emailnotify.From(senderName, from),
-		jobBaseURL: base,
-		layout:     mailtpl.New(base),
-		links:      links,
-	}
+	return emailCopy{jobBaseURL: base, layout: mailtpl.New(base)}
 }
 
 // emailData is what the body template renders. html/template escapes every field,
@@ -174,30 +160,22 @@ var batchTemplate = template.Must(mailtpl.Partials().New("reminder-batch").Parse
 {{if gt .More 0}}{{template "muted" (printf "+ %d more not listed here." .More)}}{{end}}
 {{template "button" .CTA}}`))
 
-// Send renders the batch and delivers it to the address in dest.
-func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, ms []ReminderMessage) error {
-	if len(ms) == 0 {
-		return nil
-	}
-	// The engine groups by user, so the first message names the recipient.
-	unsubscribe, err := n.links.For(ms[0].UserID, emailprefs.GroupActivity)
-	if err != nil {
-		return fmt.Errorf("reminder: unsubscribe link for user %d: %w", ms[0].UserID, err)
-	}
+// render renders the batch: a single reminder keeps its own mail, several share one.
+func (n emailCopy) render(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	if len(ms) == 1 {
-		return n.sendOne(ctx, dest, ms[0], unsubscribe)
+		return n.renderOne(ms[0], unsubscribe)
 	}
-	return n.sendBatch(ctx, dest, ms, unsubscribe)
+	return n.renderBatch(ms, unsubscribe)
 }
 
-// sendOne is the single-reminder mail, kept as it was before grouping.
-func (n *EmailNotifier) sendOne(ctx context.Context, dest string, m ReminderMessage, unsubscribe string) error {
+// renderOne is the single-reminder mail, kept as it was before grouping.
+func (n emailCopy) renderOne(m ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	url := n.jobURL(m)
 	var content bytes.Buffer
-	if err := oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
-		return err
+	if err = oneTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
+		return "", "", "", err
 	}
-	htmlBody := n.layout.Render(mailtpl.Body{
+	htmlBody = n.layout.Render(mailtpl.Body{
 		Preheader:      "A job you saved is still open",
 		Heading:        "Still interested?",
 		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped both fields in context
@@ -205,17 +183,14 @@ func (n *EmailNotifier) sendOne(ctx context.Context, dest string, m ReminderMess
 		UnsubscribeURL: unsubscribe,
 	})
 
-	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
-		m.JobTitle, m.Company, url) + emailprefs.TextFooter(unsubscribe)
-	subject := fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
-	return emailnotify.SoftSkipIfPaused(n.sender.Send(ctx, emailnotify.Message{
-		From: n.from, To: dest, Subject: subject, HTML: htmlBody, Text: textBody,
-		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
-	}), ErrChannelNotConfigured)
+	textBody = fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
+		m.JobTitle, m.Company, url)
+	subject = fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
+	return subject, htmlBody, textBody, nil
 }
 
-// sendBatch is the multi-reminder mail: digest-style job rows, one reason line, one action.
-func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []ReminderMessage, unsubscribe string) error {
+// renderBatch is the multi-reminder mail: digest-style job rows, one reason line, one action.
+func (n emailCopy) renderBatch(ms []ReminderMessage, unsubscribe string) (subject, htmlBody, textBody string, err error) {
 	shown, more := notify.Listed(ms)
 	rows := make([]mailtpl.Job, 0, len(shown))
 	for _, m := range shown {
@@ -224,13 +199,13 @@ func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []Reminde
 	reason := "You saved these jobs and haven’t applied yet."
 
 	var content bytes.Buffer
-	if err := batchTemplate.Execute(&content, emailData{
+	if err = batchTemplate.Execute(&content, emailData{
 		Jobs: rows, More: more, Reason: reason,
 		CTA: mailtpl.Link{URL: n.savedURL(), Label: "Open your saved jobs"},
 	}); err != nil {
-		return err
+		return "", "", "", err
 	}
-	htmlBody := n.layout.Render(mailtpl.Body{
+	htmlBody = n.layout.Render(mailtpl.Body{
 		Preheader:      fmt.Sprintf("%d jobs you saved are still open", len(ms)),
 		Heading:        fmt.Sprintf("%d saved jobs are still open", len(ms)),
 		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped every field in context
@@ -238,20 +213,17 @@ func (n *EmailNotifier) sendBatch(ctx context.Context, dest string, ms []Reminde
 		UnsubscribeURL: unsubscribe,
 	})
 
-	subject := fmt.Sprintf("Reminder: %d saved jobs", len(ms))
-	return emailnotify.SoftSkipIfPaused(n.sender.Send(ctx, emailnotify.Message{
-		From: n.from, To: dest, Subject: subject, HTML: htmlBody,
-		Text:  n.renderBatchText(shown, more, reason) + emailprefs.TextFooter(unsubscribe),
-		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
-	}), ErrChannelNotConfigured)
+	subject = fmt.Sprintf("Reminder: %d saved jobs", len(ms))
+	textBody = n.renderBatchText(shown, more, reason)
+	return subject, htmlBody, textBody, nil
 }
 
 // savedURL is the saved-jobs list, tagged with an email UTM source.
-func (n *EmailNotifier) savedURL() string { return n.jobBaseURL + "/my/activity?utm_source=email" }
+func (n emailCopy) savedURL() string { return n.jobBaseURL + "/my/activity?utm_source=email" }
 
 // renderBatchText builds the plain-text alternative for a batch, mirroring the HTML
 // body so non-HTML clients (and spam scorers) see the same content.
-func (n *EmailNotifier) renderBatchText(shown []ReminderMessage, more int, reason string) string {
+func (n emailCopy) renderBatchText(shown []ReminderMessage, more int, reason string) string {
 	var b strings.Builder
 	b.WriteString(reason + "\n\n")
 	for _, m := range shown {
@@ -269,6 +241,6 @@ func (n *EmailNotifier) renderBatchText(shown []ReminderMessage, more int, reaso
 
 // jobURL is the on-platform freehire job page, tagged with an email UTM source so
 // the channel's traffic is attributable.
-func (n *EmailNotifier) jobURL(m ReminderMessage) string {
+func (n emailCopy) jobURL(m ReminderMessage) string {
 	return n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=email"
 }
