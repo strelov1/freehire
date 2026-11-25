@@ -11,50 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const listPaywallHitsByFeature = `-- name: ListPaywallHitsByFeature :many
-SELECT h.feature, h.user_id, j.public_slug AS job_slug, h.day, h.created_at
-FROM paywall_hits h
-LEFT JOIN jobs j ON j.id = h.job_id
-WHERE h.created_at >= now() - make_interval(days => $1::int)
-ORDER BY h.feature, h.created_at DESC, h.id DESC
-`
-
-type ListPaywallHitsByFeatureRow struct {
-	Feature   string             `json:"feature"`
-	UserID    int64              `json:"user_id"`
-	JobSlug   pgtype.Text        `json:"job_slug"`
-	Day       pgtype.Date        `json:"day"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// Who hit which paywall in the last window_days, by feature and newest first: the operator
-// report. job_slug is NULL when the action concerned no vacancy, or the vacancy is gone.
-func (q *Queries) ListPaywallHitsByFeature(ctx context.Context, windowDays int32) ([]ListPaywallHitsByFeatureRow, error) {
-	rows, err := q.db.Query(ctx, listPaywallHitsByFeature, windowDays)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPaywallHitsByFeatureRow{}
-	for rows.Next() {
-		var i ListPaywallHitsByFeatureRow
-		if err := rows.Scan(
-			&i.Feature,
-			&i.UserID,
-			&i.JobSlug,
-			&i.Day,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const recordPaywallHit = `-- name: RecordPaywallHit :exec
 
 INSERT INTO paywall_hits (user_id, feature, job_id, day)

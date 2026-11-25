@@ -23,12 +23,3 @@ VALUES (
     sqlc.arg(day)
 )
 ON CONFLICT (user_id, feature, COALESCE(job_id, 0), day) DO NOTHING;
-
--- name: ListPaywallHitsByFeature :many
--- Who hit which paywall in the last window_days, by feature and newest first: the operator
--- report. job_slug is NULL when the action concerned no vacancy, or the vacancy is gone.
-SELECT h.feature, h.user_id, j.public_slug AS job_slug, h.day, h.created_at
-FROM paywall_hits h
-LEFT JOIN jobs j ON j.id = h.job_id
-WHERE h.created_at >= now() - make_interval(days => sqlc.arg(window_days)::int)
-ORDER BY h.feature, h.created_at DESC, h.id DESC;
