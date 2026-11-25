@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -29,7 +30,9 @@ type torreFake struct {
 	t     *testing.T
 	files map[string]string // URL → fixture name
 	errs  map[string]error
-	got   []string
+	// mu guards got, which the detail workers append to concurrently.
+	mu  sync.Mutex
+	got []string
 }
 
 func newTorreFake(t *testing.T) *torreFake {
@@ -47,7 +50,9 @@ func newTorreFake(t *testing.T) *torreFake {
 }
 
 func (f *torreFake) read(url string) ([]byte, error) {
+	f.mu.Lock()
 	f.got = append(f.got, url)
+	f.mu.Unlock()
 	if err, ok := f.errs[url]; ok {
 		return nil, err
 	}
