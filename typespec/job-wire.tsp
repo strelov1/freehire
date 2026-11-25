@@ -24,16 +24,16 @@ model Job {
   company_slug?: string;
 
   /**
-   * The employer's own application URL, as published. Match pages and deduplicate on this;
-   * do not send people to it. Empty when `direct_apply` is true: that vacancy has no page
-   * elsewhere.
+   * The employer's own application URL, as published. Served only by the Data plan's
+   * `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
+   * Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
    */
   url?: string;
 
   /**
    * Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)
-   * that counts the click and forwards to `url`. Set `src` to the surface handing the link out:
-   * `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is.
+   * that counts the click and forwards to the employer's page. Set `src` to the surface handing the link out:
+   * `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent for a vacancy taking applications on freehire.
    */
   apply_url?: string;
 
@@ -54,7 +54,8 @@ model Job {
 
   /**
    * The original posting when `url` points at a separately verified application
-   * destination. Absent when both links are the same.
+   * destination. Absent when both links are the same, and outside the Data plan's
+   * `/data/jobs` endpoints.
    */
   source_url?: string;
 

@@ -485,7 +485,7 @@
           >
             Apply <ExternalLink class="size-4" />
           </a>
-        {:else if current.url}
+        {:else if current.apply_url || current.url}
           <!-- eslint-disable svelte/no-navigation-without-resolve -- the employer's own site, not an internal route -->
           <a
             href={current.apply_url || current.url}

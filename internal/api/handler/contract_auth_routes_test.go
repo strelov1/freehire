@@ -181,6 +181,7 @@ func mountRecordingRoutes(t *testing.T) *fiber.App {
 		optionalCookie: gate("optionalCookie"),
 		moderator:      gate("moderator"),
 		paidAI:         func(plan.Feature) fiber.Handler { return gate("paidAI") },
+		dataPlan:       gate("dataPlan"),
 	}
 	contract := func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusTeapot) }
 

@@ -86,3 +86,17 @@ func TestPrivateJobKeepsDirectLink(t *testing.T) {
 		t.Fatalf("url=%q apply_url=%q: the redirect refuses private jobs, so the owner keeps the direct link", got.URL, got.ApplyURL)
 	}
 }
+
+func TestHideOriginKeepsTheOnlyLinkOfAJobWithoutARedirect(t *testing.T) {
+	// A private job read by its owner has no click redirect: its URL is the only way out.
+	private := jobview.Job{URL: "https://boards.example/1"}
+	private.HideOrigin()
+	if private.URL == "" {
+		t.Error("a job without apply_url lost its only link")
+	}
+	public := jobview.Job{URL: "https://boards.example/1", SourceURL: "https://boards.example/p/1", ApplyURL: "https://freehire.me/api/v1/go/a?src=web"}
+	public.HideOrigin()
+	if public.URL != "" || public.SourceURL != "" || public.ApplyURL == "" {
+		t.Errorf("got %+v, want url and source_url dropped, apply_url kept", public)
+	}
+}

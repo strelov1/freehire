@@ -45,7 +45,7 @@
 {#if !e.summary && !job.description?.trim()}
   <p class="text-sm text-muted-foreground">
     The posting didn't include a description.
-    {#if job.url && !job.direct_apply}
+    {#if (job.apply_url || job.url) && !job.direct_apply}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
         href={job.source_url || job.apply_url || job.url}
         target="_blank"

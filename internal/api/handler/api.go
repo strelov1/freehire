@@ -78,4 +78,6 @@ type middleware struct {
 	// unreadable plan is a 503. The binding (user_llm.go) refuses a model client without the mark
 	// this leaves, so a route that forgets it fails its first test.
 	paidAI func(plan.Feature) fiber.Handler
+	// dataPlan admits only a Data plan holder (data_jobs.go), mounted after key.
+	dataPlan fiber.Handler
 }

@@ -49,6 +49,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Plan](#plan)
 - [Plans](#plans)
 - [Catalogue export](#catalogue-export)
+- [Data plan](#data-plan)
 - [Change webhooks](#change-webhooks)
 - [Speech](#speech)
 
@@ -88,7 +89,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -6913,7 +6916,7 @@ curl "https://freehire.me/api/v1/plans"
 
 ## Catalogue export
 
-Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /jobs/{slug}` (full `description` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence.
+Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /data/jobs/{slug}` (full `description` and `url` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /data/jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence.
 
 ### `GET /catalogue/snapshots`
 
@@ -6944,6 +6947,56 @@ curl "https://freehire.me/api/v1/catalogue/snapshots" -H "Authorization: Bearer 
     }
   ]
 }
+```
+
+## Data plan
+
+Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, the employer's own page, and `source_url` where the application goes elsewhere. Every other job read leaves both out and links through `apply_url`, a freehire redirect. The Data plan's 6,000-request window applies on these endpoints only, counted apart from the 1,200-request window it holds on every other endpoint. Session or API key; any other account gets `403`.
+
+### `GET /data/jobs/search`
+
+**Auth:** Session or API key
+
+Search open jobs with their original links (Data plan).
+
+The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
+each job's `url` (the employer's own posting) and `source_url` where it differs. The public
+job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
+account gets `403`. Never cached: the answer is private to the plan holder.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `q` | string | no | Full-text query, as on `/jobs/search`. (e.g. `golang`) |
+| `q_fields` | string | no | As on `/jobs/search`. (e.g. `title`) |
+| `q_prefix` | string | no | As on `/jobs/search`. (e.g. `true`) |
+| `sort` | string | no | As on `/jobs/search`. (e.g. `posted_at`) |
+| `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
+| `limit` | string | no | Page size, 1–100. (e.g. `100`) |
+| `offset` | string | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
+
+```bash
+curl "https://freehire.me/api/v1/data/jobs/search" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `GET /data/jobs/{slug}`
+
+**Auth:** Session or API key
+
+A single job with its original links (Data plan).
+
+The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
+Data plan: any other account gets `403`.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `slug` | string | yes | The job `public_slug`. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+```bash
+curl "https://freehire.me/api/v1/data/jobs/<slug>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ## Change webhooks

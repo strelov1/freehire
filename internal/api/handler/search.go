@@ -187,7 +187,8 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 	private := match != nil ||
 		(userID != 0 && !seenIgnored && wantsParam(vals, hideSeenParam)) ||
 		(userID != 0 && !appliedIgnored && wantsParam(vals, hideAppliedCompaniesParam))
-	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match, true)
+	data := isDataPlanRequest(ctx)
+	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match, !data)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search temporarily unavailable")
 	}
@@ -211,7 +212,8 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 	}
 	h.attachGhost(ctx, res.Hits, views)
 	h.markSponsored(res.Hits, views, out.ads)
-	data, err := marshalRaws(views)
+	hideOrigins(ctx, views)
+	raws, err := marshalRaws(views)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +228,8 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 		meta.TotalIsLowerBound = apigen.NewOptBool(true)
 	}
 	return &apigen.JobSearchPageHeaders{
-		CacheControl: optString(privateCacheControl(private || out.private)),
-		Response:     apigen.JobSearchPage{Data: data, Meta: meta},
+		CacheControl: optString(privateCacheControl(data || private || out.private)),
+		Response:     apigen.JobSearchPage{Data: raws, Meta: meta},
 	}, nil
 }
 

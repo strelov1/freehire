@@ -64,6 +64,9 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	api.Get("/jobs/:slug/copies", contract)
 	api.Get("/jobs/:slug/apply-form", contract)
 	api.Get("/jobs/:slug/skill-fit", contract)
+	// The Data plan's reads with the employer links the public ones hide (data_jobs.go).
+	api.Get("/data/jobs/search", mw.key, mw.dataPlan, contract)
+	api.Get("/data/jobs/:slug", mw.key, mw.dataPlan, contract)
 	registerInterviewPrep(api, mw, contract)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
@@ -101,6 +104,7 @@ func (h *jobsHandlers) ListJobs(ctx context.Context, _ apigen.ListJobsParams) (*
 		return nil, err
 	}
 	h.attachGhostToRows(ctx, jobs, views)
+	hideOrigins(ctx, views)
 
 	data, err := marshalRaws(views)
 	if err != nil {
@@ -240,6 +244,9 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 		}
 	}
 
+	if !isDataPlanRequest(ctx) {
+		view.HideOrigin()
+	}
 	raw, err := json.Marshal(view)
 	if err != nil {
 		return nil, err
