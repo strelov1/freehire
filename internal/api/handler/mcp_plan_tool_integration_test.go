@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration test for get_plan over the signed-in MCP server
-// (openspec/changes/mcp-plan-standing): what an agent reads agrees with what GET /me/plan
+// (openspec/changes/archive/2026-11-25-mcp-plan-standing): what an agent reads agrees with what GET /me/plan
 // answers on the wire, for a paid account with usage and for a free one.
 package handler
 

@@ -81,7 +81,7 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   logs what would have been refused and enqueues anyway), mirroring `internal/ai/plan`'s
   `PLAN_ENFORCE` rollout — a false positive here has an immediate, visible cost for a
   paying candidate, so it earns the same observe-then-enforce caution
-  (`openspec/changes/add-auto-apply-eligibility-gate`). This is entirely upstream of this
+  (`openspec/changes/archive/2026-09-06-add-auto-apply-eligibility-gate`). This is entirely upstream of this
   package: `Run`/`process` never see a row this gate refused, and a row it lets through
   with missing evidence on either side is not evidence of ineligibility — the gate,
   like the evaluator it calls, never manufactures a blocker from an absent field.
@@ -96,5 +96,5 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
 guess, not a fault) — only a dead letter or a run that failed everything counts.
 
 What populates `auto_apply_queue` is out of scope for this package entirely — see
-`openspec/changes/auto-apply-worker/design.md`. `Run` only ever claims what is already
+`openspec/changes/archive/2026-11-25-auto-apply-worker/design.md`. `Run` only ever claims what is already
 there.

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 // plugin, no DOM in vitest.config.ts).
 //
 // This is the desktop-only profile menu split off HeaderMenu's consolidated
-// dropdown (openspec/changes/split-header-profile-menu). What is worth pinning:
+// dropdown (openspec/changes/archive/2026-09-16-split-header-profile-menu). What is worth pinning:
 // the panel's item order (Log out must land where it is reachable without
 // scrolling — the whole reason for the split), that it reuses the same
 // overlay-coordination and close behaviors HeaderMenu already has, and that a

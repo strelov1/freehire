@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration tests for the candidate-facing auto-apply trigger
-// (openspec/changes/auto-apply-submit-trigger): the enqueue endpoint's eligibility gates,
+// (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger): the enqueue endpoint's eligibility gates,
 // its dedup/decline-is-terminal contract, the event publish, and the job detail response's
 // own auto-apply status overlay.
 // Run with: go test -tags=integration ./internal/api/handler/

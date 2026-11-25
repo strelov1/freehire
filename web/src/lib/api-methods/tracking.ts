@@ -95,7 +95,7 @@ export function trackingApi({ call, request, requestData }: Http) {
   }
 
   /** Start an auto-apply attempt for the current user and this job
-   *  (openspec/changes/auto-apply-submit-trigger). Idempotent for a live, undecided
+   *  (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger). Idempotent for a live, undecided
    *  attempt; rejects with an ApiError (402 not PRO, 409 no base CV or already declined,
    *  400 not a Greenhouse posting) whose `message` is the caller-facing reason. */
   function autoApplyJob(slug: string): Promise<{ status: string }> {
@@ -105,7 +105,7 @@ export function trackingApi({ call, request, requestData }: Http) {
   }
 
   /** Record the candidate's approve/decline decision on a tailored-but-not-yet-reviewed
-   *  auto-apply queue entry (openspec/changes/auto-apply-review-tracking, calling the
+   *  auto-apply queue entry (openspec/changes/archive/2026-09-05-auto-apply-review-tracking, calling the
    *  endpoint auto-apply-tailored-resume already built). Rejects with an ApiError (404
    *  foreign/missing entry, 409 no tailored CV yet or already reviewed) whose `message` is
    *  the caller-facing reason. */

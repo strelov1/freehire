@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration tests for GetTrackedApplication's new auto_apply field
-// (openspec/changes/auto-apply-review-tracking): the tracker drawer's own read of a job's
+// (openspec/changes/archive/2026-09-05-auto-apply-review-tracking): the tracker drawer's own read of a job's
 // live auto-apply attempt.
 // Run with: go test -tags=integration ./internal/api/handler/
 package handler

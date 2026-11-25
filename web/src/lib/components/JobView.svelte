@@ -188,7 +188,7 @@
     showReport = true;
   }
 
-  // Auto-apply (openspec/changes/auto-apply-submit-trigger): Pro (or above) and one of the
+  // Auto-apply (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger): Pro (or above) and one of the
   // ATS providers auto-apply can queue against — both are gated on VISIBILITY (the plan JobAutoApply reads),
   // not just what happens on click.
   const autoApplyQueue = new JobAutoApply(() => job);
@@ -303,7 +303,7 @@
   {/if}
 {/snippet}
 
-<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside the apply link, not a
+<!-- Auto-apply (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger): beside the apply link, not a
      replacement for it — auto-apply still goes through the same ATS in the end, this
      button only starts the tailor-then-review sequence. What it SAYS comes from the CTA
      plan; how loud it is does not vary, the brand fill belonging to `Tailor my CV`. The
