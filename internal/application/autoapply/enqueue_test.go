@@ -10,7 +10,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/job/jobview"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // A charge that fails for a reason other than a refusal still blocks the action — an
@@ -18,7 +17,7 @@ import (
 // allowance refusal: that is an answer for the candidate, while this is a fault to report.
 func TestCharge_FaultRefusesAndKeepsItsCause(t *testing.T) {
 	cause := errors.New("failed to acquire connection from pool")
-	e := &Enqueuer{Plans: failingAllowance{err: cause}}
+	e := &Enqueuer{Plans: &meter{err: cause}}
 
 	err := e.charge(context.Background(), 7, 42)
 	if err == nil {
@@ -37,7 +36,7 @@ func TestCharge_FaultRefusesAndKeepsItsCause(t *testing.T) {
 // thing the 402 body renders.
 func TestCharge_SpentAllowanceIsAnAllowanceRefusal(t *testing.T) {
 	d := plan.Decision{Feature: plan.FeatureAutoApply, Used: 3, Limit: 3}
-	e := &Enqueuer{Plans: refusingAllowance{decision: d}}
+	e := &Enqueuer{Plans: &meter{err: plan.ErrRefused, decision: d}}
 
 	err := e.charge(context.Background(), 7, 42)
 	var refused *AllowanceRefusal
@@ -59,17 +58,14 @@ func TestCharge_NoMeterRefusesAsUnmetered(t *testing.T) {
 	}
 }
 
-// Without a CV builder nothing can tailor an attempt, so the gate never reaches a read.
+// Without a CV builder nothing can tailor an attempt, so the gate refuses before any read.
 func TestStart_WithoutACVBuilderRefusesBeforeAnyRead(t *testing.T) {
-	e := &Enqueuer{
-		FindJob: func(context.Context, string) (db.Job, error) { return db.Job{ID: 1, Source: "greenhouse"}, nil },
-		Queue:   panicStore{},
+	f := newStart()
+	f.e.BaseCV, f.e.Seeder = nil, nil
+	if got, _ := refusalReason(t, f.start(t)); got != RefusalNoCVBuilder {
+		t.Errorf("reason = %q, want RefusalNoCVBuilder", got)
 	}
-	err := e.Start(context.Background(), 7, "acme-1")
-	var refused *Refusal
-	if !errors.As(err, &refused) || refused.Reason != RefusalNoCVBuilder {
-		t.Fatalf("start without a CV builder = %v, want RefusalNoCVBuilder", err)
-	}
+	f.nothingHappened(t)
 }
 
 // Queueable is the auto_apply_available facet plus an explicit, exact extra. The facet is
@@ -106,6 +102,11 @@ func TestQueueable_IsTheFacetPlusRecruitee(t *testing.T) {
 	if want := []string{"recruitee"}; !slices.Equal(extra, want) {
 		t.Errorf("queueable but not advertised = %v, want exactly %v", extra, want)
 	}
+
+	// QueueableSources enumerates that same set, sorted, for callers that must loop over it.
+	if want := []string{"ashby", "greenhouse", "lever", "recruitee", "workable"}; !slices.Equal(QueueableSources(), want) {
+		t.Errorf("QueueableSources() = %v, want %v", QueueableSources(), want)
+	}
 }
 
 // The overlay's precedence: a decline also sets blocked_at, so it must outrank the
@@ -132,32 +133,4 @@ func TestEntryStatusOf_Precedence(t *testing.T) {
 			}
 		})
 	}
-}
-
-type failingAllowance struct{ err error }
-
-func (f failingAllowance) Consume(context.Context, int64, plan.Feature, string) (plan.Decision, error) {
-	return plan.Decision{}, f.err
-}
-
-type refusingAllowance struct{ decision plan.Decision }
-
-func (r refusingAllowance) Consume(context.Context, int64, plan.Feature, string) (plan.Decision, error) {
-	return r.decision, plan.ErrRefused
-}
-
-// panicStore fails a test that reaches the queue: Start must refuse before any queue read.
-type panicStore struct{}
-
-func (panicStore) GetUserJobApplied(context.Context, db.GetUserJobAppliedParams) (bool, error) {
-	panic("queue read before the CV-builder gate")
-}
-func (panicStore) EnqueueAutoApply(context.Context, db.EnqueueAutoApplyParams) (int64, error) {
-	panic("queue write")
-}
-func (panicStore) GetAutoApplyQueueEntryForJob(context.Context, db.GetAutoApplyQueueEntryForJobParams) (db.GetAutoApplyQueueEntryForJobRow, error) {
-	panic("queue read")
-}
-func (panicStore) GetApplicationStage(context.Context, db.GetApplicationStageParams) (pgtype.Text, error) {
-	panic("queue read")
 }
