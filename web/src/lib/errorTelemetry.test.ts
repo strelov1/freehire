@@ -349,9 +349,32 @@ it('handles Firefox and Safari extension stacks while retaining mixed stacks', (
   expect(capture).not.toHaveBeenCalled();
   const mixed = new Error('mixed');
   mixed.stack =
-    'execute@moz-extension://visitor/content.js:1:2\nrender@https://freehire.test/_app/immutable/chunks/app.js:3:4';
+    'render@https://freehire.test/_app/immutable/chunks/app.js:3:4\nexecute@moz-extension://visitor/content.js:1:2';
   target.dispatchEvent(Object.assign(new Event('error'), { error: mixed }));
   expect(capture).toHaveBeenCalledWith(mixed);
+});
+
+it('drops errors thrown inside an extension wrapper around a DOM method our code called', () => {
+  const capture = vi.fn();
+  const target = new EventTarget();
+  installErrorListeners(target, { capture });
+  // Production stack (2026-11-25): an extension patches appendChild and throws during hydration.
+  const wrapped = new DOMException(
+    "Failed to execute 'appendChild' on 'Node': This node type does not support this method.",
+    'HierarchyRequestError',
+  );
+  wrapped.stack = [
+    "HierarchyRequestError: Failed to execute 'appendChild' on 'Node': This node type does not support this method.",
+    '    at u.proto.<computed> [as appendChild] (chrome-extension://visitor/executors/101.js:1:3567)',
+    '    at wn (https://freehire.test/_app/immutable/chunks/BDwGBI6l.js:1:16908)',
+    '    at oa (https://freehire.test/_app/immutable/chunks/DoJrUSKq.js:11:1736)',
+  ].join('\n');
+  const firefox = new Error('wrapped');
+  firefox.stack =
+    'execute@moz-extension://visitor/content.js:1:2\nrender@https://freehire.test/_app/immutable/chunks/app.js:3:4';
+  for (const error of [wrapped, firefox]) target.dispatchEvent(Object.assign(new Event('error'), { error }));
+  target.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: wrapped }));
+  expect(capture).not.toHaveBeenCalled();
 });
 
 it('drops errors whose every frame is a script injected into the page', () => {
