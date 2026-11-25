@@ -270,7 +270,7 @@ func remoteokUnmojibake(s string) string {
 		if r > 0xFF {
 			return s
 		}
-		b = append(b, byte(r))
+		b = append(b, byte(r)) //nolint:gosec // r <= 0xFF is checked above
 	}
 	if !utf8.Valid(b) {
 		return s
