@@ -254,8 +254,8 @@ func (h *companiesHandlers) ListCompanies(ctx context.Context, params apigen.Lis
 		EmployeeCountMin: empMin,
 		EmployeeCountMax: empMax,
 		Sort:             sort,
-		Limit:            int32(limit),
-		Offset:           int32(offset),
+		Limit:            int32(limit),  //nolint:gosec // bounded by maxLimit
+		Offset:           int32(offset), //nolint:gosec // bounded by maxPageWindow
 	})
 	if err != nil {
 		return nil, err
