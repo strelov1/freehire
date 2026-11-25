@@ -246,9 +246,9 @@ declared version for every package the design system imports as a type.
 
 Install the pinned Betterleaks version with `mise install`. Lefthook scans the staged
 patch and fails if the binary is missing or the scanner reports a finding. CI scans
-the full set of fetched Git refs and the checked-out revision, including changes later
-removed from the tree. Both explicitly load `.betterleaks.toml` and disable provider
-validation and analysis.
+the history of the checked-out revision (the PR merge ref, or main), including changes
+later removed from the tree; other branches are scanned by their own PR runs. Both
+explicitly load `.betterleaks.toml` and disable provider validation and analysis.
 
 CI verifies that the configured scanner detects a planted GitHub token. It selects
 the non-merge commits explicitly and verifies that the scan completed and inspected

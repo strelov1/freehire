@@ -90,14 +90,21 @@ jobs:
           echo 'Canary detected.'
 
       # Betterleaks v2 does not report the number of commits. Pass an explicit
-      # manifest and verify the scan completed and inspected content. Include HEAD
-      # for a detached PR merge checkout. Merge commits are walked to both parents.
+      # manifest and verify the scan completed and inspected content. Merge commits
+      # are walked to both parents.
+      #
+      # HEAD only: the history of what was checked out, not every ref the clone holds.
+      # `fetch-depth: 0` fetches every branch, so `--all` also scanned every OTHER open
+      # branch: one PR's unmerged commit (a scanner config full of sample tokens,
+      # 2026-11-24) failed this job on main and on every unrelated PR. A branch's own
+      # commits are still scanned, by its own PR's run (HEAD is the PR merge ref) and
+      # again on main once merged.
       - name: Scan history
         run: |
           scratch=$(mktemp -d)
           trap 'rm -rf "$scratch"' EXIT
           test "$(git rev-parse --is-shallow-repository)" = false
-          git rev-list --no-merges --all HEAD > "$scratch/commits"
+          git rev-list --no-merges HEAD > "$scratch/commits"
           count=$(wc -l < "$scratch/commits")
           test "$count" -gt 0
           result=0
