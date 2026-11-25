@@ -102,6 +102,8 @@ func TestFromCompany_SiteFromCompanyInfo(t *testing.T) {
 	}{
 		{"website wins", `{"website":" https://gomotive.com ","homepage":"wearemotive.com","linkedin":"https://linkedin.com/company/motive-inc"}`, "https://gomotive.com", "https://linkedin.com/company/motive-inc"},
 		{"homepage fallback", `{"website":"  ","homepage":"acme.example"}`, "acme.example", ""},
+		// The SQL path trims ASCII whitespace only; a no-break space is kept on both paths.
+		{"no-break space kept", "{\"website\":\"\u00a0\",\"homepage\":\"acme.example\",\"linkedin\":\" \u00a0 \"}", "\u00a0", "\u00a0"},
 		{"nothing recorded", `{}`, "", ""},
 		{"malformed blob", `not json`, "", ""},
 		{"no blob", ``, "", ""},

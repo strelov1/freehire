@@ -78,7 +78,7 @@ func FromCompany(c db.Company) CompanyDocument {
 		IndustriesDerived: c.IndustriesDerived,
 		HqCountry:         c.HqCountry.String,
 		Website:           site.website(),
-		LinkedIn:          strings.TrimSpace(site.LinkedIn),
+		LinkedIn:          strings.Trim(site.LinkedIn, siteSpace),
 		JobCount:          c.JobCount,
 		Collections:       c.Collections,
 		Regions:           c.Regions,
@@ -116,12 +116,16 @@ func companySite(info json.RawMessage) companyInfoSite {
 	return s
 }
 
+// siteSpace is the whitespace ListCompanies' SQL trims ('^[ \t\n\v\f\r]+'): ASCII only, so a
+// no-break space survives on both backends. strings.TrimSpace would strip it here alone.
+const siteSpace = " \t\n\v\f\r"
+
 // website mirrors ListCompanies' column: the website, else the homepage, whitespace-trimmed.
 func (s companyInfoSite) website() string {
-	if w := strings.TrimSpace(s.Website); w != "" {
+	if w := strings.Trim(s.Website, siteSpace); w != "" {
 		return w
 	}
-	return strings.TrimSpace(s.Homepage)
+	return strings.Trim(s.Homepage, siteSpace)
 }
 
 // companySettings is the companies index configuration. Ranking is relevance-first so an exact

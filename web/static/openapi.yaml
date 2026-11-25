@@ -2139,6 +2139,9 @@
           },
           {
             "$ref": "#/components/parameters/company.domains"
+          },
+          {
+            "$ref": "#/components/parameters/company.hq_country"
           }
         ],
         "responses": {
@@ -4355,6 +4358,19 @@
         "name": "domains",
         "in": "query",
         "description": "Job-derived domains, aggregated per company: fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other.",
+        "style": "form",
+        "explode": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "company.hq_country": {
+        "name": "hq_country",
+        "in": "query",
+        "description": "Headquarters country: ISO 3166-1 alpha-2 codes, any case — where the company is headquartered, as opposed to `countries` (where its open jobs are).",
         "style": "form",
         "explode": true,
         "schema": {
