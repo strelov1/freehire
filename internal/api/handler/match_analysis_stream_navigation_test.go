@@ -114,7 +114,6 @@ func TestCrossSiteNavigationCannotReachTheFitStream(t *testing.T) {
 
 	paths := []string{
 		"/api/v1/jobs/a-job/match-analysis/stream",
-		"/api/v1/jobs/a-job/fit/stream",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {

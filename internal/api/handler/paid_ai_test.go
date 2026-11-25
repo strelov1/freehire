@@ -88,8 +88,6 @@ type gatedRoute struct {
 // below fails.
 var gatedRoutes = []gatedRoute{
 	{fiber.MethodPost, "/api/v1/jobs/some-job/referral-message/stream", plan.FeatureCoverLetter},
-	{fiber.MethodPost, "/api/v1/jobs/some-job/fit", plan.FeatureFit},
-	{fiber.MethodGet, "/api/v1/jobs/some-job/fit/stream", plan.FeatureFit},
 	{fiber.MethodPost, "/api/v1/jobs/some-job/match-analysis", plan.FeatureFit},
 	{fiber.MethodGet, "/api/v1/jobs/some-job/match-analysis/stream", plan.FeatureFit},
 	{fiber.MethodPost, "/api/v1/assistant/sessions/00000000-0000-0000-0000-000000000001/messages", plan.FeatureAssistant},
@@ -116,7 +114,6 @@ var gatedRoutes = []gatedRoute{
 // (signed in or not) and the search interpretation. They must stay reachable to free, so
 // the gate must never even be asked.
 var openRoutes = []gatedRoute{
-	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/fit"},
 	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/match-analysis"},
 	{method: fiber.MethodGet, path: "/api/v1/jobs/some-job/match"},
 	{method: fiber.MethodGet, path: "/api/v1/me/profile/ats-report"},

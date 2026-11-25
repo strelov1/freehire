@@ -9,8 +9,7 @@ namespace Freehire;
 // The per-job match surfaces: the deterministic skill match, the on-demand LLM fit
 // analysis (cached read and run) and the caller's list of analysed jobs. The run is a paid
 // AI route: the paid gate in front of it answers its own 402 before the contract is reached.
-// Both `…/stream` routes are Server-Sent Events and stay hand-written. The old `/fit` paths
-// are kept as aliases of `/match-analysis`.
+// The `…/stream` route is Server-Sent Events and stays hand-written.
 
 /** A job posting scraped off any page. */
 model FitMatchTextRequest {
@@ -215,28 +214,6 @@ op getMatchAnalysis(/** The job `public_slug`. */ @path slug: string): FitAnalys
 @route("/jobs/{slug}/match-analysis")
 @post
 op runMatchAnalysis(/** The job `public_slug`. */ @path slug: string):
-  | FitAnalysisResponse
-  | {
-      @statusCode _: 402;
-      @body body: FitRefusal;
-    }
-  | Problem;
-
-/** Alias of `getMatchAnalysis`. */
-@useAuth(SessionOrKey)
-@extension("x-audience", "hidden")
-@tag("Fit")
-@route("/jobs/{slug}/fit")
-@get
-op getJobFit(@path slug: string): FitAnalysisResponse | Problem;
-
-/** Alias of `runMatchAnalysis`. */
-@useAuth(SessionOrKey)
-@extension("x-audience", "hidden")
-@tag("Fit")
-@route("/jobs/{slug}/fit")
-@post
-op runJobFit(@path slug: string):
   | FitAnalysisResponse
   | {
       @statusCode _: 402;
