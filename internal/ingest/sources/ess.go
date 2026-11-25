@@ -45,7 +45,7 @@ const (
 	// essUserKey is the 3scale application key the search page itself sends with every request:
 	// public, embedded in the page's own script (ue_dataFor3ScaleApi_userKey), not a credential
 	// issued to us. A rotated key answers every request with an error, which fails the crawl.
-	essUserKey = "9b7dcbe8ec1855d14f0b2ec4f6335a91" // gitleaks:allow — public key served in the site's own JS
+	essUserKey = "9b7dcbe8ec1855d14f0b2ec4f6335a91" // betterleaks:allow — public key served in the site's own JS
 	// essPostingURL supplies the vacancy id for server-rendered metadata. The Angular detail
 	// panel also needs the /#/pdm/<id> fragment appended in essBaseJob; idp alone opens the list.
 	essPostingURL = "https://www.ess.gov.si/iskalci-zaposlitve/iskanje-zaposlitve/iskanje-dela/?idp="
