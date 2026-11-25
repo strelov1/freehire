@@ -99,8 +99,12 @@ func TestCallerFailsRatherThanBlockingWhenNoExtensionIsConnected(t *testing.T) {
 func TestCallerMatchesEachAnswerToItsOwnCall(t *testing.T) {
 	hub := browsertools.New()
 	// An extension that answers out of order: it holds the first call until the
-	// second has been answered.
+	// second has been answered. The hub forwards on the calling goroutine, so each
+	// Call runs this closure on its own goroutine: held needs the mutex, and heldDone
+	// tells the test the first frame was stored rather than sleeping to hope so.
 	var held []byte
+	var mu sync.Mutex
+	heldDone := make(chan struct{}, 1)
 	hub.Join(7, browsertools.RoleExtension, senderFunc(func(frame []byte) error {
 		var call struct {
 			ID   string `json:"id"`
@@ -108,14 +112,20 @@ func TestCallerMatchesEachAnswerToItsOwnCall(t *testing.T) {
 		}
 		_ = json.Unmarshal(frame, &call)
 		if call.Tool == "read_form" {
+			mu.Lock()
 			held = frame
+			mu.Unlock()
+			heldDone <- struct{}{}
 			return nil
 		}
 		hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+call.ID+`","result":"second"}`))
 		var first struct {
 			ID string `json:"id"`
 		}
-		_ = json.Unmarshal(held, &first)
+		mu.Lock()
+		heldFrame := held
+		mu.Unlock()
+		_ = json.Unmarshal(heldFrame, &first)
 		hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+first.ID+`","result":"first"}`))
 		return nil
 	}))
@@ -128,8 +138,12 @@ func TestCallerMatchesEachAnswerToItsOwnCall(t *testing.T) {
 		res, _ := caller.Call(context.Background(), "read_form", nil)
 		firstDone <- res
 	}()
-	// Let the first call reach the extension before the second releases it.
-	time.Sleep(50 * time.Millisecond)
+	// The first call must reach the extension before the second releases it.
+	select {
+	case <-heldDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first call never reached the extension")
+	}
 
 	second, err := caller.Call(context.Background(), "fill_simple", map[string]any{"fills": []any{}})
 	if err != nil {
