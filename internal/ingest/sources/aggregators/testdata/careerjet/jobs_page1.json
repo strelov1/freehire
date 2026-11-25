@@ -1,0 +1,4 @@
+{"type":"JOBS","hits":3,"message":"Jobs found","pages":2,"response_time":0.31,"jobs":[
+ {"title":"Backend Engineer","company":"Acme Ltd","date":"Wed, 15 Nov 2025 19:13:43 GMT","description":"Build services in Go. We are looking for an engineer to ...","locations":"Leeds, West Yorkshire","salary":"£60,000 - £75,000 per year","salary_currency_code":"GBP","salary_min":60000,"salary_max":75000.4,"salary_type":"Y","url":"https://jobviewtrack.com/v2/aaa111"},
+ {"title":"Data Analyst","company":"Globex","date":"Tue, 14 Nov 2025 08:00:00 GMT","description":"Analyse data ...","locations":"London","salary":"£25 per hour","salary_currency_code":"GBP","salary_min":25,"salary_max":0,"salary_type":"H","url":"https://jobviewtrack.com/v2/bbb222"}
+]}

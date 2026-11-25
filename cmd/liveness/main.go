@@ -144,8 +144,9 @@ const staleCutoff = sources.DefaultSweepGrace
 // read. whatjobs' jobs.url is the ad network's billing landing page (see whatjobs.go);
 // adzuna's stored `/land/ad/<id>` tracking redirect answers 403 to a bot, which classifies
 // uncertain, so this worker can never close an adzuna posting (cmd/adzuna-liveness reads
-// the hosted page, and this age rule is the backstop). Both also lose postings from a
-// date-ordered, bounded crawl that never revisits an ageing one.
+// the hosted page, and this age rule is the backstop); careerjet's jobs.url is a
+// jobviewtrack.com click-tracking link with no page to read. All three also lose postings
+// from a date-ordered, bounded crawl that never revisits an ageing one.
 //
 // Unlike unsignalledSources, these are re-crawled, so the age guess must agree with what
 // the crawl last saw before it may close anything (CloseStaleUnseenUnprobeableJobs and
@@ -154,7 +155,7 @@ const staleCutoff = sources.DefaultSweepGrace
 //
 // A prefix, not a list: whatjobs runs one registered provider per country ("whatjobs" for
 // the US, "whatjobs-<cc>" otherwise), so a new market is covered automatically.
-var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna"}
+var expireDespiteRegisteredPrefixes = []string{"whatjobs", "adzuna", "careerjet"}
 
 func main() {
 	worker.Main(run)

@@ -210,6 +210,8 @@ func TestProviderClassificationDoesNotRequireReedCredential(t *testing.T) {
 	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:test-publisher")
 	t.Setenv("ADZUNA_APP_ID", "test-app")
 	t.Setenv("ADZUNA_APP_KEY", "test-key")
+	t.Setenv("CAREERJET_API_KEY", "test-key")
+	t.Setenv("CAREERJET_USER_IP", "203.0.113.7")
 	live := providerKeys(sources.All(sources.NewClient()))
 	if slices.Contains(live, "reed") {
 		t.Fatal("test setup unexpectedly registers Reed for crawling")
@@ -237,6 +239,8 @@ func TestUnconfiguredWhatJobsMarketRetainsAgeFallback(t *testing.T) {
 	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:test-publisher")
 	t.Setenv("ADZUNA_APP_ID", "test-app")
 	t.Setenv("ADZUNA_APP_KEY", "test-key")
+	t.Setenv("CAREERJET_API_KEY", "test-key")
+	t.Setenv("CAREERJET_USER_IP", "203.0.113.7")
 	crawlProviders := providerKeys(sources.All(sources.NewClient()))
 	if slices.Contains(crawlProviders, "whatjobs-uk") {
 		t.Fatal("test setup unexpectedly configures UK crawl")
