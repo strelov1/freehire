@@ -269,6 +269,25 @@
     }
   }
 
+  // Deleting is final, so it asks first, with its own dialog.
+  let deleteTarget = $state<Job | null>(null);
+  let deleteOpen = $state(false);
+  let deletingSlug = $state<string | null>(null);
+  let deleteError = $state<string | null>(null);
+  async function deleteVacancy(job: Job) {
+    deletingSlug = job.public_slug;
+    deleteError = null;
+    try {
+      await api.deleteEmployerVacancy(job.public_slug);
+      vacanciesData.value = vacanciesData.value.filter((j) => j.public_slug !== job.public_slug);
+    } catch (err) {
+      deleteError = err instanceof ApiError ? err.message : s.vacancyError;
+      announce(deleteError, 'assertive');
+    } finally {
+      deletingSlug = null;
+    }
+  }
+
   let reopeningSlug = $state<string | null>(null);
   let reopenError = $state<{ slug: string; message: string } | null>(null);
   async function reopenVacancy(job: Job) {
@@ -515,6 +534,7 @@
           {:else if vacanciesData.value.length === 0}
             <States state="empty" message={s.vacanciesEmpty} />
           {:else}
+            {#if deleteError}<p role="alert" class="text-sm text-destructive">{deleteError}</p>{/if}
             <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
               {#each vacanciesData.value as job (job.public_slug)}
                 <EmployerVacancyRow
@@ -522,6 +542,7 @@
                   canManage={!recruiter}
                   closing={closingSlug === job.public_slug}
                   reopening={reopeningSlug === job.public_slug}
+                  deleting={deletingSlug === job.public_slug}
                   reopenError={reopenError?.slug === job.public_slug ? reopenError.message : null}
                   onEdit={() => openEdit(job)}
                   onClose={() => {
@@ -529,6 +550,10 @@
                     confirmOpen = true;
                   }}
                   onReopen={() => reopenVacancy(job)}
+                  onDelete={() => {
+                    deleteTarget = job;
+                    deleteOpen = true;
+                  }}
                 />
               {/each}
             </ul>
@@ -547,5 +572,16 @@
   cancelLabel={s.cancel}
   onConfirm={async () => {
     if (closeTarget) await closeVacancy(closeTarget);
+  }}
+/>
+
+<ConfirmDialog
+  bind:open={deleteOpen}
+  title={s.deleteConfirmTitle}
+  description={s.deleteConfirmBody}
+  confirmLabel={s.deleteVacancy}
+  cancelLabel={s.cancel}
+  onConfirm={async () => {
+    if (deleteTarget) await deleteVacancy(deleteTarget);
   }}
 />

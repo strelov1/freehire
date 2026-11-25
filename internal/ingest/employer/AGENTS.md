@@ -70,6 +70,15 @@ for the full design record.
   are scoped to "any manually-authored job" (`created_by IS NOT NULL`), correct for trusted
   staff and wrong for a self-service actor. `UpdateEmployerJob`/`CloseEmployerJob` add
   `created_by = ANY(ARRAY(SELECT employer_team(actor_id))) AND source = 'employer'` to the same shape.
+- **Delete is a soft close that hides the row from `jobs_read`.** `DeleteEmployerJob` sets
+  `closed_reason='employer_deleted'` (migration 0318, whose `jobs_read` excludes that reason),
+  so every public read, the employer's own `BySlug`/list and its analytics stop seeing it with
+  no filter of their own; applications read the `jobs` table and keep it. `ReopenEmployerJob`
+  only undoes `employer_closed`, so it stays gone; re-creating the same URL is the one way back.
+- **The dashboard list is authored plus collected.** `ListMine` merges `ListEmployerJobs` (the
+  team's own, scoped by `employer_team`) with `ListEmployerCollectedJobs` (the open postings of
+  the active company's slug, `active_employer_company`), read-only: edit, close and delete stay
+  scoped to authorship. Analytics and outbound clicks follow the company rule too.
 - **Facet derivation never touches moderation's private `derive()`.** Both `job.go`'s
   `deriveEmployer` and moderation's own `derive()` are thin wrappers around the same shared,
   exported primitives (`job.New`/`jobderive.Input`) — see

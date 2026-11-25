@@ -531,6 +531,13 @@ type Handler interface {
 	//
 	// POST /me/emails/{id}/delete
 	DeleteEmail(ctx context.Context, params DeleteEmailParams) error
+	// DeleteEmployerVacancy implements deleteEmployerVacancy operation.
+	//
+	// Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen
+	// does not bring it back.
+	//
+	// DELETE /employer/jobs/{slug}
+	DeleteEmployerVacancy(ctx context.Context, params DeleteEmployerVacancyParams) (*DeleteEmployerVacancyOK, error)
 	// DeleteEmployment implements deleteEmployment operation.
 	//
 	// 409 for a keyed caller while the place still holds achievements.
@@ -1503,7 +1510,9 @@ type Handler interface {
 	ListEmployerPendingClaims(ctx context.Context) (*ListEmployerPendingClaimsOK, error)
 	// ListEmployerVacancies implements listEmployerVacancies operation.
 	//
-	// Every vacancy the caller published, newest first.
+	// The caller's dashboard list, open first: the vacancies its team published (`source` is `employer`,
+	// editable; at most 200) and the open ones of its company collected from other sources (read-only; at
+	// most 200).
 	//
 	// GET /employer/jobs
 	ListEmployerVacancies(ctx context.Context) (*ListEmployerVacanciesOK, error)

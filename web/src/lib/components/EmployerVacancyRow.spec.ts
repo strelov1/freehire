@@ -19,7 +19,7 @@ vi.mock('#lib/api.js', () => ({
 it('loads a closed vacancy’s analytics on demand for a recruiter', async () => {
   getEmployerVacancyAnalytics.mockResolvedValue({ views: 40, apply_clicks: 10, applications: 3 });
   render(EmployerVacancyRow, {
-    job: { public_slug: 'acme-platform', title: 'Platform Engineer', closed_at: '2026-11-21' } as Job,
+    job: { public_slug: 'acme-platform', title: 'Platform Engineer', source: 'employer', closed_at: '2026-11-21' } as Job,
     canManage: false,
     closing: false,
     reopening: false,
@@ -27,6 +27,7 @@ it('loads a closed vacancy’s analytics on demand for a recruiter', async () =>
     onEdit: vi.fn(),
     onClose: vi.fn(),
     onReopen: vi.fn(),
+    onDelete: vi.fn(),
   });
 
   expect(getEmployerVacancyAnalytics).not.toHaveBeenCalled();
@@ -44,13 +45,14 @@ it('can reopen a failed report and leaves the click rate undefined without views
     .mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValueOnce({ views: 0, apply_clicks: 0, applications: 2 });
   render(EmployerVacancyRow, {
-    job: { public_slug: 'acme-platform', title: 'Platform Engineer' } as Job,
+    job: { public_slug: 'acme-platform', title: 'Platform Engineer', source: 'employer' } as Job,
     closing: false,
     reopening: false,
     reopenError: null,
     onEdit: vi.fn(),
     onClose: vi.fn(),
     onReopen: vi.fn(),
+    onDelete: vi.fn(),
   });
 
   const analytics = screen.getByRole('button', { name: 'Analytics' });
@@ -61,4 +63,45 @@ it('can reopen a failed report and leaves the click rate undefined without views
   await fireEvent.click(analytics);
   expect(await screen.findByText('—')).toBeTruthy();
   expect(screen.getByText('2')).toBeTruthy();
+});
+
+it('lets the team delete a vacancy it published', async () => {
+  const onDelete = vi.fn();
+  render(EmployerVacancyRow, {
+    job: { public_slug: 'acme-platform', title: 'Platform Engineer', source: 'employer' } as Job,
+    closing: false,
+    reopening: false,
+    reopenError: null,
+    onEdit: vi.fn(),
+    onClose: vi.fn(),
+    onReopen: vi.fn(),
+    onDelete,
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+  expect(onDelete).toHaveBeenCalledOnce();
+  expect(screen.queryByText(/Collected from/)).toBeNull();
+});
+
+it('shows a collected vacancy read-only, with its source and analytics', async () => {
+  getEmployerVacancyAnalytics.mockResolvedValue({ views: 7, apply_clicks: 0, applications: 0 });
+  render(EmployerVacancyRow, {
+    job: { public_slug: 'acme-ats', title: 'SRE', source: 'greenhouse', url: 'https://boards.example/1' } as Job,
+    closing: false,
+    reopening: false,
+    reopenError: null,
+    onEdit: vi.fn(),
+    onClose: vi.fn(),
+    onReopen: vi.fn(),
+    onDelete: vi.fn(),
+  });
+
+  expect(screen.getByText('Collected from Greenhouse')).toBeTruthy();
+  for (const name of ['Edit', 'Close vacancy', 'Reopen', 'Delete']) {
+    expect(screen.queryByRole('button', { name })).toBeNull();
+  }
+  await fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
+  const report = within(await screen.findByRole('region', { name: 'Analytics' }));
+  expect(await report.findByText('7')).toBeTruthy();
+  expect(getEmployerVacancyAnalytics).toHaveBeenCalledWith('acme-ats');
 });

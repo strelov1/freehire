@@ -2676,13 +2676,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 							if len(elem) == 0 {
 								switch r.Method {
+								case "DELETE":
+									s.handleDeleteEmployerVacancyRequest([1]string{
+										args[0],
+									}, elemIsEscaped, w, r)
 								case "PATCH":
 									s.handleUpdateEmployerVacancyRequest([1]string{
 										args[0],
 									}, elemIsEscaped, w, r)
 								default:
 									s.notAllowed(w, r, notAllowedParams{
-										allowedMethods: "PATCH",
+										allowedMethods: "DELETE,PATCH",
 										allowedHeaders: rn105AllowedHeaders,
 										acceptPost:     "",
 										acceptPatch:    "application/json",
@@ -14299,6 +14303,15 @@ func (s *Server) FindPath(method string, u *url.URL) (r Route, _ bool) {
 
 							if len(elem) == 0 {
 								switch method {
+								case "DELETE":
+									r.name = DeleteEmployerVacancyOperation
+									r.summary = ""
+									r.operationID = "deleteEmployerVacancy"
+									r.operationGroup = ""
+									r.pathPattern = "/employer/jobs/{slug}"
+									r.args = args
+									r.count = 1
+									return r, true
 								case "PATCH":
 									r.name = UpdateEmployerVacancyOperation
 									r.summary = ""

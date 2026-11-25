@@ -101,6 +101,15 @@ func (r *fakeJobRepo) Close(_ context.Context, actorID int64, slug string) error
 	return nil
 }
 
+// Delete removes the job from the fake's slug index, like jobs_read hiding the real row.
+func (r *fakeJobRepo) Delete(_ context.Context, actorID int64, slug string) error {
+	if r.owner[slug] != actorID {
+		return ErrJobNotFound
+	}
+	delete(r.bySlug, slug)
+	return nil
+}
+
 // Reopen undoes only a close the fake recorded, like the real query's
 // closed_reason = 'employer_closed' guard.
 func (r *fakeJobRepo) Reopen(_ context.Context, actorID int64, slug string) (bool, error) {
@@ -537,6 +546,18 @@ func TestReopenVacancy_UndoesTheEmployersOwnClose(t *testing.T) {
 	}
 	if jobs.closed["go-engineer"] {
 		t.Error("the vacancy is still closed")
+	}
+}
+
+func TestDeleteVacancy(t *testing.T) {
+	jobs := newFakeJobRepo()
+	s := activeService(t, 1, jobs, &fakeMinter{repo: jobs})
+	jobs.seed("go-engineer", 1, onSiteFields(t, job.DirectApplyPrefix+"a"))
+	if err := s.DeleteVacancy(context.Background(), 1, "go-engineer"); err != nil {
+		t.Fatalf("DeleteVacancy: %v", err)
+	}
+	if err := s.DeleteVacancy(context.Background(), 1, "go-engineer"); !errors.Is(err, ErrJobNotFound) {
+		t.Fatalf("second delete: err = %v, want ErrJobNotFound", err)
 	}
 }
 

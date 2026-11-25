@@ -68,6 +68,7 @@ func (h *employerHandlers) register(api fiber.Router, mw middleware, contract fi
 	api.Patch("/employer/jobs/:slug", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/close", mw.cookie, contract)
 	api.Post("/employer/jobs/:slug/reopen", mw.cookie, contract)
+	api.Delete("/employer/jobs/:slug", mw.cookie, contract)
 	api.Get("/employer/applications", mw.cookie, employerNoStore, contract)
 	api.Post("/employer/applications/search", mw.cookie, employerNoStore, contract)
 	api.Patch("/employer/applications/:id/workspace", mw.cookie, employerNoStore, contract)
@@ -377,8 +378,8 @@ func vacancyRaw(j job.Job, extras job.Extras) (jx.Raw, error) {
 	return json.Marshal(view)
 }
 
-// ListEmployerVacancies returns every vacancy the caller has published through this path,
-// newest first — the dashboard's own list. Active-account-only.
+// ListEmployerVacancies returns the caller's dashboard list: the vacancies its team published
+// and the open ones of its company collected from other sources. Active-account-only.
 func (h *employerHandlers) ListEmployerVacancies(ctx context.Context) (*apigen.ListEmployerVacanciesOK, error) {
 	userID, err := requireUserIDFromContext(ctx)
 	if err != nil {
@@ -461,6 +462,19 @@ func (h *employerHandlers) CloseEmployerVacancy(ctx context.Context, params apig
 		return nil, employerError(err)
 	}
 	return &apigen.CloseEmployerVacancyOK{Data: apigen.EmployerClosed{Closed: true}}, nil
+}
+
+// DeleteEmployerVacancy soft-deletes a vacancy the caller's own team published. A collected
+// vacancy of the same company, another company's, or an already deleted one is a 404.
+func (h *employerHandlers) DeleteEmployerVacancy(ctx context.Context, params apigen.DeleteEmployerVacancyParams) (*apigen.DeleteEmployerVacancyOK, error) {
+	userID, err := requireUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.employer.DeleteVacancy(ctx, userID, params.Slug); err != nil {
+		return nil, employerError(err)
+	}
+	return &apigen.DeleteEmployerVacancyOK{Data: apigen.EmployerRemoved{Removed: true}}, nil
 }
 
 // ReopenEmployerVacancy undoes the caller's own close of their vacancy — the only way back

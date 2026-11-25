@@ -1,10 +1,12 @@
 package employer
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -252,13 +254,26 @@ func (r *QueriesRepository) Teammates(ctx context.Context, actorID, otherID int6
 	return r.q.EmployerTeamIncludes(ctx, db.EmployerTeamIncludesParams{ActorID: actorID, OtherID: otherID})
 }
 
-// ListMine returns every jobSource-authored job actorID created, newest first, mapping each
-// row through the same job.FromRow every other read path uses.
+// ListMine returns the vacancies of actorID's company: the ones its team authored (open and
+// closed) and the open ones collected from other sources, open first. Each row goes through
+// the same job.FromRow every other read path uses.
 func (r *QueriesRepository) ListMine(ctx context.Context, actorID int64) ([]job.Job, []job.Extras, error) {
-	rows, err := r.q.ListEmployerJobs(ctx, actorID)
+	own, err := r.q.ListEmployerJobs(ctx, actorID)
 	if err != nil {
 		return nil, nil, err
 	}
+	collected, err := r.q.ListEmployerCollectedJobs(ctx, actorID)
+	if err != nil {
+		return nil, nil, err
+	}
+	rows := append(own, collected...)
+	// Open first, then newest first, across the two sets.
+	slices.SortStableFunc(rows, func(a, b db.Job) int {
+		return cmp.Or(
+			cmp.Compare(btoi(a.ClosedAt.Valid), btoi(b.ClosedAt.Valid)),
+			b.CreatedAt.Time.Compare(a.CreatedAt.Time),
+		)
+	})
 	jobs := make([]job.Job, len(rows))
 	extras := make([]job.Extras, len(rows))
 	for i, row := range rows {
@@ -269,6 +284,13 @@ func (r *QueriesRepository) ListMine(ctx context.Context, actorID int64) ([]job.
 		jobs[i], extras[i] = j, x
 	}
 	return jobs, extras, nil
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // Update writes the full resulting row for an employer-owned job and enqueues it to
@@ -333,6 +355,13 @@ func (r *QueriesRepository) Close(ctx context.Context, actorID int64, slug strin
 		PublicSlug: slug,
 		ActorID:    actorID,
 	})
+	return err
+}
+
+// Delete soft-deletes an employer-owned job (DeleteEmployerJob). As with Close, ownership was
+// settled by BySlug first, so there is nothing to report when no row changed.
+func (r *QueriesRepository) Delete(ctx context.Context, actorID int64, slug string) error {
+	_, err := r.q.DeleteEmployerJob(ctx, db.DeleteEmployerJobParams{PublicSlug: slug, ActorID: actorID})
 	return err
 }
 

@@ -1256,7 +1256,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Every vacancy the caller published, newest first. */
+        /**
+         * @description The caller's dashboard list, open first: the vacancies its team published (`source` is
+         *     `employer`, editable; at most 200) and the open ones of its company collected from other
+         *     sources (read-only; at most 200).
+         */
         get: operations["listEmployerVacancies"];
         put?: never;
         /** @description Publishes, or idempotently updates the caller's own vacancy at the same URL. */
@@ -1277,7 +1281,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** @description Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen does not bring it back. */
+        delete: operations["deleteEmployerVacancy"];
         options?: never;
         head?: never;
         patch: operations["updateEmployerVacancy"];
@@ -14630,6 +14635,39 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["Job"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteEmployerVacancy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployerRemoved"];
                     };
                 };
             };
