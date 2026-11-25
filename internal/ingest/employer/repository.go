@@ -266,7 +266,7 @@ func (r *QueriesRepository) ListMine(ctx context.Context, actorID int64) ([]job.
 	if err != nil {
 		return nil, nil, err
 	}
-	rows := append(own, collected...)
+	rows := slices.Concat(own, collected)
 	// Open first, then newest first, across the two sets.
 	slices.SortStableFunc(rows, func(a, b db.Job) int {
 		return cmp.Or(

@@ -19,7 +19,12 @@ vi.mock('#lib/api.js', () => ({
 it('loads a closed vacancy’s analytics on demand for a recruiter', async () => {
   getEmployerVacancyAnalytics.mockResolvedValue({ views: 40, apply_clicks: 10, applications: 3 });
   render(EmployerVacancyRow, {
-    job: { public_slug: 'acme-platform', title: 'Platform Engineer', source: 'employer', closed_at: '2026-11-21' } as Job,
+    job: {
+      public_slug: 'acme-platform',
+      title: 'Platform Engineer',
+      source: 'employer',
+      closed_at: '2026-11-21',
+    } as Job,
     canManage: false,
     closing: false,
     reopening: false,

@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -127,7 +128,7 @@ func TestEmployerVacancyScope(t *testing.T) {
 	// Deleting an authored vacancy is soft and final.
 	call(http.MethodDelete, "/employer/jobs/own-role", owner, 200)
 	equal(slugs(owner), "ats-role")
-	if _, err := queries.GetJobBySlug(ctx, "own-role"); err != pgx.ErrNoRows {
+	if _, err := queries.GetJobBySlug(ctx, "own-role"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("public lookup of a deleted vacancy: err = %v, want ErrNoRows", err)
 	}
 	var reason string

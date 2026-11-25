@@ -17,7 +17,6 @@
     closing,
     reopening,
     reopenError,
-    deleting = false,
     onEdit,
     onClose,
     onReopen,
@@ -29,7 +28,6 @@
     reopening: boolean;
     /** The reopen failure for this vacancy, if its last reopen failed. */
     reopenError: string | null;
-    deleting?: boolean;
     onEdit: () => void;
     onClose: () => void;
     onReopen: () => void;
@@ -97,9 +95,7 @@
             {reopening ? s.reopening : s.reopenVacancy}
           </Button>
         {/if}
-        <Button variant="ghost" size="sm" disabled={deleting} onclick={onDelete}>
-          {deleting ? s.deleting : s.deleteVacancy}
-        </Button>
+        <Button variant="ghost" size="sm" onclick={onDelete}>{s.deleteVacancy}</Button>
       {/if}
     </div>
   </div>
