@@ -13,12 +13,12 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobview"
 )
 
-// localsDataPlan marks a request on a Data endpoint (/data/jobs/*) whose caller holds the
-// Data plan. The job reads it reaches serve the employer's own links (jobview.HideOrigin),
+// localsDataPlan marks a request on a Data endpoint (/data/jobs/*) whose caller holds a paid
+// API plan (API or Data). The job reads it reaches serve the employer's own links (jobview.HideOrigin),
 // with no sponsored placements and never a shared cache.
 const localsDataPlan = "data.plan"
 
-// dataPlanGate admits only a Data plan holder, after the key gate attached the caller.
+// dataPlanGate admits a paid API plan holder (API or Data), after the key gate attached the caller.
 func dataPlanGate(entitlements entitlementReader) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		userID, ok := c.Locals(auth.LocalsUserID).(int64)
@@ -29,8 +29,8 @@ func dataPlanGate(entitlements entitlementReader) fiber.Handler {
 		if err != nil {
 			return err
 		}
-		if apiPlanFrom(row, time.Now()).Tier != billing.APITierData {
-			return fiber.NewError(http.StatusForbidden, "original job links are part of the Data plan")
+		if apiPlanFrom(row, time.Now()).Tier == billing.APITierNone {
+			return fiber.NewError(http.StatusForbidden, "original job links need a paid API plan")
 		}
 		c.Locals(localsDataPlan, true)
 		// The links are the plan holder's alone: no shared cache may keep the answer.
@@ -54,12 +54,12 @@ func hideOrigins(ctx context.Context, views []jobview.Job) {
 	}
 }
 
-// SearchDataJobs is /jobs/search for the Data plan; dataPlanGate marks the request.
+// SearchDataJobs is /jobs/search for the paid API plans; dataPlanGate marks the request.
 func (h *searchHandlers) SearchDataJobs(ctx context.Context, _ apigen.SearchDataJobsParams) (*apigen.JobSearchPageHeaders, error) {
 	return h.SearchJobs(ctx, apigen.SearchJobsParams{})
 }
 
-// GetDataJob is /jobs/{slug} for the Data plan; dataPlanGate marks the request.
+// GetDataJob is /jobs/{slug} for the paid API plans; dataPlanGate marks the request.
 func (h *jobsHandlers) GetDataJob(ctx context.Context, params apigen.GetDataJobParams) (*apigen.GetDataJobOK, error) {
 	out, err := h.GetJob(ctx, apigen.GetJobParams(params))
 	if err != nil {

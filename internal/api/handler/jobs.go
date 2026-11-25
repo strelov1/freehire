@@ -64,7 +64,7 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	api.Get("/jobs/:slug/copies", contract)
 	api.Get("/jobs/:slug/apply-form", contract)
 	api.Get("/jobs/:slug/skill-fit", contract)
-	// The Data plan's reads with the employer links the public ones hide (data_jobs.go).
+	// The paid API plans' reads with the employer links the public ones hide (data_jobs.go).
 	api.Get("/data/jobs/search", mw.key, mw.dataPlan, contract)
 	api.Get("/data/jobs/:slug", mw.key, mw.dataPlan, contract)
 	registerInterviewPrep(api, mw, contract)

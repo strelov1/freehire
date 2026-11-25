@@ -33,7 +33,7 @@ type Job struct {
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
 	// URL is the employer's own application URL, as stored: the canonical address the
-	// extension matches pages against. Served to the public only on the Data plan's
+	// extension matches pages against. Served to the public only on the paid API plans' /data/jobs
 	// endpoints; every other surface drops it with HideOrigin.
 	URL string `json:"url"`
 	// ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts

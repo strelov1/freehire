@@ -184,7 +184,7 @@ export interface Job {
   external_id: string;
   /**
    * URL is the employer's own application URL, as stored: the canonical address the
-   * extension matches pages against. Served to the public only on the Data plan's
+   * extension matches pages against. Served to the public only on the paid API plans' /data/jobs
    * endpoints; every other surface drops it with HideOrigin.
    */
   url: string;

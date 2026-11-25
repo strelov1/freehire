@@ -862,11 +862,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search open jobs with their original links (Data plan).
+         * Search open jobs with their original links (API and Data plans).
          * @description The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
          *     each job's `url` (the employer's own posting) and `source_url` where it differs. The public
-         *     job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
-         *     account gets `403`. Never cached: the answer is private to the plan holder.
+         *     job reads leave both out and link only through `apply_url`. Needs a paid API plan (API or
+         *     Data): any other account gets `403`. Never cached: the answer is private to the plan holder.
          */
         get: operations["searchDataJobs"];
         put?: never;
@@ -885,9 +885,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A single job with its original links (Data plan).
-         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
-         *     Data plan: any other account gets `403`.
+         * A single job with its original links (API and Data plans).
+         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid
+         *     API plan (API or Data): any other account gets `403`.
          */
         get: operations["getDataJob"];
         put?: never;
@@ -9181,7 +9181,7 @@ export interface components {
             company: string;
             company_slug?: string;
             /**
-             * @description The employer's own application URL, as published. Served only by the Data plan's
+             * @description The employer's own application URL, as published. Served only by the paid API plans'
              *     `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
              *     Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
              */
@@ -9205,7 +9205,7 @@ export interface components {
             external_id?: string;
             /**
              * @description The original posting when `url` points at a separately verified application
-             *     destination. Absent when both links are the same, and outside the Data plan's
+             *     destination. Absent when both links are the same, and outside the paid API plans'
              *     `/data/jobs` endpoints.
              */
             source_url?: string;

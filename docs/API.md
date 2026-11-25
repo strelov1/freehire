@@ -19,7 +19,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Onboarding](#onboarding)
 - [Booking links](#booking-links)
 - [Catalogue export](#catalogue-export)
-- [Data plan](#data-plan)
+- [Original job links](#original-job-links)
 - [Jobs](#jobs)
 - [Fit](#fit)
 - [Companies](#companies)
@@ -89,9 +89,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+The API plan allows 1,200 requests per 60-second window. On the original-link endpoints (`/data/jobs/search`, `/data/jobs/{slug}`) each plan is counted apart: 1,200 for the API plan, 6,000 for the Data plan, which holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
 
-Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The `/data/jobs` endpoints serve both to either paid API plan. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -192,7 +192,7 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 
 ## External vs internal endpoints
 
-This reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal). The Data plan’s endpoints are also gathered on their own at [freehire.me/docs/api/data](https://freehire.me/docs/api/data).
+This reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal). The original-link and catalogue endpoints are also gathered on their own at [freehire.me/docs/api/data](https://freehire.me/docs/api/data).
 
 ## Filtering jobs
 
@@ -454,20 +454,20 @@ curl "https://freehire.me/api/v1/catalogue/snapshots" -H "Authorization: Bearer 
 }
 ```
 
-## Data plan
+## Original job links
 
-Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`.
+Job reads for the paid API plans (`api`, `api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The API plan holds its 1,200-request window here, counted apart; the Data plan's 6,000-request window applies here only (see API plans). Session or API key; any account without a paid API plan gets `403`.
 
 ### `GET /data/jobs/search`
 
 **Auth:** Session or API key
 
-Search open jobs with their original links (Data plan).
+Search open jobs with their original links (API and Data plans).
 
 The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
 each job's `url` (the employer's own posting) and `source_url` where it differs. The public
-job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
-account gets `403`. Never cached: the answer is private to the plan holder.
+job reads leave both out and link only through `apply_url`. Needs a paid API plan (API or
+Data): any other account gets `403`. Never cached: the answer is private to the plan holder.
 
 **Query parameters**
 
@@ -489,10 +489,10 @@ curl "https://freehire.me/api/v1/data/jobs/search" -H "Authorization: Bearer $FR
 
 **Auth:** Session or API key
 
-A single job with its original links (Data plan).
+A single job with its original links (API and Data plans).
 
-The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
-Data plan: any other account gets `403`.
+The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid
+API plan (API or Data): any other account gets `403`.
 
 **Path parameters**
 
