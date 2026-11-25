@@ -27014,6 +27014,102 @@ func (s *Server) handlePostJobAutoApplyRetryRequest(args [1]string, argsEscaped 
 	}
 }
 
+// handlePrefillEmployerVacancyRequest handles prefillEmployerVacancy operation.
+//
+// Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in
+// the catalogue returns its stored fields.
+//
+// POST /employer/jobs/prefill
+func (s *Server) handlePrefillEmployerVacancyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PrefillEmployerVacancyOperation,
+			ID:   "prefillEmployerVacancy",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodePrefillEmployerVacancyRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *PrefillEmployerVacancyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PrefillEmployerVacancyOperation,
+			OperationSummary: "",
+			OperationID:      "prefillEmployerVacancy",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *PrefillRequest
+			Params   = struct{}
+			Response = *PrefillEmployerVacancyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PrefillEmployerVacancy(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PrefillEmployerVacancy(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePrefillEmployerVacancyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handlePrefillSubmissionRequest handles prefillSubmission operation.
 //
 // Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no

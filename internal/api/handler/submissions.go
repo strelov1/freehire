@@ -22,18 +22,17 @@ import (
 // mints a live job via moderation. Prefill reuses the paste-a-link importer but never writes.
 type submissionHandlers struct {
 	submission *submission.Service
-	importer   *linkimport.Importer
-	// queries and postings answer "is this vacancy already in the catalogue" via
-	// catalogSlugForURL. Zero-value postings = the offline rewrite only.
-	queries  *db.Queries
-	postings sources.PostingURLResolver
+	// prefiller serves the paste-a-link prefill; it also answers "already in the catalogue".
+	prefiller *jobPrefiller
+	queries   *db.Queries
+	postings  sources.PostingURLResolver
 }
 
 func newSubmissionHandlers(queries *db.Queries, pool *pgxpool.Pool, moderation *moderation.Service, importer *linkimport.Importer, postings sources.PostingURLResolver) *submissionHandlers {
 	// Approval mints through moderation, reusing derivation, dedup and the enrichment enqueue.
 	return &submissionHandlers{
 		submission: submission.New(submission.NewQueriesRepository(queries, pool), moderation),
-		importer:   importer,
+		prefiller:  &jobPrefiller{queries: queries, importer: importer, postings: postings},
 		queries:    queries,
 		postings:   postings,
 	}
@@ -201,28 +200,59 @@ func (h *submissionHandlers) CreateSubmission(ctx context.Context, req *apigen.S
 // PrefillSubmission parses a job URL through the paste-a-link registry
 // (internal/ingest/linksource) and writes nothing: no job, submission, credit, enrichment or
 // search push. Skills is included only when the platform states it in a STRUCTURED field
-// (sources.Job.Skills); Cities is never included. A URL the catalogue already carries answers
-// with ExistingJobSlug only. An unrecognized URL, or one that is not a single vacancy page,
-// is not an error: 200 with every field empty.
+// (sources.Job.Skills); Cities is never included. A URL the catalogue already carries
+// answers with ExistingJobSlug only. An unrecognized URL, or one that is not a single
+// vacancy page, is not an error: 200 with every field empty.
 func (h *submissionHandlers) PrefillSubmission(ctx context.Context, req *apigen.PrefillRequest) (*apigen.PrefillSubmissionOK, error) {
 	if _, err := requireUserIDFromContext(ctx); err != nil {
 		return nil, err
 	}
-
-	// Asked before the outbound fetch, which a known vacancy does not need.
-	slug, err := catalogSlugForURL(ctx, h.queries, h.postings, strings.TrimSpace(req.URL.Value))
+	out, err := h.prefiller.prefill(ctx, req.URL.Value, false)
 	if err != nil {
 		return nil, err
 	}
+	return &apigen.PrefillSubmissionOK{Data: out}, nil
+}
+
+// jobPrefiller answers "what does this job URL say", for the two forms that offer a
+// "fill in from this link" button (submit and the employer dashboard). It writes nothing.
+type jobPrefiller struct {
+	queries  *db.Queries
+	importer *linkimport.Importer
+	postings sources.PostingURLResolver
+}
+
+// prefill resolves pageURL. A vacancy the catalogue already carries is asked first, from the
+// database, since it needs no outbound fetch: with fromCatalog the stored row's fields come
+// back (ExistingJobSlug set too); without it only ExistingJobSlug does, so the caller can
+// refuse the duplicate. Only an unknown URL is fetched and parsed.
+func (p *jobPrefiller) prefill(ctx context.Context, pageURL string, fromCatalog bool) (apigen.SubmissionPrefill, error) {
+	slug, err := catalogSlugForURL(ctx, p.queries, p.postings, strings.TrimSpace(pageURL))
+	if err != nil {
+		return apigen.SubmissionPrefill{}, err
+	}
 	if slug != "" {
-		return &apigen.PrefillSubmissionOK{Data: apigen.SubmissionPrefill{ExistingJobSlug: apigen.NewOptString(slug)}}, nil
+		out := apigen.SubmissionPrefill{ExistingJobSlug: apigen.NewOptString(slug)}
+		if !fromCatalog {
+			return out, nil
+		}
+		row, err := p.queries.GetJobBySlug(ctx, slug)
+		if err != nil {
+			return apigen.SubmissionPrefill{}, err
+		}
+		out.Title, out.Company, out.Location = optString(row.Title), optString(row.Company), optString(row.Location)
+		out.Description, out.WorkMode = optString(row.Description), optString(row.WorkMode)
+		out.EmploymentType, out.Seniority = optString(row.EmploymentType), optString(row.Seniority)
+		out.Skills = nilIfEmpty(row.Skills)
+		return out, nil
 	}
 
-	resolved, ok, err := h.importer.Resolve(ctx, req.URL.Value, linkimport.Board{})
+	resolved, ok, err := p.importer.Resolve(ctx, pageURL, linkimport.Board{})
 	if err != nil || !ok {
-		return &apigen.PrefillSubmissionOK{}, nil
+		// An unreadable or non-vacancy page is an empty prefill, not an error.
+		return apigen.SubmissionPrefill{}, nil //nolint:nilerr
 	}
-	return &apigen.PrefillSubmissionOK{Data: apigen.SubmissionPrefill{
+	return apigen.SubmissionPrefill{
 		Title:          optString(resolved.Job.Title),
 		Company:        optString(resolved.Job.Company),
 		Location:       optString(resolved.Job.Location),
@@ -232,7 +262,7 @@ func (h *submissionHandlers) PrefillSubmission(ctx context.Context, req *apigen.
 		Seniority:      optString(resolved.Job.Seniority),
 		Skills:         nilIfEmpty(resolved.Job.Skills),
 		Source:         optString(resolved.Source),
-	}}, nil
+	}, nil
 }
 
 // ListMySubmissions returns the caller's own submissions with status and any rejection reason.

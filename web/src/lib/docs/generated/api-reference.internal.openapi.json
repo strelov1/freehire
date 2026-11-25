@@ -2699,6 +2699,60 @@
         }
       }
     },
+    "/employer/jobs/prefill": {
+      "post": {
+        "operationId": "prefillEmployerVacancy",
+        "description": "Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in the catalogue returns its stored fields.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SubmissionPrefill"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Employer"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrefillRequest"
+              },
+              "example": {
+                "url": "https://example.com/jobs/123"
+              }
+            }
+          }
+        }
+      }
+    },
     "/employer/jobs/{slug}": {
       "patch": {
         "operationId": "updateEmployerVacancy",
@@ -17861,6 +17915,15 @@
         },
         "description": "A year, with a month when the CV gives one."
       },
+      "PrefillRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The job posting URL to parse."
+          }
+        }
+      },
       "Problem": {
         "type": "object",
         "required": [
@@ -19155,6 +19218,46 @@
           }
         },
         "description": "A submission as the API shows it."
+      },
+      "SubmissionPrefill": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "work_mode": {
+            "type": "string"
+          },
+          "employment_type": {
+            "type": "string"
+          },
+          "seniority": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "existing_job_slug": {
+            "type": "string",
+            "description": "Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is then empty; on `/employer/jobs/prefill` they hold the stored vacancy."
+          }
+        },
+        "description": "What could be parsed from the URL. Empty when it is not recognised."
       },
       "SubmissionStatus": {
         "type": "string",

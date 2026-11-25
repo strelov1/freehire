@@ -23173,7 +23173,7 @@
           },
           "existing_job_slug": {
             "type": "string",
-            "description": "Set, with every other field empty, when the catalogue already carries the vacancy."
+            "description": "Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is then empty; on `/employer/jobs/prefill` they hold the stored vacancy."
           }
         },
         "description": "What could be parsed from the URL. Empty when it is not recognised."

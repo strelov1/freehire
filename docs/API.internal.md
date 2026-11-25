@@ -5007,6 +5007,22 @@ Publishes, or idempotently updates the caller's own vacancy at the same URL.
 curl -X POST "https://freehire.me/api/v1/employer/jobs" -b cookies.txt
 ```
 
+### `POST /employer/jobs/prefill`
+
+**Auth:** Session only
+
+Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in the catalogue returns its stored fields.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | string | no | The job posting URL to parse. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/employer/jobs/prefill" -b cookies.txt -H 'Content-Type: application/json' -d '{"url":"https://example.com/jobs/123"}'
+```
+
 ### `PATCH /employer/jobs/{slug}`
 
 **Auth:** Session only

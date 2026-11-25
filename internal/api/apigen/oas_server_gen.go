@@ -1936,6 +1936,13 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/auto-apply/retry
 	PostJobAutoApplyRetry(ctx context.Context, params PostJobAutoApplyRetryParams) (*PostJobAutoApplyRetryOK, error)
+	// PrefillEmployerVacancy implements prefillEmployerVacancy operation.
+	//
+	// Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in
+	// the catalogue returns its stored fields.
+	//
+	// POST /employer/jobs/prefill
+	PrefillEmployerVacancy(ctx context.Context, req *PrefillRequest) (*PrefillEmployerVacancyOK, error)
 	// PrefillSubmission implements prefillSubmission operation.
 	//
 	// Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no
