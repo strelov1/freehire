@@ -90,7 +90,7 @@ func genStructs() (string, error) {
 			{
 				Path:         "github.com/strelov1/freehire/internal/job/jobview",
 				OutputPath:   jobviewTS,
-				IncludeFiles: []string{"jobview.go", "card.go", "reality.go", "ghost.go"},
+				IncludeFiles: []string{"jobview.go", "detail_facts.go", "card.go", "reality.go", "ghost.go"},
 				TypeMappings: map[string]string{"enrich.Enrichment": "Enrichment"},
 			},
 			{

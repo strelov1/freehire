@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	xhtml "golang.org/x/net/html"
 	"golang.org/x/time/rate"
 )
 
@@ -37,9 +38,14 @@ type sitemapBoard struct {
 	ignoreTelecommute bool
 	// parseDeadline is set only for providers whose stated calendar deadline is mapped.
 	parseDeadline func(json.RawMessage) *time.Time
-	http          sitemapBoardHTTP
-	limiter       waiter
-	maxNew        int
+	// applyURL reads the employer's own apply link off the posting page; nil or "" records none.
+	applyURL func(*xhtml.Node) string
+	// applicantCountries reads the countries from applicantLocationRequirements when jobLocation
+	// names none, for a remote board that states where the work may be done from.
+	applicantCountries bool
+	http               sitemapBoardHTTP
+	limiter            waiter
+	maxNew             int
 }
 
 type sitemapBoardHTTP interface {
@@ -143,7 +149,7 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error)
 		Title:          title,
 		Company:        company,
 		Location:       strings.Join(p.localities(), "; "),
-		Countries:      countriesFromCodes(p.countryCodes()),
+		Countries:      countriesFromCodes(b.countryCodes(p)),
 		Description:    sanitizeHTML(html.UnescapeString(p.Description)),
 		Remote:         remote,
 		WorkMode:       workModeFromRemote(remote),
@@ -160,6 +166,11 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error)
 			salary.apply(&job, currency)
 		}
 	}
+	if b.applyURL != nil {
+		if target := b.applyURL(root); target != "" {
+			job.ApplyMethod, job.ExternalApplyURL = ApplyExternal, target
+		}
+	}
 	if job.Countries == nil && b.country != "" {
 		job.FallbackCountries = []string{b.country}
 	}
@@ -168,15 +179,18 @@ func (b sitemapBoard) detail(ctx context.Context, loc string) (Job, bool, error)
 
 // sitemapBoardPosting is the part of a posting page's JobPosting the board adapters read.
 type sitemapBoardPosting struct {
-	Title              string             `json:"title"`
-	Description        string             `json:"description"`
-	DatePosted         string             `json:"datePosted"`
-	ValidThrough       json.RawMessage    `json:"validThrough"`
-	EmploymentType     json.RawMessage    `json:"employmentType"`
-	JobLocationType    string             `json:"jobLocationType"`
-	JobLocation        sitemapBoardPlaces `json:"jobLocation"`
-	HiringOrganization sitemapldjsonOrg   `json:"hiringOrganization"`
-	BaseSalary         sitemapBoardSalary `json:"baseSalary"`
+	Title           string             `json:"title"`
+	Description     string             `json:"description"`
+	DatePosted      string             `json:"datePosted"`
+	ValidThrough    json.RawMessage    `json:"validThrough"`
+	EmploymentType  json.RawMessage    `json:"employmentType"`
+	JobLocationType string             `json:"jobLocationType"`
+	JobLocation     sitemapBoardPlaces `json:"jobLocation"`
+	// ApplicantLocationRequirements is read only by a board that sets applicantCountries.
+	// Kept raw so a shape the decoder rejects cannot fail a posting on a board that never reads it.
+	ApplicantLocationRequirements json.RawMessage    `json:"applicantLocationRequirements"`
+	HiringOrganization            sitemapldjsonOrg   `json:"hiringOrganization"`
+	BaseSalary                    sitemapBoardSalary `json:"baseSalary"`
 }
 
 // sitemapBoardSalary decodes baseSalary when it is a MonetaryAmount. schema.org also allows a bare
@@ -249,4 +263,14 @@ func (p sitemapBoardPosting) countryCodes() []string {
 		out = append(out, a.AddressCountry)
 	}
 	return out
+}
+
+func (b sitemapBoard) countryCodes(p sitemapBoardPosting) []string {
+	if codes := p.countryCodes(); b.applicantCountries && !slices.ContainsFunc(codes, func(c string) bool { return c != "" }) {
+		var areas schemaNamedAreas
+		if json.Unmarshal(p.ApplicantLocationRequirements, &areas) == nil {
+			return areas.Names()
+		}
+	}
+	return p.countryCodes()
 }

@@ -2060,7 +2060,7 @@
       "get": {
         "operationId": "searchCompanies",
         "summary": "List companies with job counts and denormalized facets; optional filters.",
-        "description": "Most active first. Facet params are repeatable and filter by array overlap (OR within a\nfacet, AND across facets), composably with `q`. `meta.total` reports the count matching\nthe full filter.",
+        "description": "Most active first. Facet params repeat and filter by array overlap (OR within a facet,\nAND across), composable with `q`; `meta.total` counts the full filter. `countries` is\nwhere open jobs are, `hq_country` the headquarters (ISO alpha-2).",
         "parameters": [
           {
             "name": "q",
@@ -2139,6 +2139,9 @@
           },
           {
             "$ref": "#/components/parameters/company.domains"
+          },
+          {
+            "$ref": "#/components/parameters/company.hq_country"
           }
         ],
         "responses": {
@@ -2176,6 +2179,8 @@
                         "payments"
                       ],
                       "hq_country": "DE",
+                      "website": "https://acme.example",
+                      "linkedin": "https://www.linkedin.com/company/acme",
                       "collections": [
                         "yc"
                       ],
@@ -4361,6 +4366,19 @@
             "type": "string"
           }
         }
+      },
+      "company.hq_country": {
+        "name": "hq_country",
+        "in": "query",
+        "description": "Headquarters country: ISO 3166-1 alpha-2 codes, any case — where the company is headquartered, as opposed to `countries` (where its open jobs are).",
+        "style": "form",
+        "explode": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "schemas": {
@@ -4584,6 +4602,8 @@
           "tagline",
           "industries",
           "hq_country",
+          "website",
+          "linkedin",
           "collections",
           "feedback_count",
           "feedback_rating_avg"
@@ -4610,6 +4630,16 @@
             }
           },
           "hq_country": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "description": "The company's own site as recorded (its website, else its homepage); null when unknown.",
+            "type": "string",
+            "nullable": true
+          },
+          "linkedin": {
+            "description": "The company's LinkedIn page; null when unknown.",
             "type": "string",
             "nullable": true
           },
@@ -4769,11 +4799,11 @@
           },
           "url": {
             "type": "string",
-            "description": "The employer's own application URL, as published. Match pages and deduplicate on this;\ndo not send people to it. Empty when `direct_apply` is true: that vacancy has no page\nelsewhere."
+            "description": "The employer's own application URL, as published. Served only by the Data plan's\n`/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.\nEmpty too when `direct_apply` is true: that vacancy has no page elsewhere."
           },
           "apply_url": {
             "type": "string",
-            "description": "Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)\nthat counts the click and forwards to `url`. Set `src` to the surface handing the link out:\n`web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is."
+            "description": "Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)\nthat counts the click and forwards to the employer's page. Set `src` to the surface handing the link out:\n`web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent for a vacancy taking applications on freehire."
           },
           "direct_apply": {
             "type": "boolean",
@@ -4793,7 +4823,7 @@
           },
           "source_url": {
             "type": "string",
-            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same."
+            "description": "The original posting when `url` points at a separately verified application\ndestination. Absent when both links are the same, and outside the Data plan's\n`/data/jobs` endpoints."
           },
           "application_deadline": {
             "type": "string",
@@ -4802,7 +4832,7 @@
           },
           "team": {
             "type": "string",
-            "description": "The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and\nAshby state one). Absent when the source states none; not a taxonomy, so values differ\nbetween employers."
+            "description": "The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever,\nAshby, Gem, Recruitee and Employment Hero state one). Absent when the source states none; not a taxonomy, so values differ\nbetween employers."
           },
           "manually_added": {
             "type": "boolean",
@@ -4926,10 +4956,6 @@
             "minimum": 0,
             "description": "How many questions the posting's application form REQUIRES beyond the standard fields\nevery form asks for (name, contact details, CV, cover letter), counted from the form\nfreehire captured from the employer's ATS. Optional questions, the equal-opportunity\nsurvey and consent boxes are not counted. `0` means no REQUIRED question beyond the\nbasics. Absent when freehire holds no form for the posting — \"not known\", never\n\"long\". Served by search hits and the job detail; a list read straight from the\ndatabase may omit it."
           },
-          "employment_type": {
-            "type": "string",
-            "description": "Mirror of `enrichment.employment_type`, for flat readers. Absent when unknown."
-          },
           "experience_level": {
             "type": "string",
             "description": "Mirror of `enrichment.seniority`. Absent when unknown."
@@ -4946,14 +4972,6 @@
             "type": "boolean",
             "description": "`true` when `work_mode` is `remote`, `false` for `hybrid` and `onsite`. Absent when\n`work_mode` is."
           },
-          "company_website": {
-            "type": "string",
-            "description": "The company's website on record (`https://host`). Served by `getJob` only; absent when none is known."
-          },
-          "company_logo": {
-            "type": "string",
-            "description": "The company logo, from the freehire logo proxy keyed by the company NAME. Served by\n`getJob` only. The proxy answers 404 for a name it cannot resolve, so keep a fallback."
-          },
           "sponsored": {
             "type": "boolean",
             "description": "True only on a search hit placed as a paid slot (never on an organic hit). Render a\nvisible \"Sponsored\" label, and link the card to `sponsored_url`."
@@ -4961,6 +4979,26 @@
           "sponsored_url": {
             "type": "string",
             "description": "Click-tracking redirect (`/api/v1/sponsored/go/<token>`) for a sponsored hit; it always\nends at the job. `url` stays the organic link."
+          },
+          "employment_type": {
+            "type": "string",
+            "description": "The employment type, the same value as `enrichment.employment_type`, lifted to the top\nlevel for flat readers. Absent when not known."
+          },
+          "salary": {
+            "description": "The pay range, the same values as `enrichment.salary_*`. Served by `getJob` only; absent when no bound is stated.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobSalary"
+              }
+            ]
+          },
+          "company_website": {
+            "type": "string",
+            "description": "The employer's own site as its company record states it. Served by `getJob` only; absent when none is on record."
+          },
+          "company_logo": {
+            "type": "string",
+            "description": "The employer's logo through freehire's logo proxy, resolved by the site's domain. The\nproxy answers 404 when it has no mark. Served by `getJob` only, beside `company_website`."
           },
           "posted_at": {
             "type": "string",
@@ -5238,6 +5276,25 @@
           }
         },
         "description": "One requirement the posting states."
+      },
+      "JobSalary": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "integer"
+          },
+          "max": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 (e.g. `USD`)."
+          },
+          "period": {
+            "type": "string"
+          }
+        },
+        "description": "A posting's pay range: either bound may be absent, never both."
       },
       "JobSearchMeta": {
         "type": "object",

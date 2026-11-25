@@ -17,13 +17,12 @@ func researchDocument(j JobResult) ResearchDocument {
 		Text:  j.Description,
 		URL:   researchURL(j.JobSummary),
 		Metadata: ResearchMetadata{
-			Company:        j.Company,
-			Location:       j.Location,
-			Source:         j.Source,
-			OfficialJobURL: j.OfficialJobURL,
-			PostedAt:       j.PostedAt,
-			Reality:        j.Reality,
-			GhostLevel:     j.GhostLevel,
+			Company:    j.Company,
+			Location:   j.Location,
+			Source:     j.Source,
+			PostedAt:   j.PostedAt,
+			Reality:    j.Reality,
+			GhostLevel: j.GhostLevel,
 		},
 	}
 }

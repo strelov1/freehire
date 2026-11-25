@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"maps"
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -26,7 +24,6 @@ import (
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
-	"github.com/strelov1/freehire/internal/search/suggest"
 )
 
 // searchHandlers serves the Meilisearch-backed job search surfaces: the keyword
@@ -106,11 +103,6 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 	return h
 }
 
-// searchRecordTimeout bounds the fire-and-forget demand write. Short: it is one
-// upsert on a small table, and a write still running past this is a database in
-// trouble rather than a slow row.
-const searchRecordTimeout = 5 * time.Second
-
 func (h *searchHandlers) register(api fiber.Router, mw middleware, contract fiber.Handler) {
 	// Literal routes are registered before the /jobs/:slug param route (see
 	// Register) so they are not read as slugs.
@@ -187,7 +179,8 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 	private := match != nil ||
 		(userID != 0 && !seenIgnored && wantsParam(vals, hideSeenParam)) ||
 		(userID != 0 && !appliedIgnored && wantsParam(vals, hideAppliedCompaniesParam))
-	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match, true)
+	data := isDataPlanRequest(ctx)
+	out, err := h.runJobSearch(ctx, vals, userID, seen, appliedFrag, match, !data)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search temporarily unavailable")
 	}
@@ -211,7 +204,8 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 	}
 	h.attachGhost(ctx, res.Hits, views)
 	h.markSponsored(res.Hits, views, out.ads)
-	data, err := marshalRaws(views)
+	hideOrigins(ctx, views)
+	raws, err := marshalRaws(views)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +220,8 @@ func (h *searchHandlers) SearchJobs(ctx context.Context, _ apigen.SearchJobsPara
 		meta.TotalIsLowerBound = apigen.NewOptBool(true)
 	}
 	return &apigen.JobSearchPageHeaders{
-		CacheControl: optString(privateCacheControl(private || out.private)),
-		Response:     apigen.JobSearchPage{Data: data, Meta: meta},
+		CacheControl: optString(privateCacheControl(data || private || out.private)),
+		Response:     apigen.JobSearchPage{Data: raws, Meta: meta},
 	}, nil
 }
 
@@ -451,43 +445,6 @@ func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, 
 		watchlist:       in.hasWatch,
 		newHiring:       hasNewHiring,
 	}, nil
-}
-
-// recordQuery notes what the catalogue was asked for, so the suggestion dictionary can
-// rank by demand rather than only by supply.
-//
-// Three properties, all deliberate:
-//
-//   - It CANNOT fail the search. A write error is logged and discarded: the result is
-//     what the visitor asked for and this is a by-product.
-//   - It CANNOT delay the response. It runs on its own goroutine with its own bounded
-//     context, because c.Context() is released when the handler returns.
-//   - It identifies nobody. The row is the phrase and a counter; no user, no session,
-//     no address — and `Recordable` refuses text that is not a search phrase at all,
-//     so a pasted email address or job description never reaches the table.
-//
-// The key is the same normalisation the builder applies to mined titles, so a typed
-// query and the title it names land on one row.
-func (h *searchHandlers) recordQuery(raw string) {
-	q := demandKey(raw)
-	if !suggest.Recordable(q) || h.queries == nil {
-		return
-	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), searchRecordTimeout)
-		defer cancel()
-		if err := h.queries.RecordSearchQuery(ctx, q); err != nil {
-			log.Printf("search: record query: %v", err)
-		}
-	}()
-}
-
-// demandKey normalises a raw `q` into the same key suggest.Title gives a mined posting title. A query wrapped in a matching pair of `"` (a title suggestion click) is unwrapped first, since that is Meilisearch quoting, not part of the phrase; any other quoting is left alone.
-func demandKey(raw string) string {
-	if len(raw) >= 2 && strings.HasPrefix(raw, `"`) && strings.HasSuffix(raw, `"`) {
-		raw = raw[1 : len(raw)-1]
-	}
-	return suggest.Title(raw)
 }
 
 // buildSearchFilter turns the request's facet query params into a Meilisearch

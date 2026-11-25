@@ -64,6 +64,9 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	api.Get("/jobs/:slug/copies", contract)
 	api.Get("/jobs/:slug/apply-form", contract)
 	api.Get("/jobs/:slug/skill-fit", contract)
+	// The Data plan's reads with the employer links the public ones hide (data_jobs.go).
+	api.Get("/data/jobs/search", mw.key, mw.dataPlan, contract)
+	api.Get("/data/jobs/:slug", mw.key, mw.dataPlan, contract)
 	registerInterviewPrep(api, mw, contract)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
@@ -101,6 +104,7 @@ func (h *jobsHandlers) ListJobs(ctx context.Context, _ apigen.ListJobsParams) (*
 		return nil, err
 	}
 	h.attachGhostToRows(ctx, jobs, views)
+	hideOrigins(ctx, views)
 
 	data, err := marshalRaws(views)
 	if err != nil {
@@ -212,18 +216,16 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 		view.ReferralAvailable = avail
 	}
 
-	// The company's site on record and its logo-proxy URL (by NAME, never a posting host:
-	// docs/agents/public-figures.md). Best-effort like the flags around it. Recruiter
-	// contacts are offered only where a lookup can run, so nobody pays a click for a 422.
-	if d, err := h.queries.GetJobRecruiterDomain(ctx, job.PublicSlug); err == nil {
-		if d.Domain != "" {
-			view.CompanyWebsite = "https://" + d.Domain
-		}
-		view.RecruiterContactsAvailable = h.recruiterContacts && d.Domain != ""
+	// The employer's site and logo, beside the employment type and pay range lifted out of
+	// enrichment. The same site host decides whether recruiter contacts are offered: only
+	// where a lookup can run, so nobody pays a click for a 422. Best-effort like the
+	// referral flag: a failed read leaves the site fields absent and contacts off.
+	var website, host string
+	if site, err := h.queries.GetCompanySite(ctx, job.CompanySlug); err == nil {
+		website, host = site.Website, site.Host
 	}
-	if job.Company != "" {
-		view.CompanyLogo = "https://logo.freehire.me/" + url.PathEscape(job.Company)
-	}
+	view.DetailFacts(website, host)
+	view.RecruiterContactsAvailable = h.recruiterContacts && host != ""
 
 	// Caller's own thumbs vote, overlaid only when signed in (OptionalAuth attaches
 	// the id on this public read). Best-effort: a lookup error leaves my_vote 0.
@@ -245,6 +247,9 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 		}
 	}
 
+	if !isDataPlanRequest(ctx) {
+		view.HideOrigin()
+	}
 	raw, err := json.Marshal(view)
 	if err != nil {
 		return nil, err

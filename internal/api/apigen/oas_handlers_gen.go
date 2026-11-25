@@ -8595,6 +8595,102 @@ func (s *Server) handleDeleteEmailRequest(args [1]string, argsEscaped bool, w ht
 	}
 }
 
+// handleDeleteEmployerVacancyRequest handles deleteEmployerVacancy operation.
+//
+// Deletes a vacancy the caller's team published; collected vacancies cannot be deleted. Final: reopen
+// does not bring it back.
+//
+// DELETE /employer/jobs/{slug}
+func (s *Server) handleDeleteEmployerVacancyRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: DeleteEmployerVacancyOperation,
+			ID:   "deleteEmployerVacancy",
+		}
+	)
+	params, err := decodeDeleteEmployerVacancyParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *DeleteEmployerVacancyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    DeleteEmployerVacancyOperation,
+			OperationSummary: "",
+			OperationID:      "deleteEmployerVacancy",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = DeleteEmployerVacancyParams
+			Response = *DeleteEmployerVacancyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackDeleteEmployerVacancyParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.DeleteEmployerVacancy(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.DeleteEmployerVacancy(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeDeleteEmployerVacancyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleDeleteEmploymentRequest handles deleteEmployment operation.
 //
 // 409 for a keyed caller while the place still holds achievements.
@@ -12382,6 +12478,102 @@ func (s *Server) handleGetCVTailorContextRequest(args [1]string, argsEscaped boo
 	}
 
 	if err := encodeGetCVTailorContextResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleGetDataJobRequest handles getDataJob operation.
+//
+// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the Data plan:
+// any other account gets `403`.
+//
+// GET /data/jobs/{slug}
+func (s *Server) handleGetDataJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: GetDataJobOperation,
+			ID:   "getDataJob",
+		}
+	)
+	params, err := decodeGetDataJobParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *GetDataJobOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetDataJobOperation,
+			OperationSummary: "A single job with its original links (Data plan).",
+			OperationID:      "getDataJob",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "slug",
+					In:   "path",
+				}: params.Slug,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = GetDataJobParams
+			Response = *GetDataJobOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackGetDataJobParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetDataJob(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetDataJob(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetDataJobResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -20199,8 +20391,9 @@ func (s *Server) handleListChangeWebhooksRequest(args [0]string, argsEscaped boo
 
 // handleListCompaniesRequest handles listCompanies operation.
 //
-// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
-// across facets), composably with `q`. `meta.total` reports the count matching the full filter.
+// Most active first. Facet params repeat and filter by array overlap (OR within a facet, AND across),
+// composable with `q`; `meta.total` counts the full filter. `countries` is where open jobs are,
+// `hq_country` the headquarters (ISO alpha-2).
 //
 // GET /companies
 func (s *Server) handleListCompaniesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -21049,7 +21242,9 @@ func (s *Server) handleListEmployerPendingClaimsRequest(args [0]string, argsEsca
 
 // handleListEmployerVacanciesRequest handles listEmployerVacancies operation.
 //
-// Every vacancy the caller published, newest first.
+// The caller's dashboard list, open first: the vacancies its team published (`source` is `employer`,
+// editable; at most 200) and the open ones of its company collected from other sources (read-only; at
+// most 200).
 //
 // GET /employer/jobs
 func (s *Server) handleListEmployerVacanciesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -26819,6 +27014,102 @@ func (s *Server) handlePostJobAutoApplyRetryRequest(args [1]string, argsEscaped 
 	}
 }
 
+// handlePrefillEmployerVacancyRequest handles prefillEmployerVacancy operation.
+//
+// Reads a vacancy link into draft values for the publish form; writes nothing. A vacancy already in
+// the catalogue returns its stored fields.
+//
+// POST /employer/jobs/prefill
+func (s *Server) handlePrefillEmployerVacancyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: PrefillEmployerVacancyOperation,
+			ID:   "prefillEmployerVacancy",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodePrefillEmployerVacancyRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *PrefillEmployerVacancyOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    PrefillEmployerVacancyOperation,
+			OperationSummary: "",
+			OperationID:      "prefillEmployerVacancy",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *PrefillRequest
+			Params   = struct{}
+			Response = *PrefillEmployerVacancyOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.PrefillEmployerVacancy(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.PrefillEmployerVacancy(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodePrefillEmployerVacancyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handlePrefillSubmissionRequest handles prefillSubmission operation.
 //
 // Uses the same ATS-recognition registry as `/jobs/resolve`, but writes nothing — no job, no
@@ -32268,6 +32559,128 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 	}
 
 	if err := encodeSearchCitiesResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleSearchDataJobsRequest handles searchDataJobs operation.
+//
+// The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with each
+// job's `url` (the employer's own posting) and `source_url` where it differs. The public job reads
+// leave both out and link only through `apply_url`. Needs the Data plan: any other account gets `403`.
+// Never cached: the answer is private to the plan holder.
+//
+// GET /data/jobs/search
+func (s *Server) handleSearchDataJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SearchDataJobsOperation,
+			ID:   "searchDataJobs",
+		}
+	)
+	params, err := decodeSearchDataJobsParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *JobSearchPageHeaders
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SearchDataJobsOperation,
+			OperationSummary: "Search open jobs with their original links (Data plan).",
+			OperationID:      "searchDataJobs",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "q",
+					In:   "query",
+				}: params.Q,
+				{
+					Name: "q_fields",
+					In:   "query",
+				}: params.QFields,
+				{
+					Name: "q_prefix",
+					In:   "query",
+				}: params.QPrefix,
+				{
+					Name: "sort",
+					In:   "query",
+				}: params.Sort,
+				{
+					Name: "order",
+					In:   "query",
+				}: params.Order,
+				{
+					Name: "limit",
+					In:   "query",
+				}: params.Limit,
+				{
+					Name: "offset",
+					In:   "query",
+				}: params.Offset,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = SearchDataJobsParams
+			Response = *JobSearchPageHeaders
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackSearchDataJobsParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SearchDataJobs(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SearchDataJobs(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSearchDataJobsResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)

@@ -24,16 +24,16 @@ model Job {
   company_slug?: string;
 
   /**
-   * The employer's own application URL, as published. Match pages and deduplicate on this;
-   * do not send people to it. Empty when `direct_apply` is true: that vacancy has no page
-   * elsewhere.
+   * The employer's own application URL, as published. Served only by the Data plan's
+   * `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
+   * Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
    */
   url?: string;
 
   /**
    * Where to send an applicant: a freehire redirect (`https://freehire.me/api/v1/go/{public_slug}?src=...`)
-   * that counts the click and forwards to `url`. Set `src` to the surface handing the link out:
-   * `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent when `url` is.
+   * that counts the click and forwards to the employer's page. Set `src` to the surface handing the link out:
+   * `web`, `mcp`, `ojcp`, `assistant`, `email`, `telegram` or `api`. Absent for a vacancy taking applications on freehire.
    */
   apply_url?: string;
 
@@ -54,7 +54,8 @@ model Job {
 
   /**
    * The original posting when `url` points at a separately verified application
-   * destination. Absent when both links are the same.
+   * destination. Absent when both links are the same, and outside the Data plan's
+   * `/data/jobs` endpoints.
    */
   source_url?: string;
 
@@ -62,8 +63,8 @@ model Job {
   application_deadline?: plainDate;
 
   /**
-   * The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
-   * Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+   * The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever,
+   * Ashby, Gem, Recruitee and Employment Hero state one). Absent when the source states none; not a taxonomy, so values differ
    * between employers.
    */
   team?: string;
@@ -160,9 +161,6 @@ model Job {
   @minValue(0)
   apply_questions?: integer;
 
-  /** Mirror of `enrichment.employment_type`, for flat readers. Absent when unknown. */
-  employment_type?: string;
-
   /** Mirror of `enrichment.seniority`. Absent when unknown. */
   experience_level?: string;
 
@@ -178,15 +176,6 @@ model Job {
    */
   remote?: boolean;
 
-  /** The company's website on record (`https://host`). Served by `getJob` only; absent when none is known. */
-  company_website?: string;
-
-  /**
-   * The company logo, from the freehire logo proxy keyed by the company NAME. Served by
-   * `getJob` only. The proxy answers 404 for a name it cannot resolve, so keep a fallback.
-   */
-  company_logo?: string;
-
   /**
    * True only on a search hit placed as a paid slot (never on an organic hit). Render a
    * visible "Sponsored" label, and link the card to `sponsored_url`.
@@ -198,6 +187,24 @@ model Job {
    * ends at the job. `url` stays the organic link.
    */
   sponsored_url?: string;
+
+  /**
+   * The employment type, the same value as `enrichment.employment_type`, lifted to the top
+   * level for flat readers. Absent when not known.
+   */
+  employment_type?: string;
+
+  /** The pay range, the same values as `enrichment.salary_*`. Served by `getJob` only; absent when no bound is stated. */
+  salary?: JobSalary;
+
+  /** The employer's own site as its company record states it. Served by `getJob` only; absent when none is on record. */
+  company_website?: string;
+
+  /**
+   * The employer's logo through freehire's logo proxy, resolved by the site's domain. The
+   * proxy answers 404 when it has no mark. Served by `getJob` only, beside `company_website`.
+   */
+  company_logo?: string;
 
   posted_at?: utcDateTime | null;
 
@@ -401,6 +408,17 @@ model JobFacetCounts {
    */
   @maxItems(50)
   top_companies?: TopCompany[];
+}
+
+/** A posting's pay range: either bound may be absent, never both. */
+model JobSalary {
+  min?: integer;
+  max?: integer;
+
+  /** ISO 4217 (e.g. `USD`). */
+  currency?: string;
+
+  period?: string;
 }
 
 /** The smallest and largest value of one continuous facet among the matching postings. */

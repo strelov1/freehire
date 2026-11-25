@@ -124,6 +124,17 @@ func TestSitemapBoardPostingKeepsAPostingWhoseSalaryIsABareNumber(t *testing.T) 
 	}
 }
 
+func TestSitemapBoardPostingKeepsAPostingWhoseApplicantLocationIsABareString(t *testing.T) {
+	root, err := html.Parse(strings.NewReader(`<script type="application/ld+json">{"@type":"JobPosting","title":"Data Engineer","hiringOrganization":{"name":"Acme"},"applicantLocationRequirements":"USA"}</script>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p sitemapBoardPosting
+	if !ldJobPosting(root, &p) || p.Title != "Data Engineer" {
+		t.Fatalf("posting with a string applicantLocationRequirements was dropped: %+v", p)
+	}
+}
+
 func TestLDJobPostingKeepsNoFieldsFromARejectedBlock(t *testing.T) {
 	rejected := `<script type="application/ld+json">{"@type":"JobPosting","baseSalary":{"currency":"USD","value":{"minValue":9000}},"title":42}</script>`
 	for name, accepted := range map[string]string{

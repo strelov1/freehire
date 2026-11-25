@@ -43,7 +43,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000. Neither paid API plan has a daily request cap. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -62,10 +64,11 @@ A posting is **open** until something closes it, and a closed posting carries `c
 - A board whose crawl has failed for a long time (`board_unreachable`, `board_gone`) or has listed nothing for a long time (`feed_empty`), or a board that was retired (`board_retired`).
 - An aggregator's copy of a posting whose employer's own board freehire already crawls closes in favour of that copy (`ats_covered`).
 - A moderator (`moderated`), or the employer on a posting they published themselves (`employer_closed`).
+- The employer deleting a posting they published themselves (`employer_deleted`). Unlike every other closer this is final: the posting leaves every list and `GET /jobs/{slug}` answers 404. The row is kept for the applications that reference it.
 
 Postings closed before the reason was recorded carry an empty `closed_reason`. A closed posting can **reopen**: when its source lists it again, or a moderator reopens it, `closed_at` is cleared.
 
-How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Every posting states its own age: `last_seen_at` is when a crawl last confirmed it live (an unchanged posting still gets it stamped), `updated_at` is when the record last changed (content, or opening or closing) and `created_at` is when freehire first saw it. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
+How often a posting is re-checked is set by each source's crawl schedule, and it differs by source; this API does not promise a figure. Every posting states its own age: `last_seen_at` is when a crawl last confirmed it live (an unchanged posting still gets it stamped), `updated_at` is when the record last changed (content, or opening or closing) and `created_at` is when freehire first saw it. `GET /jobs/{slug}` serves the current `last_seen_at`; a search hit carries the value from when its document was last written, which a crawl that changed nothing does not rewrite, so it can be older. Search also withholds an open posting its source has not shown for 14 days, but only for sources where a missing listing is evidence: some sources have a longer window of their own, and self-closing, liveness-probed and manually added sources are excluded. An old `last_seen_at` alone does not prove a posting is out of search. Such a posting stays open and `GET /jobs/{slug}` serves it.
 
 Closed postings never appear in `GET /jobs`, in search or in a company's open postings. `GET /jobs/{slug}` keeps serving them, with `closed_at` set, so a link you stored still resolves. A company's recent closed postings are at `GET /companies/{slug}/closed-jobs`. Interview prep also serves a closed public posting when the caller has a signed-in session and an application at the interview stage.
 
@@ -145,7 +148,6 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 // Listed last-first: decorators apply bottom-up, and the reference shows the tags in
 // the order they are applied.
 @tagMetadata("Change webhooks", #{ description: "Push delivery of the change feed to your own endpoint. Session or API key; needs an `api` or `api_data` plan. See Change webhooks above for the payload and how to verify a signature." })
-@tagMetadata("Catalogue export", #{ description: "Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /jobs/{slug}` (full `description` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence." })
 @tagMetadata("Watchlist", #{})
 @tagMetadata("Tailoring", #{})
 @tagMetadata("Support", #{})

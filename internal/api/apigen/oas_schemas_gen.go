@@ -6354,6 +6354,10 @@ type CompanyListItem struct {
 	Tagline    NilString `json:"tagline"`
 	Industries []string  `json:"industries"`
 	HqCountry  NilString `json:"hq_country"`
+	// The company's own site as recorded (its website, else its homepage); null when unknown.
+	Website NilString `json:"website"`
+	// The company's LinkedIn page; null when unknown.
+	Linkedin NilString `json:"linkedin"`
 	// Curated company tags; the catalogue card renders the backer marks from these.
 	Collections   []string `json:"collections"`
 	FeedbackCount int64    `json:"feedback_count"`
@@ -6391,6 +6395,16 @@ func (s *CompanyListItem) GetIndustries() []string {
 // GetHqCountry returns the value of HqCountry.
 func (s *CompanyListItem) GetHqCountry() NilString {
 	return s.HqCountry
+}
+
+// GetWebsite returns the value of Website.
+func (s *CompanyListItem) GetWebsite() NilString {
+	return s.Website
+}
+
+// GetLinkedin returns the value of Linkedin.
+func (s *CompanyListItem) GetLinkedin() NilString {
+	return s.Linkedin
 }
 
 // GetCollections returns the value of Collections.
@@ -6441,6 +6455,16 @@ func (s *CompanyListItem) SetIndustries(val []string) {
 // SetHqCountry sets the value of HqCountry.
 func (s *CompanyListItem) SetHqCountry(val NilString) {
 	s.HqCountry = val
+}
+
+// SetWebsite sets the value of Website.
+func (s *CompanyListItem) SetWebsite(val NilString) {
+	s.Website = val
+}
+
+// SetLinkedin sets the value of Linkedin.
+func (s *CompanyListItem) SetLinkedin(val NilString) {
+	s.Linkedin = val
 }
 
 // SetCollections sets the value of Collections.
@@ -9107,6 +9131,21 @@ func (s *DeleteCompanyFeedbackOK) SetData(val CompanyFeedbackSummary) {
 
 // DeleteEmailNoContent is response for DeleteEmail operation.
 type DeleteEmailNoContent struct{}
+
+// A single item: `{"data": ...}`.
+type DeleteEmployerVacancyOK struct {
+	Data EmployerRemoved `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *DeleteEmployerVacancyOK) GetData() EmployerRemoved {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *DeleteEmployerVacancyOK) SetData(val EmployerRemoved) {
+	s.Data = val
+}
 
 // DeleteEmploymentNoContent is response for DeleteEmployment operation.
 type DeleteEmploymentNoContent struct{}
@@ -13532,6 +13571,21 @@ func (s *GetCVTailorContextOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetCVTailorContextOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetDataJobOK struct {
+	Data jx.Raw `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetDataJobOK) GetData() jx.Raw {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetDataJobOK) SetData(val jx.Raw) {
 	s.Data = val
 }
 
@@ -24693,6 +24747,21 @@ func (s *PostJobAutoApplyRetryOK) SetData(val AutoApplyRetried) {
 	s.Data = val
 }
 
+// A single item: `{"data": ...}`.
+type PrefillEmployerVacancyOK struct {
+	Data SubmissionPrefill `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *PrefillEmployerVacancyOK) GetData() SubmissionPrefill {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *PrefillEmployerVacancyOK) SetData(val SubmissionPrefill) {
+	s.Data = val
+}
+
 // Ref: #/components/schemas/PrefillRequest
 type PrefillRequest struct {
 	// The job posting URL to parse.
@@ -30669,7 +30738,8 @@ type SubmissionPrefill struct {
 	Seniority      OptString `json:"seniority"`
 	Skills         []string  `json:"skills"`
 	Source         OptString `json:"source"`
-	// Set, with every other field empty, when the catalogue already carries the vacancy.
+	// Set when the catalogue already carries the vacancy. On `/submissions/prefill` every other field is
+	// then empty; on `/employer/jobs/prefill` they hold the stored vacancy.
 	ExistingJobSlug OptString `json:"existing_job_slug"`
 }
 

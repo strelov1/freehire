@@ -127,6 +127,19 @@ export interface Card {
 }
 
 //////////
+// source: detail_facts.go
+
+/**
+ * Salary is a posting's pay range: either bound may be absent, never both.
+ */
+export interface Salary {
+  min?: number /* int */;
+  max?: number /* int */;
+  currency?: string;
+  period?: string;
+}
+
+//////////
 // source: ghost.go
 
 /**
@@ -171,7 +184,8 @@ export interface Job {
   external_id: string;
   /**
    * URL is the employer's own application URL, as stored: the canonical address the
-   * extension matches pages against and API consumers deduplicate on.
+   * extension matches pages against. Served to the public only on the Data plan's
+   * endpoints; every other surface drops it with HideOrigin.
    */
   url: string;
   /**
@@ -291,7 +305,7 @@ export interface Job {
   application_deadline?: string;
   /**
    * Team is the department or team the source ATS files the posting under (Greenhouse,
-   * Lever and Ashby state one), verbatim. Omitted when the source states none.
+   * Lever, Ashby, Gem, Recruitee and Employment Hero state one), verbatim. Omitted when the source states none.
    */
   team?: string;
   /**
@@ -304,23 +318,15 @@ export interface Job {
    */
   apply_questions?: number /* int */;
   /**
-   * EmploymentType, ExperienceLevel, Category, EducationLevel and Remote are top-level
-   * mirrors of facts already served (enrichment.employment_type, .seniority, .category,
-   * .education_level, and work_mode), for consumers that read a flat posting. Remote is a
+   * ExperienceLevel, Category, EducationLevel and Remote are top-level mirrors of facts
+   * already served (enrichment.seniority, .category, .education_level, and work_mode), for
+   * consumers that read a flat posting; EmploymentType below is the fourth. Remote is a
    * pointer: false ("hybrid"/"onsite") is an answer, absent means work_mode is unknown.
    */
-  employment_type?: string;
   experience_level?: string;
   category?: string;
   education_level?: string;
   remote?: boolean;
-  /**
-   * CompanyWebsite (the company's site on record, https URL) and CompanyLogo (the logo
-   * proxy's URL for the company NAME, which may 404 on a miss) are attached by the detail
-   * handler only; list and search rows omit them.
-   */
-  company_website?: string;
-  company_logo?: string;
   /**
    * Sponsored marks a search hit placed as a paid slot (never an organic one), and
    * SponsoredURL is the click-tracking redirect the "Sponsored" card must link to
@@ -390,6 +396,20 @@ export interface Job {
    * keyed by (caller_id, job_id), so the shared job query stays free of it.
    */
   auto_apply_status?: string;
+  /**
+   * EmploymentType repeats enrichment.employment_type at the top level of every row
+   * (FromDomain). Salary repeats enrichment.salary_* on the detail only (DetailFacts);
+   * list rows and search documents keep the nested pay range.
+   */
+  employment_type?: string;
+  salary?: Salary;
+  /**
+   * CompanyWebsite is the employer's site as its company record states it, and CompanyLogo
+   * that employer's mark through the logo proxy, resolved by the site's domain. Detail
+   * handler only; both omitted when the company has no site on record.
+   */
+  company_website?: string;
+  company_logo?: string;
 }
 
 //////////
@@ -1619,7 +1639,7 @@ export interface CatalogueMember {
   has_photo: boolean;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'academictransfer', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applicantstack', 'applitrack', 'appone', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'authenticjobs', 'avature', 'awwwards', 'bamboohr', 'bayt', 'beehire', 'beesite', 'berlinstartupjobs', 'betterteam', 'bizneo', 'brassring', 'breezy', 'briefhq', 'builtin', 'bullhorn', 'bumeran', 'cadremploi', 'cake', 'careerplug', 'careersgov', 'careerspage', 'catchtalents', 'catho', 'catsone', 'cbop', 'charityjob', 'civilservicejobs', 'clearancejobs', 'clearedjobs', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'computrabajo', 'concludis', 'cornerstone', 'coveto', 'crelate', 'crossover', 'cryptocurrencyjobs', 'cryptojobslist', 'cutshort', 'cvbankas', 'cvonline', 'cvwarehouse', 'darwinbox', 'dayforce', 'deel', 'devglobaljobs', 'dice', 'digitalrecruiters', 'djinni', 'dover', 'dribbble', 'dsml', 'dualoo', 'dvinci', 'dynamitejobs', 'earcu', 'easycruit', 'echojobs', 'edjoin', 'efinancialcareers', 'eightfold', 'employmenthero', 'emply', 'empregos', 'energyjobline', 'engage', 'enlizt', 'epam', 'eploy', 'epreselec', 'erecruiter', 'ess', 'eures', 'factorial', 'feinaactiva', 'feishujobs', 'firefish', 'flatchr', 'foundit', 'francetravail', 'freework', 'freshteam', 'friendwork', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'gemeentebanen', 'gethired', 'getinit', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'glints', 'gohire', 'golangjobs', 'gr8people', 'gradcracker', 'greenhouse', 'greythr', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hackernews', 'harri', 'hcshiring', 'helixjobs', 'hellowork', 'herkey', 'herp', 'hh', 'hibob', 'higherme', 'himalayas', 'hireclick', 'hirehive', 'hireology', 'hiringroom', 'hiringthing', 'hirist', 'homerun', 'hrmanager', 'hrmdirect', 'hrmos', 'hroffice', 'hrsmart', 'hubstafftalent', 'humanbit', 'huntflow', 'hurma', 'hzz', 'icims', 'ictjobs', 'idealtraits', 'iimjobs', 'infoempleo', 'infojobs', 'infojobsbr', 'infostud', 'inhire', 'inploi', 'instaffo', 'instahyre', 'intervieweb', 'ismartrecruit', 'isolvedhire', 'itechart', 'itjobs', 'itviec', 'japandev', 'jazzhr', 'jibe', 'job104', 'jobappnetwork', 'jobbankca', 'jobboardly', 'jobdanmark', 'jobgether', 'jobicy', 'jobindex', 'jobkorea', 'jobleads', 'jobnet', 'jobsacuk', 'jobsch', 'jobscore', 'jobscz', 'jobspage', 'jobspresso', 'jobstash', 'jobstreet', 'jobteaser', 'jobtech', 'jobvite', 'jobylon', 'join', 'joppy', 'jumpit', 'justjoin', 'justremote', 'kalibrr', 'kariyernet', 'karriereat', 'keka', 'kenjo', 'landingjobs', 'lever', 'levtech', 'likeit', 'linkedin', 'livehire', 'loxo', 'luxoft', 'manatal', 'meincheckin', 'mindsight', 'mojedelo', 'mojposao', 'mokahr', 'mycareersfuture', 'mynavi', 'naukri', 'naukrigulf', 'neogov', 'netempregos', 'njoyn', 'nodesk', 'nofluffjobs', 'northstone', 'nsz', 'occ', 'odoo', 'onapply', 'onlyfy', 'oorwin', 'opencats', 'optius', 'oracle', 'pageup', 'pandape', 'pandapelatam', 'paradox', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'peoplesoft', 'personio', 'phenom', 'pinpoint', 'polymer', 'posaohr', 'potok', 'powertofly', 'pracuj', 'profession', 'prospective', 'pyjamahr', 'pythonorg', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruiter_co_kr', 'recruiterflow', 'recruitify', 'recruitingsolutions', 'recrutei', 'reed', 'refline', 'remotedotcom', 'remotive', 'remotli', 'rexx', 'rippling', 'rocketjobs', 'sapoemprego', 'saramin', 'scalis', 'schoolspring', 'seamlesshiring', 'seek', 'selfrecruit', 'senior', 'servicepublic', 'shine', 'sitemapldjson', 'skipthedrive', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spainjobs', 'spark', 'speedrun', 'startupandvc', 'startupjobs', 'successfactors', 'swissdevjobs', 'taleez', 'talentadore', 'talentbrew', 'talentclue', 'talentglade', 'talenthr', 'talentlyft', 'talentsoft', 'talentstorm', 'taleo', 'taleobe', 'teamex', 'teamtailor', 'techinasia', 'techtree', 'tecla', 'tenstreet', 'thehub', 'themuse', 'topco', 'torre', 'traffit', 'trakstar', 'trinethire', 'trudvsem', 'turijobs', 'tyomarkkinatori', 'ukg', 'ukgready', 'umantis', 'unstop', 'usajobs', 'vagas', 'velorahr', 'vention', 'vietnamworks', 'viterbit', 'vouch', 'wantapply', 'wantapply-cy', 'wellfound', 'werecruit', 'werkenvoornederland', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-cr', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-do', 'whatjobs-dz', 'whatjobs-ec', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-gt', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-ma', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-ng', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pa', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pr', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-ru', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-tz', 'whatjobs-ug', 'whatjobs-uk', 'whatjobs-uy', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'work180', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'workwise', 'wpyoast', 'wttj', 'wuzzuf', 'xing', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'academictransfer', 'adp', 'adpmyjobs', 'adzuna', 'aijobs', 'applicantpro', 'applicantstack', 'applitrack', 'appone', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'authenticjobs', 'avature', 'awwwards', 'bamboohr', 'bayt', 'beehire', 'beesite', 'berlinstartupjobs', 'betterteam', 'bizneo', 'brassring', 'breezy', 'briefhq', 'builtin', 'bullhorn', 'bumeran', 'cadremploi', 'cake', 'careerplug', 'careersgov', 'careerspage', 'catchtalents', 'catho', 'catsone', 'cbop', 'charityjob', 'civilservicejobs', 'clearancejobs', 'clearedjobs', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'computrabajo', 'concludis', 'cornerstone', 'coveto', 'crelate', 'crossover', 'cryptocurrencyjobs', 'cryptojobslist', 'cutshort', 'cvbankas', 'cvonline', 'cvwarehouse', 'darwinbox', 'dayforce', 'deel', 'devglobaljobs', 'dice', 'digitalrecruiters', 'djinni', 'dover', 'dribbble', 'dsml', 'dualoo', 'dvinci', 'dynamitejobs', 'earcu', 'easycruit', 'echojobs', 'edjoin', 'efinancialcareers', 'eightfold', 'employmenthero', 'emply', 'empregos', 'energyjobline', 'engage', 'enlizt', 'epam', 'eploy', 'epreselec', 'erecruiter', 'ess', 'eures', 'factorial', 'feinaactiva', 'feishujobs', 'firefish', 'flatchr', 'foundit', 'francetravail', 'freework', 'freshteam', 'friendwork', 'functionalworks', 'geekhunter', 'geekjob', 'gem', 'gemeentebanen', 'gethired', 'getinit', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'glints', 'gohire', 'golangjobs', 'gr8people', 'gradcracker', 'greenhouse', 'greythr', 'gulftalent', 'gupy', 'gusto', 'habr_career', 'hackernews', 'harri', 'hcshiring', 'helixjobs', 'hellowork', 'herkey', 'herp', 'hh', 'hibob', 'higherme', 'himalayas', 'hireclick', 'hirehive', 'hireology', 'hiringroom', 'hiringthing', 'hirist', 'homerun', 'hrmanager', 'hrmdirect', 'hrmos', 'hroffice', 'hrsmart', 'hubstafftalent', 'humanbit', 'huntflow', 'hurma', 'hzz', 'icims', 'ictjobs', 'idealtraits', 'iimjobs', 'infoempleo', 'infojobs', 'infojobsbr', 'infostud', 'inhire', 'inploi', 'instaffo', 'instahyre', 'intervieweb', 'ismartrecruit', 'isolvedhire', 'itechart', 'itjobs', 'itviec', 'japandev', 'jazzhr', 'jibe', 'job104', 'jobappnetwork', 'jobbankca', 'jobboardly', 'jobdanmark', 'jobgether', 'jobicy', 'jobindex', 'jobkorea', 'jobleads', 'jobnet', 'jobsacuk', 'jobsch', 'jobscore', 'jobscz', 'jobspage', 'jobspresso', 'jobstash', 'jobstreet', 'jobteaser', 'jobtech', 'jobvite', 'jobylon', 'join', 'joppy', 'jumpit', 'justjoin', 'justremote', 'kalibrr', 'kariyernet', 'karriereat', 'keka', 'kenjo', 'landingjobs', 'lever', 'levtech', 'likeit', 'linkedin', 'livehire', 'loxo', 'luxoft', 'manatal', 'meincheckin', 'mindsight', 'mojedelo', 'mojposao', 'mokahr', 'mycareersfuture', 'mynavi', 'naukri', 'naukrigulf', 'neogov', 'netempregos', 'njoyn', 'nodesk', 'nofluffjobs', 'northstone', 'nsz', 'occ', 'odoo', 'onapply', 'onlyfy', 'oorwin', 'opencats', 'optius', 'oracle', 'pageup', 'pandape', 'pandapelatam', 'paradox', 'paycom', 'paycor', 'paylocity', 'peopleforce', 'peoplesoft', 'personio', 'phenom', 'pinpoint', 'polymer', 'posaohr', 'potok', 'powertofly', 'pracuj', 'profession', 'prospective', 'pyjamahr', 'pythonorg', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruiter_co_kr', 'recruiterflow', 'recruitify', 'recruitingsolutions', 'recrutei', 'reed', 'refline', 'remote100k', 'remotedotcom', 'remotejobsfinder', 'remotive', 'remotli', 'rexx', 'rippling', 'rocketjobs', 'sapoemprego', 'saramin', 'scalis', 'schoolspring', 'seamlesshiring', 'seek', 'selfrecruit', 'senior', 'servicepublic', 'shine', 'sitemapldjson', 'skipthedrive', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spainjobs', 'spark', 'speedrun', 'startupandvc', 'startupjobs', 'successfactors', 'swissdevjobs', 'taleez', 'talentadore', 'talentbrew', 'talentclue', 'talentglade', 'talenthr', 'talentlyft', 'talentsoft', 'talentstorm', 'taleo', 'taleobe', 'teamex', 'teamtailor', 'techinasia', 'techtree', 'tecla', 'tenstreet', 'thehub', 'themuse', 'topco', 'torre', 'traffit', 'trakstar', 'trinethire', 'trudvsem', 'turijobs', 'tyomarkkinatori', 'ukg', 'ukgready', 'umantis', 'unstop', 'usajobs', 'vagas', 'velorahr', 'vention', 'vietnamworks', 'viterbit', 'vouch', 'wantapply', 'wantapply-cy', 'wellfound', 'werecruit', 'werkenvoornederland', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-cr', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-do', 'whatjobs-dz', 'whatjobs-ec', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-gt', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-ma', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-ng', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pa', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pr', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-ru', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-tz', 'whatjobs-ug', 'whatjobs-uk', 'whatjobs-uy', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'work180', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'workstream', 'workwise', 'wpyoast', 'wttj', 'wuzzuf', 'xing', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];

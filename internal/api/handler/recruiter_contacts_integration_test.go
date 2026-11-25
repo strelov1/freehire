@@ -255,18 +255,9 @@ func TestRecruiterContacts_NoWebsiteAndFeatureOff(t *testing.T) {
 }
 
 // The job page offers the lookup only where it can run: feature on and a company website.
-// The same lookup serves the company's site and its logo-proxy URL, whatever the flag.
 func TestRecruiterContacts_JobDetailSaysWhereALookupCanRun(t *testing.T) {
 	fx := newContactsFixture(t, nil, 5)
-	if _, err := fx.pool.Exec(context.Background(), `UPDATE jobs SET company = 'Acme & Co' WHERE id = $1`, fx.jobIDs["job-a"]); err != nil {
-		t.Fatal(err)
-	}
-	type detail struct {
-		Available bool   `json:"recruiter_contacts_available"`
-		Website   string `json:"company_website"`
-		Logo      string `json:"company_logo"`
-	}
-	get := func(configured bool, slug string) detail {
+	available := func(configured bool, slug string) bool {
 		t.Helper()
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		mountJobsContract(app, &jobsHandlers{queries: db.New(fx.pool), recruiterContacts: configured}, middleware{})
@@ -276,28 +267,23 @@ func TestRecruiterContacts_JobDetailSaysWhereALookupCanRun(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		var body struct {
-			Data detail `json:"data"`
+			Data struct {
+				Available bool `json:"recruiter_contacts_available"`
+			} `json:"data"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("GET %s: %d %v", slug, resp.StatusCode, err)
 		}
-		return body.Data
+		return body.Data.Available
 	}
-	if !get(true, "job-a").Available {
+	if !available(true, "job-a") {
 		t.Error("configured, company with a website: want available")
 	}
-	if get(true, "no-site").Available {
+	if available(true, "no-site") {
 		t.Error("company without a website: want unavailable")
 	}
-	off := get(false, "job-a")
-	if off.Available {
+	if available(false, "job-a") {
 		t.Error("feature off: want unavailable")
-	}
-	if want := (detail{Website: "https://acme.io", Logo: "https://logo.freehire.me/Acme%20&%20Co"}); off != want {
-		t.Errorf("feature off, job-a = %+v, want %+v", off, want)
-	}
-	if d := get(true, "no-site"); d.Website != "" {
-		t.Errorf("company without a website: company_website = %q, want absent", d.Website)
 	}
 }
 

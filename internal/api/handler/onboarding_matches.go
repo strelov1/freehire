@@ -47,6 +47,7 @@ func (h *searchHandlers) OnboardingMatches(ctx context.Context, req *apigen.Onbo
 		views[i] = hit.Job
 	}
 	h.attachGhost(ctx, res.Hits, views)
+	hideOrigins(ctx, views)
 	raws, err := marshalRaws(views)
 	if err != nil {
 		return nil, err
