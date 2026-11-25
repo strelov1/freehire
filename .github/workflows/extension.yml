@@ -95,6 +95,12 @@ jobs:
       - name: Type check
         run: pnpm run check
 
+      # The other half of the check in ci.yml's web-work job: lib/assistant holds verbatim
+      # ports of web/src/lib/assistant, and an extension-only change selects this job alone.
+      - name: Check the assistant ports against the web
+        working-directory: ..
+        run: node scripts/check-assistant-ports.mjs
+
       # Production build (.env.production -> freehire.me),
       # zipped exactly as it is uploaded to the Chrome Web Store.
       - name: Build and zip
