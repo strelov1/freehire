@@ -91,7 +91,6 @@ var curatedAliases = map[string]string{
 	// copies. Each count is shared open roles over the smaller side; the survivor is the slug
 	// whose company record holds the employer's website (company_info is not carried over).
 	"michaels":                 "michaels-stores",               // 1562/1618, michaels.com
-	"micron":                   "micron-technology",             // 2120/2172
 	"truist-bank":              "truist",                        // 595/610, truist.com
 	"c-a-brasil-lojas":         "c-a-brasil",                    // 356/358
 	"verzani":                  "verzani-sandrini",              // 108/109

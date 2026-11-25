@@ -477,3 +477,20 @@ func TestNameWords_SpacedPolishFormIsNotNameWords(t *testing.T) {
 		t.Errorf("nameWords = %d, want 1", got)
 	}
 }
+
+func TestPlanMerges_CuratedEntryCannotRetireAFrozenCanon(t *testing.T) {
+	// micron was a frozen canon (micron-sp-z-o-o 301s to it) when a curated entry named it
+	// retiring; honouring the entry would have left that alias pointing at an empty slug.
+	companies := []company{
+		{Slug: "micron", Name: "Micron", JobCount: 40},
+		{Slug: "micron-technology", Name: "Micron Technology", JobCount: 50},
+	}
+	got := planMerges(companies, map[string]bool{"micron": true}, 0, map[string]string{"micron": "micron-technology"})
+	for _, m := range got {
+		for _, a := range m.Aliases {
+			if a.Slug == "micron" {
+				t.Errorf("planned micron -> %q, want it kept: a frozen canon never moves", m.Canonical)
+			}
+		}
+	}
+}
