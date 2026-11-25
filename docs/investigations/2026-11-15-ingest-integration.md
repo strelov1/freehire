@@ -202,7 +202,7 @@ validation after the routing and fleet commits is recorded below):
   read-only catalog access only. The initial connection attempt revealed that psql treats
   a URI in `PGDATABASE` as a literal name; fixed by using its intended `--dbname` API,
   capturing failures and reporting a generic error to avoid exposing connection secrets.
-- `pnpm check:size`, `git diff --check`, staged diff check, and The secret scan over the three
+- `pnpm check:size`, `git diff --check`, staged diff check, and the secret scan over the three
   integrated commits and own follow-up diff: passed.
 - Simplify pass: retained the existing provider APIs; the recovery script only checks
   the initial two explicit identities and invokes the established writer. No extra abstraction,
