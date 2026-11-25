@@ -901,8 +901,6 @@ type ExperienceEmployment struct {
 	Company          string             `json:"company"`
 	Role             string             `json:"role"`
 	Location         string             `json:"location"`
-	PeriodStart      string             `json:"period_start"`
-	PeriodEnd        string             `json:"period_end"`
 	IsCurrent        bool               `json:"is_current"`
 	Summary          string             `json:"summary"`
 	Stack            []string           `json:"stack"`
@@ -2126,8 +2124,6 @@ type User struct {
 	ResumeObjectKey            pgtype.Text        `json:"resume_object_key"`
 	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
 	ResumeAtsAnalysis          []byte             `json:"resume_ats_analysis"`
-	ResumeEmbedding            []float64          `json:"resume_embedding"`
-	ResumeEmbeddingModel       pgtype.Text        `json:"resume_embedding_model"`
 	ResumeStructured           []byte             `json:"resume_structured"`
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
