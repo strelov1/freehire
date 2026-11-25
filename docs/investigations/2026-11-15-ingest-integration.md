@@ -202,7 +202,7 @@ validation after the routing and fleet commits is recorded below):
   read-only catalog access only. The initial connection attempt revealed that psql treats
   a URI in `PGDATABASE` as a literal name; fixed by using its intended `--dbname` API,
   capturing failures and reporting a generic error to avoid exposing connection secrets.
-- `pnpm check:size`, `git diff --check`, staged diff check, and Gitleaks over the three
+- `pnpm check:size`, `git diff --check`, staged diff check, and the secret scan over the three
   integrated commits and own follow-up diff: passed.
 - Simplify pass: retained the existing provider APIs; the recovery script only checks
   the initial two explicit identities and invokes the established writer. No extra abstraction,
@@ -267,7 +267,7 @@ Final checks after all six commits and both accepted review fixes passed:
 `GOMAXPROCS=2 go vet -p 2 ./...`, `GOMAXPROCS=2 go test -p 2 ./...`, and
 `GOMAXPROCS=2 go vet -p 2 -tags=integration ./...`. Golangci-lint over changes since
 integrated HEAD reports zero issues. Gofmt, sqlc regeneration, Ruff, five Python tests,
-link/size checks, whitespace checks and the final follow-up Gitleaks scan passed.
+link/size checks, whitespace checks and the final follow-up secret scan passed.
 All six supplied commits retain matching stable patch IDs. Production recovery remains
 unclaimed; the separately delegated ops/RWB/HigherMe work and the catalog blockers above
 remain release follow-ups.
