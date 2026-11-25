@@ -2,8 +2,10 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/meilisearch/meilisearch-go"
@@ -55,6 +57,10 @@ type CompanyDocument struct {
 	// path (ListCompanies in internal/platform/db/queries/companies.sql).
 	FeedbackCount     int32   `json:"feedback_count"`
 	FeedbackRatingAvg float32 `json:"feedback_rating_avg"`
+	// Website and LinkedIn identify the company to a caller outside freehire, display-only:
+	// company_info's website (else homepage) and linkedin, the ListCompanies row's columns.
+	Website  string `json:"website"`
+	LinkedIn string `json:"linkedin"`
 	// UpdatedAt is the row's last write, carried only for the company sitemap's <lastmod>
 	// (see sitemap.go). Not searchable, filterable or sortable.
 	UpdatedAt time.Time `json:"updated_at"`
@@ -63,6 +69,7 @@ type CompanyDocument struct {
 // FromCompany maps a stored company row to its index document. pgtype.Text scalars unwrap to
 // their string (empty when NULL); facet arrays pass through, and an empty one matches no filter.
 func FromCompany(c db.Company) CompanyDocument {
+	site := companySite(c.CompanyInfo)
 	return CompanyDocument{
 		Slug:              c.Slug,
 		Name:              c.Name,
@@ -70,6 +77,8 @@ func FromCompany(c db.Company) CompanyDocument {
 		Industries:        c.Industries,
 		IndustriesDerived: c.IndustriesDerived,
 		HqCountry:         c.HqCountry.String,
+		Website:           site.website(),
+		LinkedIn:          strings.Trim(site.LinkedIn, siteSpace),
 		JobCount:          c.JobCount,
 		Collections:       c.Collections,
 		Regions:           c.Regions,
@@ -92,6 +101,33 @@ func FromCompany(c db.Company) CompanyDocument {
 	}
 }
 
+// companyInfoSite is the part of companies.company_info that says where the company lives on
+// the web. A malformed blob reads as empty: the document then carries no site, as for a company
+// nobody enriched.
+type companyInfoSite struct {
+	Website  string `json:"website"`
+	Homepage string `json:"homepage"`
+	LinkedIn string `json:"linkedin"`
+}
+
+func companySite(info json.RawMessage) companyInfoSite {
+	var s companyInfoSite
+	_ = json.Unmarshal(info, &s)
+	return s
+}
+
+// siteSpace is the whitespace ListCompanies' SQL trims ('^[ \t\n\v\f\r]+'): ASCII only, so a
+// no-break space survives on both backends. strings.TrimSpace would strip it here alone.
+const siteSpace = " \t\n\v\f\r"
+
+// website mirrors ListCompanies' column: the website, else the homepage, whitespace-trimmed.
+func (s companyInfoSite) website() string {
+	if w := strings.Trim(s.Website, siteSpace); w != "" {
+		return w
+	}
+	return strings.Trim(s.Homepage, siteSpace)
+}
+
 // companySettings is the companies index configuration. Ranking is relevance-first so an exact
 // name match beats a substring, with `job_count:desc` as the last tiebreaker to reproduce the
 // Postgres path's secondary order. Searchable attributes are ordered name, slug, tagline so a
@@ -105,7 +141,7 @@ func companySettings() *meilisearch.Settings {
 			"industries_derived",
 			"company_types", "company_sizes", "remote_regions",
 			"yc_batch", "yc_status", "yc_stage", "yc_flags",
-			"maturity", "subindustry",
+			"maturity", "subindustry", "hq_country",
 		},
 		SortableAttributes: []string{"job_count"},
 		RankingRules:       []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "job_count:desc"},
@@ -134,6 +170,9 @@ var companyFacets = []struct{ param, attr string }{
 	{"yc_flags", "yc_flags"},
 	{"maturity", "maturity"},
 	{"subindustries", "subindustry"},
+	// Where the company is headquartered, unlike `countries` (where its open jobs are). Stored
+	// codes are mixed case ("US", "us"); Meilisearch compares filter strings case-insensitively.
+	{"hq_country", "hq_country"},
 }
 
 // CompanyFilterFromValues turns the facet params of a /companies request into a Meilisearch

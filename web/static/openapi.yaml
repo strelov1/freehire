@@ -2060,7 +2060,7 @@
       "get": {
         "operationId": "searchCompanies",
         "summary": "List companies with job counts and denormalized facets; optional filters.",
-        "description": "Most active first. Facet params are repeatable and filter by array overlap (OR within a\nfacet, AND across facets), composably with `q`. `meta.total` reports the count matching\nthe full filter.",
+        "description": "Most active first. Facet params repeat and filter by array overlap (OR within a facet,\nAND across), composable with `q`; `meta.total` counts the full filter. `countries` is\nwhere open jobs are, `hq_country` the headquarters (ISO alpha-2).",
         "parameters": [
           {
             "name": "q",
@@ -2139,6 +2139,9 @@
           },
           {
             "$ref": "#/components/parameters/company.domains"
+          },
+          {
+            "$ref": "#/components/parameters/company.hq_country"
           }
         ],
         "responses": {
@@ -2176,6 +2179,8 @@
                         "payments"
                       ],
                       "hq_country": "DE",
+                      "website": "https://acme.example",
+                      "linkedin": "https://www.linkedin.com/company/acme",
                       "collections": [
                         "yc"
                       ],
@@ -4361,6 +4366,19 @@
             "type": "string"
           }
         }
+      },
+      "company.hq_country": {
+        "name": "hq_country",
+        "in": "query",
+        "description": "Headquarters country: ISO 3166-1 alpha-2 codes, any case — where the company is headquartered, as opposed to `countries` (where its open jobs are).",
+        "style": "form",
+        "explode": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "schemas": {
@@ -4584,6 +4602,8 @@
           "tagline",
           "industries",
           "hq_country",
+          "website",
+          "linkedin",
           "collections",
           "feedback_count",
           "feedback_rating_avg"
@@ -4610,6 +4630,16 @@
             }
           },
           "hq_country": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "description": "The company's own site as recorded (its website, else its homepage); null when unknown.",
+            "type": "string",
+            "nullable": true
+          },
+          "linkedin": {
+            "description": "The company's LinkedIn page; null when unknown.",
             "type": "string",
             "nullable": true
           },

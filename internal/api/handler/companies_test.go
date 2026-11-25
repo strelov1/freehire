@@ -79,8 +79,8 @@ func TestCompanyListItemFromDocNormalizesAbsentCollections(t *testing.T) {
 // caller receives. Any change here is an API change and must be argued for, not merged as a
 // refactor.
 const (
-	goldenCompanyFull  = `{"slug":"euro-lab","name":"Euro Lab","job_count":12,"tagline":"We ship fridges","industries":["fintech"],"hq_country":"de","collections":["yc"],"feedback_count":0,"feedback_rating_avg":null}`
-	goldenCompanyEmpty = `{"slug":"x","name":"X","job_count":0,"tagline":null,"industries":[],"hq_country":null,"collections":[],"feedback_count":0,"feedback_rating_avg":null}`
+	goldenCompanyFull  = `{"slug":"euro-lab","name":"Euro Lab","job_count":12,"tagline":"We ship fridges","industries":["fintech"],"hq_country":"de","website":"https://eurolab.example","linkedin":"https://www.linkedin.com/company/euro-lab","collections":["yc"],"feedback_count":0,"feedback_rating_avg":null}`
+	goldenCompanyEmpty = `{"slug":"x","name":"X","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"collections":[],"feedback_count":0,"feedback_rating_avg":null}`
 )
 
 // The endpoint has two backends and one response, so the assertion that matters is that they
@@ -92,6 +92,8 @@ func TestCompanyListItemJSONIsStableAcrossBothBackends(t *testing.T) {
 		Tagline:     pgtype.Text{String: "We ship fridges", Valid: true},
 		Industries:  []string{"fintech"},
 		HqCountry:   pgtype.Text{String: "de", Valid: true},
+		Website:     "https://eurolab.example",
+		Linkedin:    "https://www.linkedin.com/company/euro-lab",
 		Collections: []string{"yc"},
 	})
 	fromSearch := companyListItemFromDoc(search.CompanyDocument{
@@ -99,6 +101,8 @@ func TestCompanyListItemJSONIsStableAcrossBothBackends(t *testing.T) {
 		Tagline:     "We ship fridges",
 		Industries:  []string{"fintech"},
 		HqCountry:   "de",
+		Website:     "https://eurolab.example",
+		LinkedIn:    "https://www.linkedin.com/company/euro-lab",
 		Collections: []string{"yc"},
 	})
 
@@ -120,7 +124,7 @@ func TestCompanyListItemJSONKeepsAbsenceShapes(t *testing.T) {
 // absent convention (see its doc comment) is only safe if a real, non-zero average
 // actually survives the round trip on both paths.
 func TestCompanyListItemJSONCarriesRating(t *testing.T) {
-	const golden = `{"slug":"euro-lab","name":"Euro Lab","job_count":0,"tagline":null,"industries":[],"hq_country":null,"collections":[],"feedback_count":3,"feedback_rating_avg":4.5}`
+	const golden = `{"slug":"euro-lab","name":"Euro Lab","job_count":0,"tagline":null,"industries":[],"hq_country":null,"website":null,"linkedin":null,"collections":[],"feedback_count":3,"feedback_rating_avg":4.5}`
 	fromPostgres := companyListItemFromRow(db.ListCompaniesRow{
 		Slug: "euro-lab", Name: "Euro Lab", Industries: []string{}, Collections: []string{},
 		FeedbackCount: 3, FeedbackRatingAvg: pgtype.Float4{Float32: 4.5, Valid: true},

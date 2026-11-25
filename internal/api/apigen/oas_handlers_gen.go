@@ -20199,8 +20199,9 @@ func (s *Server) handleListChangeWebhooksRequest(args [0]string, argsEscaped boo
 
 // handleListCompaniesRequest handles listCompanies operation.
 //
-// Most active first. Facet params are repeatable and filter by array overlap (OR within a facet, AND
-// across facets), composably with `q`. `meta.total` reports the count matching the full filter.
+// Most active first. Facet params repeat and filter by array overlap (OR within a facet, AND across),
+// composable with `q`; `meta.total` counts the full filter. `countries` is where open jobs are,
+// `hq_country` the headquarters (ISO alpha-2).
 //
 // GET /companies
 func (s *Server) handleListCompaniesRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
