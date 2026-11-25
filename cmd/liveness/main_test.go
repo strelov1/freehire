@@ -214,7 +214,7 @@ func TestProviderClassificationDoesNotRequireReedCredential(t *testing.T) {
 	if slices.Contains(live, "reed") {
 		t.Fatal("test setup unexpectedly registers Reed for crawling")
 	}
-	if missing := unmatchedPrefixes(live, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+	if missing := unmatchedPrefixes(live, guardedExpirePrefixes()); len(missing) > 0 {
 		t.Fatalf("independent age guard fails: %v", missing)
 	}
 	classified := classifiedProviderKeys()
@@ -241,7 +241,7 @@ func TestUnconfiguredWhatJobsMarketRetainsAgeFallback(t *testing.T) {
 	if slices.Contains(crawlProviders, "whatjobs-uk") {
 		t.Fatal("test setup unexpectedly configures UK crawl")
 	}
-	if missing := unmatchedPrefixes(crawlProviders, expireDespiteRegisteredPrefixes); len(missing) > 0 {
+	if missing := unmatchedPrefixes(crawlProviders, guardedExpirePrefixes()); len(missing) > 0 {
 		t.Fatalf("live-prefix guard fails: %v", missing)
 	}
 	if !slices.Contains(classifiedProviderKeys(), "whatjobs-uk") {
@@ -259,5 +259,18 @@ func TestUnconfiguredWhatJobsMarketRetainsAgeFallback(t *testing.T) {
 	noMarkets := providerKeys(sources.All(sources.NewClient()))
 	if missing := unmatchedPrefixes(noMarkets, expireDespiteRegisteredPrefixes); !slices.Contains(missing, "whatjobs") {
 		t.Fatal("live-prefix guard no longer detects missing publisher configuration")
+	}
+}
+
+// A host without Careerjet's credential still runs, and still age-expires its postings.
+func TestCareerjetIsOptionalForTheGuardButAgeExpired(t *testing.T) {
+	if slices.Contains(guardedExpirePrefixes(), "careerjet") {
+		t.Fatal("careerjet must not stop a host that lacks its credential")
+	}
+	if !slices.Contains(expireDespiteRegisteredPrefixes, "careerjet") {
+		t.Fatal("careerjet must stay in the age rule")
+	}
+	if got, _ := registeredAgeFallback(); !slices.Contains(got, "careerjet") {
+		t.Fatalf("registeredAgeFallback() = %v, want careerjet from taxonomy", got)
 	}
 }
