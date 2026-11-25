@@ -45,7 +45,8 @@ func oneOrMany[T any](raw json.RawMessage) ([]T, error) {
 // decides. Shared by the ld+json adapters (northstone, briefhq, djinni, talentlyft,
 // onstrider).
 func schemaEmploymentType(t string) string {
-	switch strings.ToUpper(strings.TrimSpace(t)) {
+	// "Full Time" (remotejobsfinder) reads as FULL_TIME.
+	switch strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(t)), " ", "_") {
 	case "FULL_TIME":
 		return "full_time"
 	case "PART_TIME":
