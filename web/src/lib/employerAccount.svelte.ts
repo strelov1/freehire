@@ -1,7 +1,7 @@
 // Whether the signed-in user already acts for a company (as its claimant or a team member,
-// in any status), so the "I'm the employer" offer on job and company pages stays hidden:
+// in any status), so the "I'm the employer" offer on company pages stays hidden:
 // one account per user, a second claim would only be refused. Read once per session from
-// GET /api/v1/employer/company, not once per page — the public job and company reads stay
+// GET /api/v1/employer/company, not once per page — the public company reads stay
 // anonymous. A failed load leaves it false: the offer shows, and following it lands the user
 // on their own employer page, which is the harmless way to be wrong.
 

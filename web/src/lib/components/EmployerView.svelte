@@ -39,7 +39,7 @@
 
   // ── Claim form ─────────────────────────────────────────────────────────
   let companyName = $state('');
-  // `?company=<slug>` (the "I'm the employer" link on a job or company page) names a
+  // `?company=<slug>` (the "I'm the employer" link on a company page) names a
   // company the catalogue lists: claim that exact one by slug instead of a typed name, so
   // the claim lands on the company the crawled vacancies belong to. A slug that does not
   // resolve falls back to the typed form.

@@ -89,7 +89,7 @@ func (s *Service) Claim(ctx context.Context, userID int64, companyName, workEmai
 }
 
 // ClaimBySlug is Claim for a company the catalogue already lists, named by its slug (the
-// "I am the employer" button on a job or company page). The slug is the identity ingest
+// "I am the employer" link on a company page). The slug is the identity ingest
 // attached the crawled vacancies to, so the claim cannot land on a new company because a
 // typed name normalised differently. An unknown slug is refused with ErrInvalid.
 func (s *Service) ClaimBySlug(ctx context.Context, userID int64, companySlug, workEmail string) (Account, error) {
