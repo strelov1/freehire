@@ -21,8 +21,8 @@
 -- Stripe at 570 against 444 on its page.
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
        feedback_count, feedback_rating_avg, ai_interview_reports, employee_count,
-       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), NULLIF(btrim(company_info ->> 'homepage'), ''))::text AS website,
-       NULLIF(btrim(company_info ->> 'linkedin'), '')::text AS linkedin_url
+       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), btrim(company_info ->> 'homepage'), '')::text AS website,
+       COALESCE(btrim(company_info ->> 'linkedin'), '')::text AS linkedin_url
 FROM companies
 WHERE job_count > 0
   AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')

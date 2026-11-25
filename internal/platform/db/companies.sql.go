@@ -314,8 +314,8 @@ func (q *Queries) InsertMissingCompaniesForSlugs(ctx context.Context, slugs []st
 const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
        feedback_count, feedback_rating_avg, ai_interview_reports, employee_count,
-       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), NULLIF(btrim(company_info ->> 'homepage'), ''))::text AS website,
-       NULLIF(btrim(company_info ->> 'linkedin'), '')::text AS linkedin_url
+       COALESCE(NULLIF(btrim(company_info ->> 'website'), ''), btrim(company_info ->> 'homepage'), '')::text AS website,
+       COALESCE(btrim(company_info ->> 'linkedin'), '')::text AS linkedin_url
 FROM companies
 WHERE job_count > 0
   AND ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
