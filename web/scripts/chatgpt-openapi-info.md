@@ -118,7 +118,9 @@ one adds nothing to their OR, and in `_exclude` it excludes nothing. A boolean
 or modifier parameter reads a bad value its own way (`requires_clearance=flase`
 reads as true, `visa_sponsorship=yes` filters nothing), so the answer may be
 wider rather than empty; it is still reported. `meta.ignored_values` names such values per
-parameter (the `_exclude` form under its own name):
+parameter (the `_exclude` form under its own name). The personal preferences
+`hide_applied_companies` and `hide_seen` are the exception: a value of theirs that is not
+a boolean drops the whole param, which `meta.ignored_params` names instead:
 
 ```json
 "meta": { "total": 0, "limit": 10, "offset": 0,
