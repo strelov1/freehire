@@ -27,7 +27,7 @@ func (s icims) CanonicalBoard(ctx context.Context, board string) (string, error)
 	}
 	u, err := url.Parse(final)
 	if err != nil {
-		return board, nil
+		return board, nil //nolint:nilerr // an unreadable final URL leaves the board unchecked, not refused
 	}
 	host := strings.ToLower(u.Hostname())
 	// shortcut: only a redirect onto *.icims.com is followed; a move to a client's own domain is
