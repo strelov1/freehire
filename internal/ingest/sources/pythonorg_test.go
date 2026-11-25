@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,11 +21,15 @@ type pythonorgFake struct {
 	t     *testing.T
 	pages map[string]string // URL → fixture name
 	errs  map[string]error
-	got   []string
+	// mu guards got, which the detail workers append to concurrently.
+	mu  sync.Mutex
+	got []string
 }
 
 func (f *pythonorgFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.mu.Lock()
 	f.got = append(f.got, url)
+	f.mu.Unlock()
 	if err, ok := f.errs[url]; ok {
 		return nil, err
 	}

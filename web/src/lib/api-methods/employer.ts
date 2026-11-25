@@ -14,6 +14,7 @@ import type {
   EmployerVacancyInput,
   EmployerVacancyPatch,
   Job,
+  PrefillResult,
 } from '../types';
 import type { Slice } from '../api-types';
 import type { components } from '#lib/generated/api.js';
@@ -100,6 +101,13 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     );
   }
 
+  /** Read a vacancy link into draft field values for the publish form; nothing is saved.
+   *  A vacancy the catalogue already carries comes back with its stored fields and
+   *  `existing_job_slug` set; an unrecognized URL comes back empty, not an error. */
+  async function prefillEmployerVacancy(url: string): Promise<PrefillResult> {
+    return requestData<PrefillResult>('/api/v1/employer/jobs/prefill', jsonBody('POST', { url }));
+  }
+
   /** Edit a vacancy the caller's own account owns, addressed by public slug. Any other
    *  slug (missing, another owner's) is a 404. */
   async function updateEmployerVacancy(slug: string, input: EmployerVacancyPatch): Promise<Job> {
@@ -112,6 +120,11 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
   /** Soft-close a vacancy the caller's own account owns. */
   async function closeEmployerVacancy(slug: string): Promise<void> {
     await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}/close`, { method: 'POST' });
+  }
+
+  /** Delete a vacancy the caller's team published. Final; a collected vacancy is a 404. */
+  async function deleteEmployerVacancy(slug: string): Promise<void> {
+    await call(`/api/v1/employer/jobs/${encodeURIComponent(slug)}`, { method: 'DELETE' });
   }
 
   /** Undo the caller's own close of their vacancy. A close someone else made is a 400. */
@@ -267,8 +280,10 @@ export function employerApi({ call, request, requestData, baseUrl }: Http) {
     updateEmployerCompany,
     listEmployerVacancies,
     createEmployerVacancy,
+    prefillEmployerVacancy,
     updateEmployerVacancy,
     closeEmployerVacancy,
+    deleteEmployerVacancy,
     reopenEmployerVacancy,
     listEmployerApplications,
     employerApplicationCVUrl,

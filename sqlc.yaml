@@ -19,6 +19,8 @@ sql:
           # No column or table is named "job", so the key renames only the jobs model.
           job: "JobRow"
           jobs_read: "Job"
+          # The same projection without the deleted-vacancy filter (migration 0320).
+          jobs_read_all: "JobAll"
         overrides:
           # Read jobs.enrichment as json.RawMessage, not []byte. RawMessage keeps
           # the JSONB blob as raw bytes that marshal straight through to the API
@@ -26,6 +28,8 @@ sql:
           - column: "jobs.enrichment"
             go_type: "encoding/json.RawMessage"
           - column: "jobs_read.enrichment"
+            go_type: "encoding/json.RawMessage"
+          - column: "jobs_read_all.enrichment"
             go_type: "encoding/json.RawMessage"
           # Same reasoning for the company-info extras JSONB: raw bytes marshal
           # straight through to the company-detail response ({} stays {}), not base64.

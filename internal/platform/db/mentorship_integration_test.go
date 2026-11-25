@@ -232,8 +232,12 @@ func TestWithdrawalKeepsTheHistory(t *testing.T) {
 	})
 
 	t.Run("its review survives", func(t *testing.T) {
-		if _, err := q.GetMentorReviewForBooking(ctx, past.ID); err != nil {
-			t.Errorf("the review is gone: %v", err)
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM mentor_reviews WHERE booking_id = $1`, past.ID).Scan(&n); err != nil {
+			t.Fatalf("count reviews: %v", err)
+		}
+		if n != 1 {
+			t.Errorf("the booking holds %d reviews after withdrawal, want 1 — the review is gone", n)
 		}
 	})
 
@@ -767,12 +771,20 @@ func TestMentorshipUniquenessConstraints(t *testing.T) {
 			}
 		}
 
-		summary, err := q.GetMentorReviewSummary(ctx, mentor.ID)
-		if err != nil {
-			t.Fatalf("GetMentorReviewSummary: %v", err)
+		// count(*) over the booking proves one row; min() is its rating only because there
+		// is one — a second submission that inserted instead would read 2 here and 1 above.
+		var reviews int
+		var rating int16
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*), min(rating) FROM mentor_reviews WHERE booking_id = $1`,
+			booking.ID).Scan(&reviews, &rating); err != nil {
+			t.Fatalf("read reviews: %v", err)
 		}
-		if summary.RatingCount != 1 {
-			t.Errorf("rating count = %d after two submissions, want 1", summary.RatingCount)
+		if reviews != 1 {
+			t.Errorf("review rows = %d after two submissions, want 1", reviews)
+		}
+		if rating != 2 {
+			t.Errorf("rating = %d after a resubmission with 2, want 2 — the second submission was not stored", rating)
 		}
 	})
 }

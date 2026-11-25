@@ -3,6 +3,7 @@ package emailnotify
 import (
 	"context"
 	"errors"
+	"html/template"
 	"strconv"
 	"strings"
 	"testing"
@@ -61,15 +62,26 @@ func digest() notify.Digest {
 	}
 }
 
+// mustRender is render with the test's own failure handling: the sample digests
+// here are valid, so a render error is a bug in the notifier, not the sample.
+func mustRender(t *testing.T, n *Notifier, m notify.Message, unsubscribeURL string) renderedEmail {
+	t.Helper()
+	e, err := n.render(m, unsubscribeURL)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	return e
+}
+
 func TestNotifier_RenderSubject(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
 
-	got := n.render(msgOf(digest()), testUnsubscribeURL(t))
+	got := mustRender(t, n, msgOf(digest()), testUnsubscribeURL(t))
 	if want := `3 new jobs for "Go & <remote>"`; got.subject != want {
 		t.Errorf("subject = %q, want %q", got.subject, want)
 	}
 
-	one := n.render(msgOf(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}), testUnsubscribeURL(t))
+	one := mustRender(t, n, msgOf(notify.Digest{SavedSearchName: "x", Total: 1, Jobs: []notify.DigestJob{{Title: "A", Slug: "a"}}}), testUnsubscribeURL(t))
 	if want := `1 new job for "x"`; one.subject != want {
 		t.Errorf("singular subject = %q, want %q", one.subject, want)
 	}
@@ -77,7 +89,7 @@ func TestNotifier_RenderSubject(t *testing.T) {
 
 func TestNotifier_RenderHTML(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
-	got := n.render(msgOf(digest()), testUnsubscribeURL(t)).html
+	got := mustRender(t, n, msgOf(digest()), testUnsubscribeURL(t)).html
 
 	// The saved-search name and a hostile title are auto-escaped by html/template.
 	if !strings.Contains(got, "Go &amp; &lt;remote&gt;") {
@@ -108,7 +120,7 @@ func TestNotifier_RenderHTML(t *testing.T) {
 
 func TestNotifier_RenderTextAlternative(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(msgOf(digest()), testUnsubscribeURL(t)).text
+	got := mustRender(t, n, msgOf(digest()), testUnsubscribeURL(t)).text
 
 	// The text alternative carries the same content in plain form (unescaped).
 	if !strings.Contains(got, "Go Dev <x>") {
@@ -174,7 +186,7 @@ func bigDigest(n int, notificationID int64) notify.Digest {
 
 func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
+	got := mustRender(t, n, msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
 
 	if c := strings.Count(got.html, "/api/v1/go/job-"); c != notify.ListLimit {
 		t.Errorf("HTML lists %d jobs, want %d", c, notify.ListLimit)
@@ -192,7 +204,7 @@ func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
 
 func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
+	got := mustRender(t, n, msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
 
 	const want = "https://freehire.me/my/notifications/42/jobs?utm_source=email"
 	if !strings.Contains(got.html, want) {
@@ -205,7 +217,7 @@ func TestNotifier_TailLinksToTheDigestsOwnPage(t *testing.T) {
 
 func TestNotifier_TailFallsBackWithoutANotificationID(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
-	got := n.render(msgOf(bigDigest(67, 0)), testUnsubscribeURL(t))
+	got := mustRender(t, n, msgOf(bigDigest(67, 0)), testUnsubscribeURL(t))
 
 	if strings.Contains(got.html, "/my/notifications/0/jobs") {
 		t.Errorf("a zero notification id must not be rendered as a URL: %s", got.html)
@@ -226,7 +238,7 @@ func TestNotifier_OverflowedTailLinksToTheSavedSearch(t *testing.T) {
 	d := bigDigest(67, 42)
 	d.Total = 600
 	d.SearchQuery = "seniority=senior"
-	got := n.render(msgOf(d), testUnsubscribeURL(t))
+	got := mustRender(t, n, msgOf(d), testUnsubscribeURL(t))
 
 	const want = "https://freehire.me/jobs?seniority=senior&utm_source=email"
 	if !strings.Contains(got.text, "+ 590 more at "+want) {
@@ -249,7 +261,7 @@ func TestRender_BundleSubjectCountsAlertsAndSectionsNameThem(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me/", testLinks())
 	a := digest()
 	b := notify.Digest{SavedSearchName: "My profile", Total: 1, Jobs: []notify.DigestJob{{Title: "Frontend", Slug: "frontend"}}}
-	got := n.render(notify.Message{UserID: digestUserID, Digests: []notify.Digest{a, b}}, testUnsubscribeURL(t))
+	got := mustRender(t, n, notify.Message{UserID: digestUserID, Digests: []notify.Digest{a, b}}, testUnsubscribeURL(t))
 
 	wantSubject := notify.JobCount(a.Total+1) + " from 2 job alerts"
 	if got.subject != wantSubject {
@@ -284,7 +296,7 @@ func TestNotifier_RenderSponsoredJob(t *testing.T) {
 		Job:  notify.DigestJob{Title: "Paid <role>", Company: "Ad Co", Slug: "paid"},
 		Path: "/api/v1/sponsored/go/TOKEN",
 	}
-	got := n.render(msgOf(d), testUnsubscribeURL(t))
+	got := mustRender(t, n, msgOf(d), testUnsubscribeURL(t))
 
 	link := "https://freehire.me/api/v1/sponsored/go/TOKEN"
 	for _, want := range []string{"Sponsored", link, "Paid &lt;role&gt;"} {
@@ -304,7 +316,7 @@ func TestNotifier_RenderSponsoredJob(t *testing.T) {
 		t.Error("the ad links the job page directly, skipping the click redirect")
 	}
 
-	plain := n.render(msgOf(digest()), testUnsubscribeURL(t))
+	plain := mustRender(t, n, msgOf(digest()), testUnsubscribeURL(t))
 	if strings.Contains(plain.html, "Sponsored") || strings.Contains(plain.text, "Sponsored") {
 		t.Error("a digest without an ad renders the label")
 	}
@@ -316,5 +328,27 @@ func TestNotifier_PageOnlyJobKeepsItsPage(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
 	if got, want := n.jobURL(notify.DigestJob{Slug: "native-acme", StaysOnSite: true}), "https://freehire.me/jobs/native-acme?utm_source=email"; got != want {
 		t.Errorf("jobURL = %q, want %q", got, want)
+	}
+}
+
+// A template that fails to execute must stop the mail: the notify runner then
+// counts a failed attempt and retries, instead of a digest landing with an empty
+// body while every send reported success.
+func TestNotifier_TemplateErrorSendsNothing(t *testing.T) {
+	fs := &fakeSender{}
+	n := NewNotifier(fs, "notifications@freehire.me", "https://freehire.me", testLinks())
+
+	// Swap the body for one whose partial is missing: Parse accepts an unresolved
+	// {{template}} and only Execute reports it, which is the error being dropped.
+	previous := htmlTemplate
+	t.Cleanup(func() { htmlTemplate = previous })
+	htmlTemplate = template.Must(template.New("digest").Parse(`{{template "no-such-partial" .}}`))
+
+	err := n.Send(context.Background(), notify.ChannelEmail, "user@acme.com", msgOf(digest()))
+	if err == nil || !strings.Contains(err.Error(), "no-such-partial") {
+		t.Fatalf("Send = %v, want the template error", err)
+	}
+	if fs.calls != 0 {
+		t.Errorf("sender calls = %d, want 0: a mail whose body failed to render must not be sent", fs.calls)
 	}
 }

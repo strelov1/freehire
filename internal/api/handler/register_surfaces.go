@@ -103,7 +103,7 @@ func newMentorshipSurfaces(cfg Config, queries *db.Queries, mailClient *emailnot
 
 // newEmployerSurfaces builds the employer service, with claim and team-invite mail when a
 // transport exists, and the employer surface over it.
-func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.Service, employerClaimMailer *emailnotify.AuthMailer, mailClient *emailnotify.Client, moderationSvc *moderation.Service) (*employer.Service, *employerHandlers) {
+func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.Service, employerClaimMailer *emailnotify.AuthMailer, mailClient *emailnotify.Client, moderationSvc *moderation.Service, prefiller *jobPrefiller) (*employer.Service, *employerHandlers) {
 	// employer.Service reuses the auth surface's accounts service as its codeIssuer (the
 	// pointer WithCodes configured in Register). employerMailer must be a NIL INTERFACE when employerClaimMailer is
 	// nil: Service.Claim tests the interface, so a typed nil would pass its check.
@@ -119,7 +119,9 @@ func newEmployerSurfaces(cfg Config, queries *db.Queries, accountsSvc *accounts.
 		teamInvites = teamInviteMailer{emailnotify.NewTeamInviteMailer(mailClient, cfg.NotifyEmailFrom, cfg.FrontendOrigin)}
 	}
 	employerSvc.WithTeam(employerRepo, teamInvites, strings.TrimRight(cfg.FrontendOrigin, "/")+"/my/employer/join")
-	return employerSvc, newEmployerHandlers(queries, employerSvc)
+	h := newEmployerHandlers(queries, employerSvc)
+	h.prefiller = prefiller
+	return employerSvc, h
 }
 
 // wireOptional hands the agent the services that may be unconfigured. Each is assigned

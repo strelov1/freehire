@@ -562,47 +562,6 @@ func (q *Queries) GetMentorByUserID(ctx context.Context, userID int64) (Mentor, 
 	return i, err
 }
 
-const getMentorReviewForBooking = `-- name: GetMentorReviewForBooking :one
-SELECT booking_id, mentor_id, seeker_user_id, rating, comment, created_at, updated_at FROM mentor_reviews WHERE booking_id = $1
-`
-
-// The seeker's own review of one session, for rendering the edit form.
-func (q *Queries) GetMentorReviewForBooking(ctx context.Context, bookingID pgtype.UUID) (MentorReview, error) {
-	row := q.db.QueryRow(ctx, getMentorReviewForBooking, bookingID)
-	var i MentorReview
-	err := row.Scan(
-		&i.BookingID,
-		&i.MentorID,
-		&i.SeekerUserID,
-		&i.Rating,
-		&i.Comment,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getMentorReviewSummary = `-- name: GetMentorReviewSummary :one
-SELECT COALESCE(count(*), 0)::bigint AS rating_count,
-       COALESCE(avg(rating), 0)::numeric AS rating_avg
-FROM mentor_reviews WHERE mentor_id = $1
-`
-
-type GetMentorReviewSummaryRow struct {
-	RatingCount int64          `json:"rating_count"`
-	RatingAvg   pgtype.Numeric `json:"rating_avg"`
-}
-
-// The aggregate the public profile shows. Returns zeroes rather than NULLs for a mentor
-// nobody has reviewed, so the caller renders "no reviews yet" from a count of 0 instead
-// of from a null it has to remember to check.
-func (q *Queries) GetMentorReviewSummary(ctx context.Context, mentorID int64) (GetMentorReviewSummaryRow, error) {
-	row := q.db.QueryRow(ctx, getMentorReviewSummary, mentorID)
-	var i GetMentorReviewSummaryRow
-	err := row.Scan(&i.RatingCount, &i.RatingAvg)
-	return i, err
-}
-
 const getPublishedMentorBySlug = `-- name: GetPublishedMentorBySlug :one
 SELECT m.id, m.user_id, m.company_slug, m.slug, m.display_name, m.headline, m.bio, m.topics, m.languages, m.timezone, m.session_duration_min, m.buffer_before_min, m.buffer_after_min, m.min_notice_min, m.horizon_days, m.meeting_url, m.status, m.paused, m.decided_by, m.decided_at, m.created_at, m.updated_at, m.show_photo, m.seniority, c.name AS company_name,
     COALESCE(r.rating_count, 0)::bigint AS rating_count,
