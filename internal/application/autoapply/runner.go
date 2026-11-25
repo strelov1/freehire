@@ -163,7 +163,7 @@ func (s RunStats) Degraded() bool {
 // wave comes back empty.
 func Run(ctx context.Context, s Store, answers AnswerSource, sidecar SidecarClient, opts RunOptions) (RunStats, error) {
 	rn := &run{store: s, answers: answers, sidecar: sidecar, opts: opts}
-	result, err := outbox.RunPool(ctx, &cancelAwareClaimer{store: s}, outbox.RunOptions{
+	result, err := outbox.RunPool(ctx, &outbox.StopOnCancel[Claimed]{Inner: s}, outbox.RunOptions{
 		BatchSize:    opts.BatchSize,
 		LeaseSeconds: opts.LeaseSeconds,
 		Concurrency:  opts.Concurrency,
@@ -179,22 +179,6 @@ func Run(ctx context.Context, s Store, answers AnswerSource, sidecar SidecarClie
 		return stats, fmt.Errorf("claim auto-apply attempts: %w", err)
 	}
 	return stats, nil
-}
-
-// cancelAwareClaimer mirrors internal/applyform's: it checks for a cancelled ctx before
-// every Claim after the first, so a cancelled run stops at the next wave boundary instead of
-// burning the backlog's retries.
-type cancelAwareClaimer struct {
-	store Store
-	calls int
-}
-
-func (c *cancelAwareClaimer) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
-	if c.calls > 0 && ctx.Err() != nil {
-		return nil, nil
-	}
-	c.calls++
-	return c.store.Claim(ctx, batch, leaseSeconds)
 }
 
 type run struct {

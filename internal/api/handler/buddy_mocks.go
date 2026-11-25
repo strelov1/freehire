@@ -306,7 +306,7 @@ func buddyMockOut(e buddy.MockEntry) apigen.BuddyMock {
 	return apigen.BuddyMock{
 		ID: e.ID.String(), Role: apigen.BuddyMockRole(e.Role), StartsAt: e.StartsAt.UTC(), EndsAt: e.EndsAt.UTC(),
 		Topic: apigen.BuddyMockTopic(e.Topic), Status: apigen.BuddyMockStatus(e.Status), CanCancel: e.CanCancel, CanReview: e.CanReview,
-		Counterpart: nilString(nilIfEmptyPtr(e.Counterpart)), MeetingURL: nilString(nilIfEmptyPtr(e.MeetingURL)),
+		Counterpart: nilString(presentOrNil(e.Counterpart)), MeetingURL: nilString(presentOrNil(e.MeetingURL)),
 		MyReview: buddyMockReviewOut(e.MyReview), TheirReview: buddyMockReviewOut(e.TheirReview),
 	}
 }
@@ -317,13 +317,6 @@ func buddyMocksOut(entries []buddy.MockEntry) []apigen.BuddyMock {
 		out = append(out, buddyMockOut(e))
 	}
 	return out
-}
-
-func nilIfEmptyPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
 }
 
 // BuddyMockList is the caller's own mocks, upcoming and past.

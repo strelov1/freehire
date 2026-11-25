@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net/http"
 	"sync"
 
 	"golang.org/x/net/html"
@@ -74,7 +73,9 @@ func (g *homerunEgress) send(do func(homerunGetter) error) error {
 		return errHomerunStopped
 	}
 	err := do(c)
-	if !homerunRefused(err) {
+	// A 403 is Homerun's block and a 429 the rate refusal that precedes it: the edge turning
+	// the request away for who sent it, not for what it asked.
+	if !isRateLimited(err) {
 		return err
 	}
 	g.refused(lane)
@@ -122,11 +123,4 @@ func (g *homerunEgress) refused(lane homerunLane) {
 	log.Printf("homerun: the direct IP was refused after %d requests this run and no rotating "+
 		"proxy is configured (SOURCES_ROTATING_PROXY_URL); no further Homerun request is sent "+
 		"this run", g.sent[homerunLaneDirect])
-}
-
-// homerunRefused reports Homerun's edge turning the request away for who sent it rather than
-// for what it asked: a 403 (the block) or a 429 (the rate refusal that precedes it).
-func homerunRefused(err error) bool {
-	var se *StatusError
-	return errors.As(err, &se) && (se.Code == http.StatusForbidden || se.Code == http.StatusTooManyRequests)
 }

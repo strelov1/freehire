@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
 // --- fakes ------------------------------------------------------------------
@@ -107,14 +109,14 @@ func (s *fakeStore) Reap(context.Context, int) (int64, error) {
 	return s.reapN, nil
 }
 
-func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, policy FailurePolicy) (bool, error) {
+func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, policy outbox.FailurePolicy) (bool, error) {
 	s.mu.Lock()
 	s.failed = append(s.failed, outboxID)
 	s.failMax = append(s.failMax, policy.MaxAttempts)
 	s.mu.Unlock()
 	// MaxAttempts == 1 forces immediate dead-letter (the corrupted-row path), and only
 	// when the posting is at fault — the attempt ceiling does not apply otherwise.
-	return s.deadFor[outboxID] || (policy.PostingAtFault && policy.MaxAttempts == 1), nil
+	return s.deadFor[outboxID] || (policy.AtFault && policy.MaxAttempts == 1), nil
 }
 
 func opts() RunOptions {

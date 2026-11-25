@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/application/mailclassify"
+	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
 type fakeStore struct {
@@ -24,7 +25,7 @@ type fakeStore struct {
 	savedOutbox     []int64
 	savedModel      []string
 	failCalls       int
-	failPolicies    []FailurePolicy
+	failPolicies    []outbox.FailurePolicy
 	deadLetter      bool
 	failErr         error
 }
@@ -73,7 +74,7 @@ func (s *fakeStore) Save(_ context.Context, outboxID, _ int64, r Result, model s
 // failCalls records every Fail the run made, and deadLetter decides what each reports — the
 // signal the worker's exit code is built from. failPolicies keeps every policy it was handed,
 // which is how the bound a failure is held to is asserted.
-func (s *fakeStore) Fail(_ context.Context, _ int64, _ string, policy FailurePolicy) (bool, error) {
+func (s *fakeStore) Fail(_ context.Context, _ int64, _ string, policy outbox.FailurePolicy) (bool, error) {
 	s.failCalls++
 	s.failPolicies = append(s.failPolicies, policy)
 	return s.deadLetter, s.failErr
@@ -318,7 +319,7 @@ func TestRunnerHoldsAGatewayFailureToTheAgeBoundNotTheAttemptCeiling(t *testing.
 		t.Fatalf("recorded %d failures, want 1", len(store.failPolicies))
 	}
 	got := store.failPolicies[0]
-	if got.MessageAtFault {
+	if got.AtFault {
 		t.Error("a gateway failure was blamed on the message; the attempt ceiling would then bury the queue")
 	}
 	if got.UpstreamGraceDays <= 0 {
@@ -341,8 +342,8 @@ func TestRunnerChargesAnUnparseableAnswerToTheMessage(t *testing.T) {
 	if len(store.failPolicies) != 1 {
 		t.Fatalf("recorded %d failures, want 1", len(store.failPolicies))
 	}
-	if got := store.failPolicies[0]; !got.MessageAtFault || got.MaxAttempts <= 0 {
-		t.Errorf("policy = %+v, want MessageAtFault with a positive ceiling", got)
+	if got := store.failPolicies[0]; !got.AtFault || got.MaxAttempts <= 0 {
+		t.Errorf("policy = %+v, want AtFault with a positive ceiling", got)
 	}
 }
 
