@@ -89,8 +89,8 @@ func TestNotifier_RenderHTML(t *testing.T) {
 	if strings.Contains(got, "<x>") {
 		t.Errorf("raw unescaped title leaked into HTML: %q", got)
 	}
-	// Each job links to its on-platform freehire page tagged with the email UTM.
-	if !strings.Contains(got, "https://freehire.me/jobs/go-dev-acme?utm_source=email") {
+	// Each job links through the click redirect, counted as an email click.
+	if !strings.Contains(got, "https://freehire.me/api/v1/go/go-dev-acme?src=email") {
 		t.Errorf("missing job link: %q", got)
 	}
 	// Company + salary render for the first job.
@@ -117,7 +117,7 @@ func TestNotifier_RenderTextAlternative(t *testing.T) {
 	if !strings.Contains(got, "Acme") || !strings.Contains(got, "$130K—$170K / year") {
 		t.Errorf("text missing company/salary: %q", got)
 	}
-	if !strings.Contains(got, "https://freehire.me/jobs/go-dev-acme?utm_source=email") {
+	if !strings.Contains(got, "https://freehire.me/api/v1/go/go-dev-acme?src=email") {
 		t.Errorf("text missing job link: %q", got)
 	}
 	if !strings.Contains(got, "1 more") {
@@ -176,10 +176,10 @@ func TestNotifier_ListsAtMostTenJobs(t *testing.T) {
 	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
 	got := n.render(msgOf(bigDigest(67, 42)), testUnsubscribeURL(t))
 
-	if c := strings.Count(got.html, "/jobs/job-"); c != notify.ListLimit {
+	if c := strings.Count(got.html, "/api/v1/go/job-"); c != notify.ListLimit {
 		t.Errorf("HTML lists %d jobs, want %d", c, notify.ListLimit)
 	}
-	if c := strings.Count(got.text, "/jobs/job-"); c != notify.ListLimit {
+	if c := strings.Count(got.text, "/api/v1/go/job-"); c != notify.ListLimit {
 		t.Errorf("text lists %d jobs, want %d", c, notify.ListLimit)
 	}
 	if !strings.Contains(got.html, "57 more") || !strings.Contains(got.text, "57 more") {
@@ -307,5 +307,14 @@ func TestNotifier_RenderSponsoredJob(t *testing.T) {
 	plain := n.render(msgOf(digest()), testUnsubscribeURL(t))
 	if strings.Contains(plain.html, "Sponsored") || strings.Contains(plain.text, "Sponsored") {
 		t.Error("a digest without an ad renders the label")
+	}
+}
+
+// A job with no employer destination (direct-apply or private) keeps the
+// freehire page.
+func TestNotifier_PageOnlyJobKeepsItsPage(t *testing.T) {
+	n := NewNotifier(&fakeSender{}, "notifications@freehire.me", "https://freehire.me", testLinks())
+	if got, want := n.jobURL(notify.DigestJob{Slug: "native-acme", StaysOnSite: true}), "https://freehire.me/jobs/native-acme?utm_source=email"; got != want {
+		t.Errorf("jobURL = %q, want %q", got, want)
 	}
 }

@@ -121,7 +121,7 @@ type Job struct {
 	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
 	ApplicationDeadline *string `json:"application_deadline,omitempty"`
 	// Team is the department or team the source ATS files the posting under (Greenhouse,
-	// Lever and Ashby state one), verbatim. Omitted when the source states none.
+	// Lever, Ashby, Gem, Recruitee and Employment Hero state one), verbatim. Omitted when the source states none.
 	Team string `json:"team,omitempty"`
 	// ApplyQuestions is how many questions the application form REQUIRES beyond the
 	// standard fields (name, contact details, CV), counted from the captured form

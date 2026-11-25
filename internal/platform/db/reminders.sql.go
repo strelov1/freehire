@@ -187,7 +187,7 @@ func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (No
 
 const getReminderForDelivery = `-- name: GetReminderForDelivery :one
 SELECT r.id, r.user_id, r.job_id, r.channels,
-       j.title, j.company, j.public_slug, j.url,
+       j.title, j.company, j.public_slug, j.source, j.external_id, j.is_private,
        -- The live opt-out gate. COALESCE'd to TRUE, not FALSE: an account with no
        -- notification_settings row has never configured the rule, and the
        -- never-configured default is ENABLED (see notification-settings). Nudges
@@ -220,7 +220,9 @@ type GetReminderForDeliveryRow struct {
 	Title                string      `json:"title"`
 	Company              string      `json:"company"`
 	PublicSlug           string      `json:"public_slug"`
-	URL                  string      `json:"url"`
+	Source               string      `json:"source"`
+	ExternalID           string      `json:"external_id"`
+	IsPrivate            bool        `json:"is_private"`
 	NotificationsEnabled bool        `json:"notifications_enabled"`
 	JobOpen              bool        `json:"job_open"`
 	StillActionable      bool        `json:"still_actionable"`
@@ -251,7 +253,9 @@ func (q *Queries) GetReminderForDelivery(ctx context.Context, id int64) (GetRemi
 		&i.Title,
 		&i.Company,
 		&i.PublicSlug,
-		&i.URL,
+		&i.Source,
+		&i.ExternalID,
+		&i.IsPrivate,
 		&i.NotificationsEnabled,
 		&i.JobOpen,
 		&i.StillActionable,

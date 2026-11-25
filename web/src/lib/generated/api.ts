@@ -9182,8 +9182,8 @@ export interface components {
              */
             application_deadline?: string;
             /**
-             * @description The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever and
-             *     Ashby state one). Absent when the source states none; not a taxonomy, so values differ
+             * @description The department or team the posting's ATS files it under, verbatim (Greenhouse, Lever,
+             *     Ashby, Gem, Recruitee and Employment Hero state one). Absent when the source states none; not a taxonomy, so values differ
              *     between employers.
              */
             team?: string;
