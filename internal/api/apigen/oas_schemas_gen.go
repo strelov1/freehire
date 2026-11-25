@@ -10993,13 +10993,21 @@ func (s *EmployerApplicationsPage) SetMeta(val EmployerApplicationsMeta) {
 
 // Ref: #/components/schemas/EmployerClaim
 type EmployerClaim struct {
+	// The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set.
 	CompanyName OptString `json:"company_name"`
+	// The slug of a company the catalogue lists (`company_slug` of a job or company page).
+	CompanySlug OptString `json:"company_slug"`
 	WorkEmail   OptString `json:"work_email"`
 }
 
 // GetCompanyName returns the value of CompanyName.
 func (s *EmployerClaim) GetCompanyName() OptString {
 	return s.CompanyName
+}
+
+// GetCompanySlug returns the value of CompanySlug.
+func (s *EmployerClaim) GetCompanySlug() OptString {
+	return s.CompanySlug
 }
 
 // GetWorkEmail returns the value of WorkEmail.
@@ -11010,6 +11018,11 @@ func (s *EmployerClaim) GetWorkEmail() OptString {
 // SetCompanyName sets the value of CompanyName.
 func (s *EmployerClaim) SetCompanyName(val OptString) {
 	s.CompanyName = val
+}
+
+// SetCompanySlug sets the value of CompanySlug.
+func (s *EmployerClaim) SetCompanySlug(val OptString) {
+	s.CompanySlug = val
 }
 
 // SetWorkEmail sets the value of WorkEmail.

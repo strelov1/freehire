@@ -4684,6 +4684,10 @@
             "type": "boolean",
             "description": "Whether an employee referral offer exists for this company."
           },
+          "company_claimed": {
+            "type": "boolean",
+            "description": "Whether an employer account holds this company."
+          },
           "parent": {
             "$ref": "#/components/schemas/CompanyRef"
           },

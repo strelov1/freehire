@@ -38,6 +38,20 @@ func (q *Queries) ActivateCompanyAccount(ctx context.Context, userID int64) (Com
 	return i, err
 }
 
+const companyIsClaimed = `-- name: CompanyIsClaimed :one
+SELECT EXISTS (SELECT 1 FROM company_accounts WHERE company_slug = $1)::boolean AS claimed
+`
+
+// Whether an account of any status holds the slug. UNIQUE(company_slug) reserves it from the
+// pending claim on, so a further claim would only end in a 409. Caller-independent, so the
+// public pages that show it stay cacheable.
+func (q *Queries) CompanyIsClaimed(ctx context.Context, companySlug string) (bool, error) {
+	row := q.db.QueryRow(ctx, companyIsClaimed, companySlug)
+	var claimed bool
+	err := row.Scan(&claimed)
+	return claimed, err
+}
+
 const confirmCompanyAccountEmail = `-- name: ConfirmCompanyAccountEmail :one
 UPDATE company_accounts
 SET email_confirmed_at = COALESCE(email_confirmed_at, now()), updated_at = now()

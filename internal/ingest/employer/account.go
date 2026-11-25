@@ -62,21 +62,12 @@ func New(repo Repository, codes codeIssuer, mailer ClaimMailer, jobs JobReposito
 // (this user already holds an account) or ErrCompanyAlreadyClaimed (the slug is taken).
 func (s *Service) Claim(ctx context.Context, userID int64, companyName, workEmail string) (Account, error) {
 	companyName = strings.TrimSpace(companyName)
-	workEmail = strings.TrimSpace(workEmail)
 	if companyName == "" {
 		return Account{}, fmt.Errorf("%w: company name is required", ErrInvalid)
 	}
-	if workEmail == "" {
-		return Account{}, fmt.Errorf("%w: work email is required", ErrInvalid)
-	}
-	if isPublicWebmailDomain(workEmail) {
-		return Account{}, ErrPublicWebmailDomain
-	}
-	// s.mailer.SendClaimVerificationCode below is a method VALUE, evaluated eagerly as a
-	// call argument — taking one from a nil interface panics before accounts.Service ever
-	// gets to run its own "is mail configured" check, so this package needs its own guard.
-	if s.mailer == nil {
-		return Account{}, ErrMailUnavailable
+	workEmail, err := s.checkClaimEmail(workEmail)
+	if err != nil {
+		return Account{}, err
 	}
 
 	candidate := normalize.CompanySlug(companyName)
@@ -94,12 +85,57 @@ func (s *Service) Claim(ctx context.Context, userID int64, companyName, workEmai
 	} else if found && existingName != "" {
 		name = existingName
 	}
+	return s.reserve(ctx, userID, slug, name, workEmail)
+}
 
+// ClaimBySlug is Claim for a company the catalogue already lists, named by its slug (the
+// "I am the employer" button on a job or company page). The slug is the identity ingest
+// attached the crawled vacancies to, so the claim cannot land on a new company because a
+// typed name normalised differently. An unknown slug is refused with ErrInvalid.
+func (s *Service) ClaimBySlug(ctx context.Context, userID int64, companySlug, workEmail string) (Account, error) {
+	workEmail, err := s.checkClaimEmail(workEmail)
+	if err != nil {
+		return Account{}, err
+	}
+	slug, err := s.repo.ResolveCanonicalSlug(ctx, strings.TrimSpace(companySlug))
+	if err != nil {
+		return Account{}, err
+	}
+	name, _, found, err := s.repo.ExistingCompany(ctx, slug)
+	if err != nil {
+		return Account{}, err
+	}
+	if !found || name == "" {
+		return Account{}, fmt.Errorf("%w: unknown company", ErrInvalid)
+	}
+	return s.reserve(ctx, userID, slug, name, workEmail)
+}
+
+// checkClaimEmail trims workEmail and refuses an empty or public-webmail one, or a
+// service with no mail transport.
+func (s *Service) checkClaimEmail(workEmail string) (string, error) {
+	workEmail = strings.TrimSpace(workEmail)
+	if workEmail == "" {
+		return "", fmt.Errorf("%w: work email is required", ErrInvalid)
+	}
+	if isPublicWebmailDomain(workEmail) {
+		return "", ErrPublicWebmailDomain
+	}
+	// s.mailer.SendClaimVerificationCode in reserve is a method VALUE, evaluated eagerly as a
+	// call argument — taking one from a nil interface panics before accounts.Service ever
+	// gets to run its own "is mail configured" check, so this package needs its own guard.
+	if s.mailer == nil {
+		return "", ErrMailUnavailable
+	}
+	return workEmail, nil
+}
+
+// reserve holds the slug as a pending account and mails the verification code.
+func (s *Service) reserve(ctx context.Context, userID int64, slug, name, workEmail string) (Account, error) {
 	acc, err := s.repo.InsertPending(ctx, userID, slug, name, workEmail)
 	if err != nil {
 		return Account{}, err
 	}
-
 	if err := s.codes.IssueCode(ctx, userID, accounts.PurposeVerifyWorkEmail, workEmail, s.mailer.SendClaimVerificationCode); err != nil {
 		return Account{}, err
 	}

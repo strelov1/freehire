@@ -7896,6 +7896,8 @@ export interface components {
             jobs?: components["schemas"]["Job"][];
             /** @description Whether an employee referral offer exists for this company. */
             referral_available?: boolean;
+            /** @description Whether an employer account holds this company. */
+            company_claimed?: boolean;
             parent?: components["schemas"]["CompanyRef"];
             /** @description Companies this one owns. Each is a separate employer with its own jobs. Omitted when there are none. */
             subsidiaries?: components["schemas"]["CompanyRef"][];
@@ -8522,7 +8524,10 @@ export interface components {
             meta: components["schemas"]["EmployerApplicationsMeta"];
         };
         EmployerClaim: {
+            /** @description The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set. */
             company_name?: string;
+            /** @description The slug of a company the catalogue lists (`company_slug` of a job or company page). */
+            company_slug?: string;
             work_email?: string;
         };
         /** @enum {string} */

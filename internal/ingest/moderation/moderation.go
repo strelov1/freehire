@@ -205,7 +205,10 @@ func (s *Service) Create(ctx context.Context, actorID int64, in CreateInput) (jo
 	if in.ExternalID != "" {
 		externalID = in.ExternalID
 	}
-	f, err := derive(source, externalID, in.Title, in.Company, in.Location, description, in.Remote, in.structured())
+	// An employer write keeps the company identity its account holds: re-deriving it from the
+	// display name would put the posting under another company whenever the two differ
+	// (a claim by slug, a merged company). A moderator write derives it as ever.
+	f, err := derive(source, externalID, in.Title, in.Company, in.Employer.CompanySlug, in.Location, description, in.Remote, in.structured())
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -251,7 +254,13 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 	// re-derive (the recomputed public slug is discarded — identity is immutable, so the
 	// adapter writes the passed-in slug, not f.PublicSlug). The edit path re-derives every
 	// facet from content and carries no explicit structured overrides.
-	f, err := derive(curF.Source, curF.ExternalID, title, company, location, description, remote, structuredFacets{})
+	// The company slug stays what it is unless the moderator renames the company: an employer
+	// posting is pinned to its account's slug, which the display name need not normalise to.
+	companySlug := curF.CompanySlug
+	if p.Company != nil {
+		companySlug = ""
+	}
+	f, err := derive(curF.Source, curF.ExternalID, title, company, companySlug, location, description, remote, structuredFacets{})
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -297,7 +306,7 @@ func (in CreateInput) structured() structuredFacets {
 // remote flag when no explicit work mode was given (job.New cleans the location and
 // derives the rest). It errors only when the identity or title is blank, which the
 // caller's validation already precludes.
-func derive(source, externalID, title, company, location, description string, remote bool, s structuredFacets) (job.Fields, error) {
+func derive(source, externalID, title, company, companySlug, location, description string, remote bool, s structuredFacets) (job.Fields, error) {
 	workMode := s.WorkMode
 	if workMode == "" {
 		workMode = remoteWorkMode(remote)
@@ -317,7 +326,8 @@ func derive(source, externalID, title, company, location, description string, re
 			EmploymentType: s.EmploymentType,
 			Seniority:      s.Seniority,
 		},
-		ManualSalary: s.Salary,
+		ManualSalary:         s.Salary,
+		CanonicalCompanySlug: companySlug,
 	})
 	if err != nil {
 		return job.Fields{}, err

@@ -430,3 +430,53 @@ func TestCreate_NeverConsultsAnySubmissionDomainBlocklist(t *testing.T) {
 		t.Fatal("repo.Create was not called for a moderator-authored URL on a would-be-blocked host")
 	}
 }
+
+func TestCreate_EmployerWriteKeepsTheAccountsCompanySlug(t *testing.T) {
+	repo := &fakeRepo{}
+	in := moderation.CreateInput{URL: "https://acme.test/jobs/1", Title: "Go Engineer", Company: "Acme Technologies"}
+	if _, _, err := moderation.New(repo).Create(context.Background(), 7, in); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if repo.created.CompanySlug != "acme-technologies" {
+		t.Fatalf("moderator CompanySlug = %q, want it derived from the name", repo.created.CompanySlug)
+	}
+
+	in.Employer = moderation.EmployerOwner{UserID: 7, CompanySlug: "acme"}
+	if _, _, err := moderation.New(repo).Create(context.Background(), 7, in); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if repo.created.CompanySlug != "acme" {
+		t.Errorf("employer CompanySlug = %q, want the account's own slug", repo.created.CompanySlug)
+	}
+}
+
+func TestUpdate_KeepsTheCompanySlugUnlessTheCompanyChanges(t *testing.T) {
+	repo := &fakeRepo{
+		bySlugJob: mustJob(t, db.Job{
+			Source:      "manual",
+			ExternalID:  "https://acme.test/jobs/1",
+			Title:       "Go Engineer",
+			Company:     "Acme Technologies",
+			CompanySlug: "acme",
+			Description: "d",
+			PublicSlug:  "go-engineer-acme-abcd1234",
+		}),
+	}
+	svc := moderation.New(repo)
+
+	title := "Senior Go Engineer"
+	if _, _, err := svc.Update(context.Background(), 9, "go-engineer-acme-abcd1234", moderation.UpdatePatch{Title: &title}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if repo.updated.CompanySlug != "acme" {
+		t.Errorf("CompanySlug = %q after a title edit, want acme", repo.updated.CompanySlug)
+	}
+
+	renamed := "Globex"
+	if _, _, err := svc.Update(context.Background(), 9, "go-engineer-acme-abcd1234", moderation.UpdatePatch{Company: &renamed}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if repo.updated.CompanySlug != "globex" {
+		t.Errorf("CompanySlug = %q after a company change, want globex", repo.updated.CompanySlug)
+	}
+}

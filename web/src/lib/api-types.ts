@@ -21,6 +21,7 @@ export interface CompanyDetail {
   company: Company;
   jobs: Job[];
   referral_available: boolean;
+  company_claimed: boolean;
   response?: CompanyResponse;
   parent?: CompanyRef;
   subsidiaries?: CompanyRef[];
