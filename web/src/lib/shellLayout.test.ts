@@ -33,6 +33,7 @@ describe('isApiReferenceRoute', () => {
   it('covers both the external and internal API references', () => {
     expect(isApiReferenceRoute('/docs/api')).toBe(true);
     expect(isApiReferenceRoute('/docs/api/internal')).toBe(true);
+    expect(isApiReferenceRoute('/docs/api/data')).toBe(true);
   });
 
   it('does not catch a sub-path of the API reference', () => {

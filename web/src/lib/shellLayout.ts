@@ -27,7 +27,7 @@ export function isFullBleedRoute(pathname: string): boolean {
  *  both isWideHeaderRoute and TopBar's search-box suppression need to recognize
  *  as a group, kept here as the single place that lists them. */
 export function isApiReferenceRoute(pathname: string): boolean {
-  return pathname === '/docs/api' || pathname === '/docs/api/internal';
+  return pathname === '/docs/api' || pathname === '/docs/api/internal' || pathname === '/docs/api/data';
 }
 
 /** True wherever the header should go edge to edge — every isFullBleedRoute plus the

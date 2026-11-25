@@ -191,7 +191,7 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 
 ## External vs internal endpoints
 
-This reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal).
+This reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal). The Data plan’s endpoints are also gathered on their own at [freehire.me/docs/api/data](https://freehire.me/docs/api/data).
 
 ## Filtering jobs
 
