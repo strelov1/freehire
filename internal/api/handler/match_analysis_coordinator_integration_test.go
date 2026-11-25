@@ -239,7 +239,7 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	registerEnsureRoute(app, h, userID, job)
-	app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+	app.Get("/api/v1/jobs/:slug/match-analysis/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 
 	ensure := startEnsure(t, app)
 	select {
@@ -248,7 +248,7 @@ func TestMatchAnalysisCoordinatorEnsureCachedAnalysisLeadsStreamFollows(t *testi
 		t.Fatal("autopilotAnalysis.ensure never started its compute")
 	}
 
-	stream := startStream(t, app, "/api/v1/jobs/"+coordinatorJobSlug("a", 0)+"/fit/stream", token)
+	stream := startStream(t, app, "/api/v1/jobs/"+coordinatorJobSlug("a", 0)+"/match-analysis/stream", token)
 	waitStillRunning(t, stream, 200*time.Millisecond, "the follower stream returned before the leader was released")
 
 	close(model.release)
@@ -331,9 +331,9 @@ func TestMatchAnalysisCoordinatorStreamLeadsEnsureCachedAnalysisFollowsAndLeader
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	registerEnsureRoute(app, h, userID, job)
-	app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+	app.Get("/api/v1/jobs/:slug/match-analysis/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 
-	stream := startStream(t, app, "/api/v1/jobs/"+coordinatorJobSlug("b", 0)+"/fit/stream", token)
+	stream := startStream(t, app, "/api/v1/jobs/"+coordinatorJobSlug("b", 0)+"/match-analysis/stream", token)
 
 	select {
 	case <-model.started:
@@ -402,12 +402,12 @@ func TestMatchAnalysisCoordinatorSecondStreamNeverSeesAnalysisUnavailable(t *tes
 	const iterations = 15
 	for i := 0; i < iterations; i++ {
 		jobID := seedCoordinatorJob(t, pool, "cc", i)
-		path := "/api/v1/jobs/" + coordinatorJobSlug("cc", i) + "/fit/stream"
+		path := "/api/v1/jobs/" + coordinatorJobSlug("cc", i) + "/match-analysis/stream"
 
 		model := newBlockingFitModel()
 		h := newCoordinatorHandlers(pool, queries, store, model)
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/match-analysis/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 
 		leader := startStream(t, app, path, token)
 		select {
@@ -504,8 +504,8 @@ func TestMatchAnalysisCoordinatorFollowerNeverServesStaleAnalysisAfterFailedReco
 	token, _ := iss.Issue(userID, testTokenVersion)
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
-	path := "/api/v1/jobs/" + coordinatorJobSlug("d", 0) + "/fit/stream"
+	app.Get("/api/v1/jobs/:slug/match-analysis/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+	path := "/api/v1/jobs/" + coordinatorJobSlug("d", 0) + "/match-analysis/stream"
 
 	leader := startStream(t, app, path, token)
 	select {

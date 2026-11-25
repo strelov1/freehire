@@ -41,10 +41,6 @@ type ResolveJobRes interface {
 	resolveJobRes()
 }
 
-type RunJobFitRes interface {
-	runJobFitRes()
-}
-
 type RunMatchAnalysisRes interface {
 	runMatchAnalysisRes()
 }
