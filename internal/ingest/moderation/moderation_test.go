@@ -472,6 +472,14 @@ func TestUpdate_KeepsTheCompanySlugUnlessTheCompanyChanges(t *testing.T) {
 		t.Errorf("CompanySlug = %q after a title edit, want acme", repo.updated.CompanySlug)
 	}
 
+	same := "Acme Technologies"
+	if _, _, err := svc.Update(context.Background(), 9, "go-engineer-acme-abcd1234", moderation.UpdatePatch{Title: &title, Company: &same}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if repo.updated.CompanySlug != "acme" {
+		t.Errorf("CompanySlug = %q after resending the same company, want acme", repo.updated.CompanySlug)
+	}
+
 	renamed := "Globex"
 	if _, _, err := svc.Update(context.Background(), 9, "go-engineer-acme-abcd1234", moderation.UpdatePatch{Company: &renamed}); err != nil {
 		t.Fatalf("Update: %v", err)

@@ -69,6 +69,8 @@ describe('EmployerView claim form', () => {
     let resolve!: (v: { company: { name: string } }) => void;
     getCompany.mockReturnValue(new Promise((r) => (resolve = r)));
     render(EmployerView, { section: 'profile' });
+    // A typed name would make the form submittable if the pending lookup did not block it.
+    await fireEvent.input(await screen.findByPlaceholderText('Acme'), { target: { value: 'Acme Technologies' } });
     await submitWith('hr@acme.test');
     expect(claimCompany).not.toHaveBeenCalled();
 

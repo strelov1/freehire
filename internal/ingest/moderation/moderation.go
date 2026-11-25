@@ -256,8 +256,9 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 	// facet from content and carries no explicit structured overrides.
 	// The company slug stays what it is unless the moderator renames the company: an employer
 	// posting is pinned to its account's slug, which the display name need not normalise to.
+	// Resending the stored name is not a rename.
 	companySlug := curF.CompanySlug
-	if p.Company != nil {
+	if company != curF.Company {
 		companySlug = ""
 	}
 	f, err := derive(curF.Source, curF.ExternalID, title, company, companySlug, location, description, remote, structuredFacets{})
