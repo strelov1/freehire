@@ -16,7 +16,7 @@ code in a family calls `kit.X` directly. A marker is a method with an exported n
 (`FullBoardListing()`), so a family adapter can declare it.
 
 Families so far: [`sources/ats`](ats/AGENTS.md) (greenhouse, lever, ashby, recruitee) and
-[`sources/aggregators`](aggregators/AGENTS.md) (adzuna, eures, jobnet, jobtech, nofluffjobs).
+[`sources/aggregators`](aggregators/AGENTS.md) (adzuna, careerjet, eures, jobnet, jobtech, nofluffjobs).
 A family imports only `kit` (and `applyform`) of ingest; `.golangci.yml` rule
 `sources-families` holds it.
 

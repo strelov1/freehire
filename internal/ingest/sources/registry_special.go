@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/strelov1/freehire/internal/ingest/sources/aggregators"
+	"github.com/strelov1/freehire/internal/ingest/sources/kit"
 )
 
 // registerSpecialTransports adds the providers All cannot list in its plain reg call: the keyed
@@ -11,7 +12,7 @@ import (
 // their own (a cookie session, a long timeout, a TLS fingerprint). It follows All's rule: on the
 // taxonomy path (c == nil) every provider registers, transport-free.
 func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
-	// usajobs, reed, whatjobs, adzuna and arc are the keyed sources: each needs a credential read from
+	// usajobs, reed, whatjobs, adzuna, careerjet and arc are the keyed sources: each needs a credential read from
 	// the environment, never from a board file. The credential gates the CRAWL registry only — a
 	// host without it must not register a provider whose every board would fail to authenticate,
 	// so its board file fails config validation before a request goes out. The taxonomy path
@@ -45,6 +46,14 @@ func registerSpecialTransports(registry map[string]Source, c HTTPClient) {
 	// Adzuna's credential is an app_id/app_key pair rather than a single key; both must be set.
 	if appID, appKey := os.Getenv("ADZUNA_APP_ID"), os.Getenv("ADZUNA_APP_KEY"); c == nil || (appID != "" && appKey != "") {
 		registry["adzuna"] = aggregators.NewAdzuna(c, appID, appKey)
+	}
+	// Careerjet needs the API key AND the server's public egress IP (its required user_ip).
+	// The adapter is registered only when both are set.
+	if key, ip := os.Getenv("CAREERJET_API_KEY"), os.Getenv("CAREERJET_USER_IP"); c == nil || (key != "" && ip != "") {
+		hc, ok := c.(kit.HeaderJSONGetter)
+		if c == nil || ok {
+			registry["careerjet"] = aggregators.NewCareerjet(hc, key, ip)
+		}
 	}
 	// whatjobs' credential is a publisher id rather than an API key, and it is per-country — one
 	// account per market, each under its own provider name (whatjobsMarkets). Rather than one
