@@ -272,15 +272,21 @@ var pageRedirectRes = []*regexp.Regexp{
 // eventHandlers are on*= attributes, quoted or not (an unquoted value ends at whitespace or >). An
 // interaction handler such as a button's onclick="window.location='…'" runs on a click, not on
 // load (a Tenstreet posting's Apply button, freehire#5209), so it is removed before matching;
-// onload is kept, since it does run as the page loads.
-var eventHandlers = regexp.MustCompile(`(?is)\son([a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+// onload is kept, since it does run as the page loads. Only tags are searched (htmlTag), so a
+// script's own text (`const once = location.replace(…)`) is never read as an attribute.
+var (
+	htmlTag       = regexp.MustCompile(`<[a-zA-Z][^>]*>`)
+	eventHandlers = regexp.MustCompile(`(?is)\son([a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+)
 
 func dropInteractionHandlers(body string) string {
-	return eventHandlers.ReplaceAllStringFunc(body, func(attr string) string {
-		if strings.EqualFold(eventHandlers.FindStringSubmatch(attr)[1], "load") {
-			return attr
-		}
-		return ""
+	return htmlTag.ReplaceAllStringFunc(body, func(tag string) string {
+		return eventHandlers.ReplaceAllStringFunc(tag, func(attr string) string {
+			if strings.EqualFold(eventHandlers.FindStringSubmatch(attr)[1], "load") {
+				return attr
+			}
+			return ""
+		})
 	})
 }
 
