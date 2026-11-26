@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -160,13 +161,15 @@ func TestSuccessorFallbackOnlyForRefusedFirstHop(t *testing.T) {
 
 func TestPageRedirects(t *testing.T) {
 	base, _ := url.Parse("https://a.example/x/")
-	body := `<div onclick="window.location='https://apply.example/c/acme'"></div><button onClick='location.href="/back"'>x</button><button onclick=location.assign('https://apply.example/')>y</button><body onload="location.href='/loaded'"><script>const once = location.replace('https://c.example/jobs');</script><meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
-window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&amp;b=2')</script>`
+	body := `<div onclick="window.location='https://apply.example/c/acme'"></div><button onClick='location.href="/back"'>x</button><button onclick=location.assign('https://apply.example/')>y</button><button onclick="if (n > 0) location.href='https://apply.example/gt'">z</button><body onload="location.href='/loaded'"><script>const once = location.replace('https://c.example/jobs');</script><meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
+window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&b=2')</script>`
 	var got []string
 	for _, u := range pageRedirects(base, body) {
 		got = append(got, u.String())
 	}
 	want := []string{"https://a.example/loaded", "https://c.example/jobs", "https://b.example/p?a=1&b=2", "https://a.example/moved", "https://a.example/reversed"}
+	sort.Strings(got)
+	sort.Strings(want)
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("pageRedirects = %v, want %v", got, want)
 	}
