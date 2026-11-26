@@ -269,8 +269,13 @@ var pageRedirectRes = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)<meta[^>]+content=["'][^"']*?url=([^"'>\s]+)["'][^>]*http-equiv=["']?refresh`),
 }
 
+// eventHandlers are on*= attributes: a button's onclick="window.location='…'" runs on a click, not
+// on load (a Tenstreet posting's Apply button, freehire#5209), so it is removed before matching.
+var eventHandlers = regexp.MustCompile(`(?is)\son[a-z]+\s*=\s*("[^"]*"|'[^']*')`)
+
 // pageRedirects returns the absolute http(s) URLs a page redirects to, resolved against base.
 func pageRedirects(base *url.URL, body string) []*url.URL {
+	body = eventHandlers.ReplaceAllString(body, "")
 	var out []*url.URL
 	for _, re := range pageRedirectRes {
 		for _, m := range re.FindAllStringSubmatch(body, -1) {

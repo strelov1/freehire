@@ -160,7 +160,7 @@ func TestSuccessorFallbackOnlyForRefusedFirstHop(t *testing.T) {
 
 func TestPageRedirects(t *testing.T) {
 	base, _ := url.Parse("https://a.example/x/")
-	body := `<meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
+	body := `<div onclick="window.location='https://apply.example/c/acme'"></div><button onClick='location.href="/back"'>x</button><meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
 window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&amp;b=2')</script>`
 	var got []string
 	for _, u := range pageRedirects(base, body) {

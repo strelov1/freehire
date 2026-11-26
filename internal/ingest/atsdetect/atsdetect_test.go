@@ -209,3 +209,9 @@ func TestDetectSelfHosted(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectSelfHostedIgnoresRecruiteeSite(t *testing.T) {
+	if p, b, ok := DetectSelfHosted(`switching from teamtailor?`, "recruitee.com"); ok {
+		t.Fatalf("recruitee.com read as %s/%s", p, b)
+	}
+}
