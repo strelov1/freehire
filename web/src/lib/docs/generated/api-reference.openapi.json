@@ -25,6 +25,9 @@
       "name": "Booking links"
     },
     {
+      "name": "Availability"
+    },
+    {
       "name": "Catalogue export",
       "description": "Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /data/jobs/{slug}` (full `description` and `url` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /data/jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence."
     },
@@ -6051,6 +6054,263 @@
         },
         "tags": [
           "Autofill"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/availability": {
+      "get": {
+        "operationId": "getAvailability",
+        "summary": "Get my availability.",
+        "description": "The caller's availability: hours, zone and booking-link settings.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AvailabilityOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Availability"
+        ],
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/availability/booking": {
+      "put": {
+        "operationId": "saveAvailabilityBooking",
+        "summary": "Save my booking-link settings.",
+        "description": "Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration or notice is 422.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AvailabilityBookingOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Availability"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityBookingBody"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/availability/overrides": {
+      "post": {
+        "operationId": "addAvailabilityDated",
+        "summary": "Add a dated override.",
+        "description": "Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "The request has succeeded and a new resource has been created as a result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BuddyMockRuleOut"
+                    }
+                  },
+                  "description": "A single item: `{\"data\": ...}`."
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Availability"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityRuleBody"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/availability/weekly": {
+      "put": {
+        "operationId": "replaceAvailabilityWeekly",
+        "summary": "Replace my weekly hours.",
+        "description": "Swap the recurring week; dated overrides stay.",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Availability"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityWeeklyBody"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CookieSession": []
+          },
+          {
+            "PersonalApiKey": []
+          }
+        ]
+      }
+    },
+    "/me/availability/{id}": {
+      "delete": {
+        "operationId": "deleteAvailabilityEntry",
+        "summary": "Delete one availability rule.",
+        "description": "Remove one of the caller's own rules.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "There is no content to send for this request, but the headers may be useful."
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Availability"
         ],
         "security": [
           {
@@ -16154,6 +16414,138 @@
           }
         },
         "description": "A question the attempt could not answer. The attempt's internal error text is never here."
+      },
+      "AvailabilityBookingBody": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "duration_min",
+          "notice_hours"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "IANA zone the hours are stated in."
+          },
+          "duration_min": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notice_hours": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AvailabilityBookingOut": {
+        "type": "object",
+        "required": [
+          "duration_min",
+          "notice_hours"
+        ],
+        "properties": {
+          "duration_min": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Meeting length of a booking link: 15, 30, 45 or 60."
+          },
+          "notice_hours": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Shortest notice before a booking-link meeting, in hours (0 to 168)."
+          }
+        }
+      },
+      "AvailabilityOut": {
+        "type": "object",
+        "required": [
+          "rules",
+          "timezone",
+          "saved",
+          "booking"
+        ],
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockRuleOut"
+            },
+            "description": "Weekly rules and dated overrides together."
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The zone the hours are stated in; null until settings were saved."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "False while the user has neither hours nor settings, so booking links still use their default week (Mon-Fri 10-18, 30 min, 12 h)."
+          },
+          "booking": {
+            "$ref": "#/components/schemas/AvailabilityBookingOut"
+          }
+        }
+      },
+      "AvailabilityRuleBody": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int64"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0 (Sunday) through 6; null for a dated override."
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "YYYY-MM-DD; null for a weekly rule."
+          },
+          "start": {
+            "type": "string",
+            "description": "HH:MM."
+          },
+          "end": {
+            "type": "string",
+            "description": "HH:MM; 24:00 means until midnight."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA zone the hours are stated in; stored when present, 422 if invalid."
+          }
+        }
+      },
+      "AvailabilityWeeklyBody": {
+        "type": "object",
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuddyMockRule"
+            }
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA zone the hours are stated in; stored when present, 422 if invalid."
+          }
+        }
       },
       "BankedAnswer": {
         "type": "object",
