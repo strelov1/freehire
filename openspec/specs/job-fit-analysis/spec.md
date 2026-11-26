@@ -257,48 +257,53 @@ fit-analysis page — see "Fit analysis surfaces in the tailoring workspace".
 - **WHEN** no analysis is cached
 - **THEN** the sidebar shows an action that navigates to `/tailor/[slug]` instead of computing inline
 
-### Requirement: Per-user monthly fit-analysis quota
+### Requirement: Fit analysis is a paid, daily-metered feature
 
-The system SHALL limit each user to at most **10 AI fit analyses per rolling 30-day window**, enforced BEFORE the LLM prompt-chain runs on both the synchronous `POST /api/v1/jobs/:slug/match-analysis` endpoint and the streaming `GET /api/v1/jobs/:slug/match-analysis/stream` endpoint. Only the FIRST analysis of a distinct `(user, job)` pair consumes quota: a recompute of a pair the user has already analysed, and re-running the same job, MUST be allowed regardless of the count. Consumption is counted from the persisted `user_job_analysis` rows whose first-analysis timestamp falls within the last 30 days, so an analysis that fails or is never persisted MUST NOT consume quota. The limit applies to every role — there is no staff exemption.
+Running a fit analysis on the synchronous `POST /api/v1/jobs/:slug/match-analysis` endpoint or the streaming `GET /api/v1/jobs/:slug/match-analysis/stream` endpoint SHALL require a live Pro or Ultra plan and SHALL draw on the caller's daily `match` allowance (`plan.FeatureFit`), both checked BEFORE the LLM prompt-chain runs. The day is the UTC calendar day; the allowance resets at midnight UTC. Both paid plans are unlimited for a person: the daily figure in `plan.DefaultConfig` (60 on Pro, 180 on Ultra) is a fair-use guard against automation, never shown as a plan ceiling. Only the FIRST analysis of a distinct `(user, job)` pair is charged: a recompute of a pair the caller has already analysed is free. The charge is taken before the chain starts and given back when the run produces no analysis. A metering fault lets the run through uncharged (fail open); a failure to read the caller's plan refuses it with `503` (fail closed).
 
-#### Scenario: New job under the limit
+#### Scenario: Caller without a paid plan
 
-- **WHEN** a user who has analysed fewer than 10 distinct jobs in the last 30 days requests an analysis for a job they have not analysed
-- **THEN** the system runs the chain, persists the result, and the run counts toward the 30-day window
+- **WHEN** a caller on no paid plan requests a new analysis on either endpoint
+- **THEN** the system responds `402`, never invokes the LLM, and persists nothing
 
-#### Scenario: New job over the limit
+#### Scenario: New job within the allowance
 
-- **WHEN** a user who has already analysed 10 distinct jobs in the last 30 days requests an analysis for a job they have not analysed
-- **THEN** the system responds `429`, never invokes the LLM, and persists nothing
+- **WHEN** a paid caller below today's fair-use guard requests an analysis for a job they have not analysed
+- **THEN** the system runs the chain, persists the result, and today's `match` usage grows by one
 
-#### Scenario: Recompute is always free
+#### Scenario: Fair-use guard reached
 
-- **WHEN** a user at or above the limit requests an analysis for a job they have already analysed (a recompute of an existing `(user, job)` pair)
-- **THEN** the system runs the chain and does not reject the request on quota grounds
+- **WHEN** a paid caller who has reached today's fair-use guard requests an analysis for a job they have not analysed
+- **THEN** the system responds `402` with the `allowance` and its `resets_at`, never invokes the LLM, and persists nothing
 
-#### Scenario: Streaming endpoint enforces the same cap
+#### Scenario: Recompute is free
 
-- **WHEN** a user over the limit opens the SSE stream for a job they have not analysed
-- **THEN** the system responds `429` before opening the event stream and never invokes the LLM
+- **WHEN** a paid caller at the guard requests an analysis for a job they have already analysed
+- **THEN** the system runs the chain and does not refuse it on allowance grounds
 
-#### Scenario: Failed analysis does not consume quota
+#### Scenario: Streaming endpoint enforces the same gate
 
-- **WHEN** an under-limit new-job analysis is attempted but the LLM is unconfigured or errors, so no row is persisted
-- **THEN** the user's remaining quota is unchanged
+- **WHEN** a caller who would be refused opens the SSE stream for a job they have not analysed
+- **THEN** the system responds `402` before opening the event stream and never invokes the LLM
 
-### Requirement: Quota state on the read endpoint
+#### Scenario: Failed analysis gives the charge back
 
-The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return a `quota` object carrying `used`, `limit`, and `remaining` (where `remaining = max(0, limit - used)`) computed over the caller's last 30 days, without invoking the LLM, so the client can display usage and pre-block a new-job analysis when no quota remains.
+- **WHEN** a new-job analysis is charged but the LLM is unconfigured or errors, so no analysis is produced
+- **THEN** the charge is released and today's usage is unchanged
 
-#### Scenario: Quota reported on read
+### Requirement: Allowance state on the read endpoint
 
-- **WHEN** a signed-in caller reads `GET /api/v1/jobs/:slug/match-analysis`
-- **THEN** the response includes `quota` with `used`, `limit` (10), and `remaining` reflecting the caller's distinct-job analyses in the last 30 days, and no LLM call is made
+The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return the caller's standing on today's fit-analysis allowance as `allowance`, and on the tailoring-session allowance as `tailor_allowance`, without invoking the LLM, so the client can show usage and pre-block a run the server would refuse. Each carries `feature`, `used`, `unlimited`, `enforced`, `resets_at`, and `limit` only when the plan has a real ceiling (an unlimited plan's fair-use guard is never exposed as a limit). The standing is best-effort: when it cannot be read the field is omitted and the read still succeeds.
 
-#### Scenario: Remaining never negative
+#### Scenario: Allowance reported on read
 
-- **WHEN** a caller has analysed 10 or more distinct jobs in the window
-- **THEN** `remaining` is reported as `0`, not a negative number
+- **WHEN** a signed-in paid caller reads `GET /api/v1/jobs/:slug/match-analysis`
+- **THEN** the response includes `allowance` with `feature` `match`, today's `used`, `unlimited` true, and the next midnight UTC as `resets_at`, and no LLM call is made
+
+#### Scenario: Meter unavailable
+
+- **WHEN** the plan meter cannot be read during a read
+- **THEN** the response omits `allowance` and still returns the cached analysis
 
 ### Requirement: Structured résumé augments the fit input
 
