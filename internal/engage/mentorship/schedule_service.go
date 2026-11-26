@@ -13,9 +13,9 @@ import (
 
 // slotsFor assembles the engine's inputs and runs it.
 func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Time, viewerZone string) (slots.SlotResult, error) {
-	zone, err := time.LoadLocation(mentor.Timezone)
+	zone, err := s.zoneOf(ctx, mentor)
 	if err != nil {
-		return slots.SlotResult{}, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, mentor.ID, mentor.Timezone)
+		return slots.SlotResult{}, err
 	}
 
 	rules, err := s.repo.ListAvailability(ctx, mentor.ID)
@@ -79,9 +79,9 @@ func (s *Service) MyCalendar(ctx context.Context, userID int64, year int, month 
 	if err != nil {
 		return slots.CalendarResult{}, err
 	}
-	zone, err := time.LoadLocation(profile.Timezone)
+	zone, err := s.zoneOf(ctx, profile)
 	if err != nil {
-		return slots.CalendarResult{}, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, profile.ID, profile.Timezone)
+		return slots.CalendarResult{}, err
 	}
 
 	from := time.Date(year, month, 1, 0, 0, 0, 0, zone)
@@ -129,4 +129,23 @@ func (s *Service) ownProfile(ctx context.Context, userID int64) (Profile, error)
 		return Profile{}, ErrProfileNotFound
 	}
 	return profile, nil
+}
+
+// zoneOf is the zone the mentor's hours are stated in: the account's shared one once saved,
+// else the profile's own.
+func (s *Service) zoneOf(ctx context.Context, mentor Profile) (*time.Location, error) {
+	name, err := s.repo.AvailabilityZone(ctx, mentor.ID)
+	if err != nil {
+		return nil, err
+	}
+	if name == "" {
+		name = mentor.Timezone
+	}
+	zone, err := time.LoadLocation(name)
+	if err != nil {
+		// A stored zone that no longer resolves is a broken row, not a bad request; guessing
+		// one would offer hours nobody stated.
+		return nil, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, mentor.ID, name)
+	}
+	return zone, nil
 }

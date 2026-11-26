@@ -39,6 +39,19 @@ func encodeAddAtomResponse(response *AddAtomCreated, w http.ResponseWriter) erro
 	return nil
 }
 
+func encodeAddAvailabilityDatedResponse(response *AddAvailabilityDatedCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeAddAvailabilityOverrideResponse(response *AddAvailabilityOverrideCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
@@ -1108,6 +1121,12 @@ func encodeDeleteAtomResponse(response *DeleteAtomNoContent, w http.ResponseWrit
 	return nil
 }
 
+func encodeDeleteAvailabilityEntryResponse(response *DeleteAvailabilityEntryNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeDeleteAvailabilityRuleResponse(response *DeleteAvailabilityRuleNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
@@ -1577,6 +1596,19 @@ func encodeGetAutoApplySettingsResponse(response *GetAutoApplySettingsOK, w http
 }
 
 func encodeGetAutofillProfileResponse(response *GetAutofillProfileOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
+func encodeGetAvailabilityResponse(response *GetAvailabilityOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -4405,6 +4437,12 @@ func encodeReopenEmployerVacancyResponse(response *ReopenEmployerVacancyOK, w ht
 	return nil
 }
 
+func encodeReplaceAvailabilityWeeklyResponse(response *ReplaceAvailabilityWeeklyNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeReplaceResumeContactsFromCvResponse(response *ReplaceResumeContactsFromCvOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -4754,6 +4792,19 @@ func encodeRunMatchAnalysisResponse(response RunMatchAnalysisRes, w http.Respons
 	default:
 		return errors.Errorf("unexpected response type: %T", response)
 	}
+}
+
+func encodeSaveAvailabilityBookingResponse(response *SaveAvailabilityBookingOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
 }
 
 func encodeSaveBankedAnswerResponse(response *SaveBankedAnswerOK, w http.ResponseWriter) error {

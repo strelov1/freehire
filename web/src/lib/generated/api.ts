@@ -2637,6 +2637,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my availability.
+         * @description The caller's availability: hours, zone and booking-link settings.
+         */
+        get: operations["getAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save my booking-link settings.
+         * @description Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration or notice is 422.
+         */
+        put: operations["saveAvailabilityBooking"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a dated override.
+         * @description Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+         */
+        post: operations["addAvailabilityDated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace my weekly hours.
+         * @description Swap the recurring week; dated overrides stay.
+         */
+        put: operations["replaceAvailabilityWeekly"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one availability rule.
+         * @description Remove one of the caller's own rules.
+         */
+        delete: operations["deleteAvailabilityEntry"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/buddies": {
         parameters: {
             query?: never;
@@ -7237,6 +7337,52 @@ export interface components {
             label: string;
             required: boolean;
             reason: string;
+        };
+        AvailabilityBookingBody: {
+            /** @description IANA zone the hours are stated in. */
+            timezone: string;
+            /** Format: int64 */
+            duration_min: number;
+            /** Format: int64 */
+            notice_hours: number;
+        };
+        AvailabilityBookingOut: {
+            /**
+             * Format: int64
+             * @description Meeting length of a booking link: 15, 30, 45 or 60.
+             */
+            duration_min: number;
+            /**
+             * Format: int64
+             * @description Shortest notice before a booking-link meeting, in hours (0 to 168).
+             */
+            notice_hours: number;
+        };
+        AvailabilityOut: {
+            /** @description Weekly rules and dated overrides together. */
+            rules: components["schemas"]["BuddyMockRuleOut"][];
+            /** @description The zone the hours are stated in; null until settings were saved. */
+            timezone: string | null;
+            /** @description False while the user has neither hours nor settings, so booking links still use their default week (Mon-Fri 10-18, 30 min, 12 h). */
+            saved: boolean;
+            booking: components["schemas"]["AvailabilityBookingOut"];
+        };
+        AvailabilityRuleBody: {
+            /** @description 0 (Sunday) through 6; null for a dated override. */
+            weekday?: number | null;
+            /** @description YYYY-MM-DD; null for a weekly rule. */
+            date?: string | null;
+            /** @description HH:MM. */
+            start?: string;
+            /** @description HH:MM; 24:00 means until midnight. */
+            end?: string;
+            /** @description IANA zone the hours are stated in; stored when present, 422 if invalid. */
+            timezone?: string;
+        };
+        AvailabilityWeeklyBody: {
+            rules?: components["schemas"]["BuddyMockRule"][];
+            /** @description IANA zone the hours are stated in; stored when present, 422 if invalid. */
+            timezone?: string;
         };
         BanRequest: {
             /** @description 1 to 500 characters. */
@@ -18454,6 +18600,167 @@ export interface operations {
                         data: unknown;
                     };
                 };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAvailability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AvailabilityOut"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    saveAvailabilityBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityBookingBody"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AvailabilityBookingOut"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addAvailabilityDated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityRuleBody"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BuddyMockRuleOut"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    replaceAvailabilityWeekly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityWeeklyBody"];
+            };
+        };
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteAvailabilityEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description An unexpected error response. */
             default: {

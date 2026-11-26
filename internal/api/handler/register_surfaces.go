@@ -10,6 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/candidate/resume"
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/bookinglink"
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
@@ -168,4 +169,8 @@ func newBookingLinkSurface(cfg Config, q *db.Queries, plans *plan.Store) *bookin
 	// A database dump alone cannot rebuild a link's URL.
 	service := bookinglink.New(bookinglink.NewQueriesRepository(q, cfg.Pool), plans, []byte(cfg.JWTSecret), calendar)
 	return newBookingLinkHandlers(service, cfg.FrontendOrigin)
+}
+
+func newAvailabilitySurface(q *db.Queries, plans *plan.Store) *availabilityHandlers {
+	return &availabilityHandlers{store: availability.New(q), plans: plans}
 }
