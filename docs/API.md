@@ -18,6 +18,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Filtering jobs](#filtering-jobs)
 - [Onboarding](#onboarding)
 - [Booking links](#booking-links)
+- [Availability](#availability)
 - [Catalogue export](#catalogue-export)
 - [Original job links](#original-job-links)
 - [Jobs](#jobs)
@@ -415,6 +416,99 @@ A link's free slots from now to its horizon, in the viewer's zone (UTC when unkn
 
 ```bash
 curl "https://freehire.me/api/v1/booking/<token>/slots"
+```
+
+## Availability
+
+### `GET /me/availability`
+
+**Auth:** Session or API key
+
+Get my availability.
+
+The caller's availability: hours, zone and booking-link settings.
+
+```bash
+curl "https://freehire.me/api/v1/me/availability" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `PUT /me/availability/booking`
+
+**Auth:** Session or API key
+
+Save my booking-link settings.
+
+Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration or notice is 422.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `timezone` | string | yes | IANA zone the hours are stated in. |
+| `duration_min` | integer (int64) | yes |  |
+| `notice_hours` | integer (int64) | yes |  |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/availability/booking" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /me/availability/overrides`
+
+**Auth:** Session or API key
+
+Add a dated override.
+
+Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `weekday` | integer (int64) \| null | no | 0 (Sunday) through 6; null for a dated override. |
+| `date` | string \| null | no | YYYY-MM-DD; null for a weekly rule. |
+| `start` | string | no | HH:MM. |
+| `end` | string | no | HH:MM; 24:00 means until midnight. |
+| `timezone` | string | no | IANA zone the hours are stated in; stored when present, 422 if invalid. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/availability/overrides" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `PUT /me/availability/weekly`
+
+**Auth:** Session or API key
+
+Replace my weekly hours.
+
+Swap the recurring week; dated overrides stay.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rules` | BuddyMockRule[] | no |  |
+| `timezone` | string | no | IANA zone the hours are stated in; stored when present, 422 if invalid. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/availability/weekly" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `DELETE /me/availability/{id}`
+
+**Auth:** Session or API key
+
+Delete one availability rule.
+
+Remove one of the caller's own rules.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/availability/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ## Catalogue export

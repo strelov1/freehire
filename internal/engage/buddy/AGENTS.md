@@ -50,6 +50,16 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
   member's ranking keys; no other route may call it.
 - **A privately pasted posting (`jobs.is_private`) never reaches another member**: the feed and
   the shared-company count both skip events whose job is private.
+- **Hours and busy time are shared across products (`engage/availability`).** One
+  `user_availability` calendar (weekly rules, dated overrides) plus `user_availability_settings`
+  (zone, booking-link meeting length and notice) per user; mentorship, buddy mocks and booking
+  links all read it, and `ListUserBusy` unions their meetings (mentor sessions as mentor or
+  seeker, mocks, booking-link meetings, application interviews, synced Google busy), so a
+  meeting in one blocks the same time in the others. A settings row, once saved, decides the
+  zone, and setting it rewrites every product zone to match; the product zone applies before that. A race across products is NOT closed: each `Book`
+  re-derives its slot, which narrows the window, but no cross-table constraint stops two
+  products booking the same time at once. `mentor_availability` and
+  `buddy_mock_availability` are no longer read; a follow-up migration drops them.
 - **One person, one mock at a time, whatever the role.** `buddy_mock_participants` holds a
   row per person per mock under one `EXCLUDE` (`user_id =`, `[)` range `&&`, `WHERE active`);
   a mentor-style constraint on the host alone could not refuse "host at 19:00 and guest at

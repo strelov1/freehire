@@ -37,7 +37,7 @@ export const messages = defineMessages(
     noHistory: 'No activity recorded for this application yet.',
     bookingLink: {
       title: 'Booking link',
-      hint: 'Share it with the recruiter: they pick a 30-minute slot on weekdays 10:00–18:00 your time, no account needed.',
+      hint: 'Share it with the recruiter: they pick a slot from the hours in your calendar, no account needed.',
       turnOn: 'Turn on booking link',
       copy: 'Copy',
       copied: 'Copied',
@@ -185,7 +185,7 @@ export const messages = defineMessages(
       noHistory: 'Для этой заявки пока нет записей.',
       bookingLink: {
         title: 'Ссылка для записи',
-        hint: 'Отправьте её рекрутеру: он выберет 30-минутный слот в будни с 10:00 до 18:00 по вашему времени, без аккаунта.',
+        hint: 'Отправьте её рекрутеру: он выберет слот из часов в вашем календаре, без аккаунта.',
         turnOn: 'Включить ссылку для записи',
         copy: 'Копировать',
         copied: 'Скопировано',

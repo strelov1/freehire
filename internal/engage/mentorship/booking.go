@@ -270,11 +270,9 @@ func (s *Service) Review(ctx context.Context, bookingID uuid.UUID, seekerID int6
 // whether that exact instant is one of them. The window is one day either side, not the
 // whole horizon: buffers reach at most a session's length beyond a booking.
 func (s *Service) slotIsOfferable(ctx context.Context, mentor Profile, start time.Time) (bool, error) {
-	zone, err := time.LoadLocation(mentor.Timezone)
+	zone, err := s.zoneOf(ctx, mentor)
 	if err != nil {
-		// A stored zone that no longer resolves is a broken row, not a bad request; guessing
-		// one would offer hours nobody stated.
-		return false, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, mentor.ID, mentor.Timezone)
+		return false, err
 	}
 
 	from := start.AddDate(0, 0, -1)
