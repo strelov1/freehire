@@ -91,7 +91,10 @@ const localsMCPUserID = "mcp.userID"
 // spec's only signal that sign-in is needed: Claude.ai, Grok, Cursor and the CLIs open
 // sign-in from it while a connector is being added, and never later.
 func mcpAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
-	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + mcpapp.ResourceMetadataPath + `"`
+	origin := strings.TrimSuffix(frontendOrigin, "/")
+	challenge := `Bearer resource_metadata="` + origin + mcpapp.ResourceMetadataPath + `"`
+	howToConnect := "missing bearer token: this is an MCP connector URL, add it in your AI client. See " +
+		origin + "/mcp for usage instructions."
 	return func(c *fiber.Ctx) error {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
 		c.Request().Header.Del(mcpapp.AccountUserIDHeader)
@@ -100,7 +103,8 @@ func mcpAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber
 		if !strings.HasPrefix(authorization, prefix) {
 			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "missing_bearer_token")
 			c.Set(fiber.HeaderWWWAuthenticate, challenge)
-			return fiber.NewError(fiber.StatusUnauthorized, "missing bearer token")
+			// People paste this URL into a browser; the message says where to add it instead.
+			return fiber.NewError(fiber.StatusUnauthorized, howToConnect)
 		}
 		token := strings.TrimPrefix(authorization, prefix)
 
