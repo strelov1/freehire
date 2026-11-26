@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -160,13 +161,15 @@ func TestSuccessorFallbackOnlyForRefusedFirstHop(t *testing.T) {
 
 func TestPageRedirects(t *testing.T) {
 	base, _ := url.Parse("https://a.example/x/")
-	body := `<meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
-window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&amp;b=2')</script>`
+	body := `<div onclick="window.location='https://apply.example/c/acme'"></div><button onClick='location.href="/back"'>x</button><button onclick=location.assign('https://apply.example/')>y</button><button onclick="if (n > 0) location.href='https://apply.example/gt'">z</button><body onload="location.href='/loaded'"><script>const once = location.replace('https://c.example/jobs');</script><meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><meta http-equiv="refresh" content="5; url=https://jobs.example/search;tenant=acme"><script>if (location.href.indexOf('') >= 0) {}
+window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&b=2')</script>`
 	var got []string
 	for _, u := range pageRedirects(base, body) {
 		got = append(got, u.String())
 	}
-	want := []string{"https://b.example/p?a=1&b=2", "https://a.example/moved", "https://a.example/reversed"}
+	want := []string{"https://a.example/loaded", "https://c.example/jobs", "https://b.example/p?a=1&b=2", "https://a.example/moved", "https://a.example/reversed", "https://jobs.example/search;tenant=acme"}
+	sort.Strings(got)
+	sort.Strings(want)
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("pageRedirects = %v, want %v", got, want)
 	}
@@ -292,5 +295,28 @@ func TestSuccessorKeepsMoveWhenBudgetEnds(t *testing.T) {
 		if moves := f.Run(context.Background(), []ChronicBoard{board}); len(moves) != want {
 			t.Fatalf("budget %d: moves = %+v, want %d", budget, moves, want)
 		}
+	}
+}
+
+// A page with an immediate script redirect and a delayed meta-refresh fallback has moved where the
+// script sends it.
+func TestSuccessorPrefersScriptOverMetaRefresh(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Host {
+		case "careers-acme.icims.com":
+			_, _ = w.Write([]byte(`<meta http-equiv="refresh" content="30; url=http://jobs.lever.co/fallback"><script>location.replace("http://jobs.lever.co/acme")</script>`))
+		case "jobs.lever.co":
+			_, _ = w.Write([]byte(`lever`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	moves := newFinder(hostsClient(srv), nil).Run(context.Background(), []ChronicBoard{{
+		Provider: "icims", Board: "acme", LatestURL: "http://careers-acme.icims.com/jobs/1/x/job",
+	}})
+	if len(moves) != 1 || moves[0].SuccessorBoard != "acme" || moves[0].SuccessorProvider != "lever" {
+		t.Fatalf("moves = %+v, want lever/acme", moves)
 	}
 }
