@@ -19,6 +19,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
 	"github.com/strelov1/freehire/internal/ingest/atsdetect"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/job/qualityaudit"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
@@ -28,8 +29,10 @@ import (
 )
 
 // The successor pass (-successors) runs on its own timer on the crawl host, where the Scrapling
-// tier is, not in the weekly measuring run on core: it writes a list for a human to act on (the
-// SuperPlane "Board successors" canvas reads it), not gauges.
+// tier is, not in the weekly measuring run on core. It writes the moves for the SuperPlane "Board
+// successors" canvas to check. With -apply-moved it is the one part of this audit that acts: a
+// renamed tenant (renamedTenant) has its old board retired here, since nothing else ever would —
+// its crawl only sees a 404 or "board gone", never where the board went.
 
 // successorFileEnv names the JSON report's path; the canvas reads it.
 const successorFileEnv = "QUALITY_AUDIT_SUCCESSORS_FILE"
@@ -61,9 +64,54 @@ type successorMove struct {
 	// "retired"; "" when there is no recognised successor.
 	SuccessorStatus  string `json:"successor_status"`
 	SuccessorCompany string `json:"successor_company"`
+	// SuccessorChronic is a successor that is itself among the unreachable boards.
+	SuccessorChronic bool `json:"successor_chronic"`
+	// Retired is set when -apply-moved retired the old board this run; ClosedJobs is what that closed.
+	Retired    bool  `json:"retired"`
+	ClosedJobs int64 `json:"closed_jobs"`
 }
 
-func runSuccessors(dryRun bool) int {
+// renamedTenant is a move the pass applies itself: the same provider's board, live in the catalogue
+// and crawling, now holds the old board's postings (a tenant renamed on its platform). Retiring
+// the old board stops a crawl that can only fail, and its postings are already carried by the
+// successor. Every other move needs a human: another platform, or a board the catalogue lacks.
+func renamedTenant(m successorMove) bool {
+	return m.SuccessorProvider == m.Provider && m.SuccessorStatus == "active" && !m.SuccessorChronic
+}
+
+type boardRetirer interface {
+	Retire(ctx context.Context, provider, board, region string) (boardcatalog.Retirement, error)
+}
+
+// applyMoves retires the old board of every renamed tenant in the report, at most maxRetire of
+// them: more in one run than a renamed-tenant day ever produced is worth a human looking first.
+func applyMoves(ctx context.Context, repo boardRetirer, report *successorReport, maxRetire int, apply bool) error {
+	n := 0
+	for i := range report.Moves {
+		m := &report.Moves[i]
+		if !renamedTenant(*m) {
+			continue
+		}
+		if n >= maxRetire {
+			log.Printf("quality-audit: successors: retire cap %d reached; %s/%s left for the next run", maxRetire, m.Provider, m.Board)
+			continue
+		}
+		n++
+		if !apply {
+			log.Printf("quality-audit: successors: would retire %s/%s, moved to %s/%s (-apply-moved to retire)", m.Provider, m.Board, m.SuccessorProvider, m.SuccessorBoard)
+			continue
+		}
+		r, err := repo.Retire(ctx, m.Provider, m.Board, m.Region)
+		if err != nil {
+			return fmt.Errorf("retire %s/%s: %w", m.Provider, m.Board, err)
+		}
+		m.Retired, m.ClosedJobs = r.Retired, r.Closed
+		log.Printf("quality-audit: successors: retired %s/%s (moved to %s/%s), closed %d posting(s)", m.Provider, m.Board, m.SuccessorProvider, m.SuccessorBoard, r.Closed)
+	}
+	return nil
+}
+
+func runSuccessors(dryRun, applyMoved bool) int {
 	path := os.Getenv(successorFileEnv)
 	if path == "" && !dryRun {
 		log.Printf("quality-audit: %s is unset, nothing to write", successorFileEnv)
@@ -115,6 +163,15 @@ func runSuccessors(dryRun bool) int {
 
 	report, err := findSuccessors(ctx, q, finder, days, maxBoards)
 	if err != nil {
+		log.Printf("quality-audit: successors: %v", err)
+		return 1
+	}
+	maxRetire, err := worker.EnvInt32("QUALITY_AUDIT_SUCCESSOR_MAX_RETIRE", 50)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if err := applyMoves(ctx, boardcatalog.NewQueriesRepository(q), &report, int(maxRetire), applyMoved && !dryRun); err != nil {
 		log.Printf("quality-audit: successors: %v", err)
 		return 1
 	}
@@ -170,6 +227,10 @@ func findSuccessors(ctx context.Context, q successorQueries, finder successorPro
 	if len(rows) > 0 {
 		report.Chronic = rows[0].Total
 	}
+	chronic := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		chronic[r.Provider+"/"+strings.ToLower(r.Board)] = true
+	}
 	rand.Shuffle(len(rows), func(i, j int) { rows[i], rows[j] = rows[j], rows[i] }) //nolint:gosec // Only selects which boards a capped run probes.
 
 	var boards []qualityaudit.ChronicBoard
@@ -218,6 +279,7 @@ func findSuccessors(ctx context.Context, q successorQueries, finder successorPro
 				return report, err
 			}
 			out.SuccessorStatus, out.SuccessorCompany = next.Status, next.Company
+			out.SuccessorChronic = chronic[m.SuccessorProvider+"/"+strings.ToLower(m.SuccessorBoard)]
 		}
 		log.Printf("quality-audit: successors: %s/%s -> %s (%s/%s, %s)", out.Provider, out.Board, out.Target,
 			out.SuccessorProvider, out.SuccessorBoard, out.SuccessorStatus)

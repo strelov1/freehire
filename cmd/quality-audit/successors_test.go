@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/job/qualityaudit"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -52,6 +53,7 @@ func TestFindSuccessorsResolvesCatalogue(t *testing.T) {
 			{Provider: "icims", Board: "beta", Total: 4},
 			{Provider: "icims", Board: "nourl", Total: 4},
 			{Provider: "adzuna", Board: "", Total: 4},
+			{Provider: "jibe", Board: "Beta.example", Total: 4},
 		},
 		urls: map[string]string{
 			"icims/acme:%": "https://careers-acme.icims.com/jobs/1/x/job",
@@ -70,6 +72,11 @@ func TestFindSuccessorsResolvesCatalogue(t *testing.T) {
 	}
 	if report.Chronic != 4 || report.Probed != 2 || len(prober.got) != 2 {
 		t.Fatalf("chronic=%d probed=%d handed=%d, want 4/2/2", report.Chronic, report.Probed, len(prober.got))
+	}
+	for _, m := range report.Moves {
+		if m.SuccessorChronic != (m.Board == "beta") {
+			t.Fatalf("%s: successor_chronic = %v", m.Board, m.SuccessorChronic)
+		}
 	}
 	status := map[string]string{}
 	for _, m := range report.Moves {
@@ -94,5 +101,37 @@ func TestNameBoard(t *testing.T) {
 	lever, _ := url.Parse("https://jobs.lever.co/acme")
 	if p, b, ok := nameBoard(lever, ""); !ok || p != "lever" || b != "acme" {
 		t.Fatalf("lever = %s/%s %v", p, b, ok)
+	}
+}
+
+type fakeRetirer struct{ retired []string }
+
+func (f *fakeRetirer) Retire(_ context.Context, provider, board, _ string) (boardcatalog.Retirement, error) {
+	f.retired = append(f.retired, provider+"/"+board)
+	return boardcatalog.Retirement{Retired: true, Closed: 4}, nil
+}
+
+func TestApplyMovesRetiresOnlyRenamedTenants(t *testing.T) {
+	report := successorReport{Moves: []successorMove{
+		{Provider: "trakstar", Board: "old", SuccessorProvider: "trakstar", SuccessorBoard: "new", SuccessorStatus: "active"},
+		{Provider: "trakstar", Board: "sick", SuccessorProvider: "trakstar", SuccessorBoard: "alsosick", SuccessorStatus: "active", SuccessorChronic: true},
+		{Provider: "icims", Board: "acme", SuccessorProvider: "jibe", SuccessorBoard: "talent.acme.com", SuccessorStatus: "active"},
+		{Provider: "pandape", Board: "a", SuccessorProvider: "pandape", SuccessorBoard: "b", SuccessorStatus: "absent"},
+		{Provider: "inhire", Board: "x", SuccessorProvider: "inhire", SuccessorBoard: "y", SuccessorStatus: "active"},
+	}}
+	repo := &fakeRetirer{}
+	if err := applyMoves(context.Background(), repo, &report, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.retired) != 1 || repo.retired[0] != "trakstar/old" {
+		t.Fatalf("retired %v, want only trakstar/old (cap 1)", repo.retired)
+	}
+	if !report.Moves[0].Retired || report.Moves[0].ClosedJobs != 4 || report.Moves[4].Retired {
+		t.Fatalf("moves = %+v", report.Moves)
+	}
+
+	dry := &fakeRetirer{}
+	if err := applyMoves(context.Background(), dry, &report, 10, false); err != nil || len(dry.retired) != 0 {
+		t.Fatalf("dry run retired %v (err %v)", dry.retired, err)
 	}
 }
