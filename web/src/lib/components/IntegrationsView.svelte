@@ -11,6 +11,7 @@
   import { Mail, CalendarDays } from '@lucide/svelte';
   import { errorMessage } from '#lib/utils.js';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
+  import InterviewSchedulingSetup from './InterviewSchedulingSetup.svelte';
 
   // The account-level home for every third-party connection: Google (Gmail +
   // Calendar, two separate consents on the same grant) and Telegram (the alert
@@ -51,6 +52,8 @@
   let scheduling = $state<Awaited<ReturnType<typeof api.interviewSchedulingStatus>> | null>(null);
   let schedulingBusy = $state(false);
   let schedulingError = $state('');
+  // Turning on goes through the hours-and-consent step first; once on, it reopens to edit hours.
+  let schedulingSetupOpen = $state(false);
 
   async function loadScheduling() {
     try {
@@ -362,11 +365,17 @@
           </p>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
-          {#if !scheduling.enabled || !scheduling.connected}
-            <Button variant="primary" size="sm" onclick={connectScheduling}>
-              {scheduling.enabled ? 'Reconnect Google' : 'Turn on with Google'}
-            </Button>
+          {#if scheduling.enabled && !scheduling.connected}
+            <Button variant="primary" size="sm" onclick={connectScheduling}>Reconnect Google</Button>
           {/if}
+          <Button
+            variant={scheduling.enabled ? 'outline' : 'primary'}
+            size="sm"
+            aria-expanded={schedulingSetupOpen}
+            onclick={() => (schedulingSetupOpen = !schedulingSetupOpen)}
+          >
+            {scheduling.enabled ? 'Hours' : 'Set up'}
+          </Button>
           {#if scheduling.enabled}
             <Button variant="outline" size="sm" disabled={schedulingBusy} onclick={disableScheduling}>Turn off</Button>
           {/if}
@@ -374,6 +383,9 @@
       </div>
       {#if schedulingError}
         <p class="text-xs text-destructive" role="alert">{schedulingError}</p>
+      {/if}
+      {#if schedulingSetupOpen}
+        <InterviewSchedulingSetup onconnect={scheduling.enabled ? undefined : connectScheduling} />
       {/if}
     </div>
   {/if}
