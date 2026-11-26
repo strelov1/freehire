@@ -22,6 +22,8 @@
   let savingBooking = $state(false);
   let bookingNote = $state('');
   let agreed = $state(false);
+  // The API takes any whole hour up to 168; keep a stored value outside the presets visible.
+  const noticeOptions = $derived(NOTICES.includes(notice) ? NOTICES : [...NOTICES, notice].sort((x, y) => x - y));
   let weekUnsaved = $state(false);
 
   // A first save states the browser's zone; after that the stored zone stays.
@@ -95,7 +97,7 @@
         <label class="block text-sm">
           <span class="text-muted-foreground">Shortest notice</span>
           <select bind:value={notice} class={selectClass}>
-            {#each NOTICES as h (h)}<option value={h}>{noticeLabel(h)}</option>{/each}
+            {#each noticeOptions as h (h)}<option value={h}>{noticeLabel(h)}</option>{/each}
           </select>
         </label>
         <Button variant="outline" size="sm" disabled={savingBooking} onclick={() => void saveBooking()}>Save</Button>

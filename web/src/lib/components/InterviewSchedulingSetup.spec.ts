@@ -54,4 +54,23 @@ describe('InterviewSchedulingSetup', () => {
     });
     expect(screen.queryByRole('checkbox', { name: /answer interview invitations/ })).toBeNull();
   });
+
+  it('keeps a stored notice outside the presets', async () => {
+    api.myAvailability.mockResolvedValueOnce({
+      rules: [],
+      timezone: 'Europe/Berlin',
+      saved: true,
+      booking: { duration_min: 30, notice_hours: 6 },
+    });
+    render(InterviewSchedulingSetup);
+
+    const notice = (await screen.findByLabelText('Shortest notice')) as HTMLSelectElement;
+    expect(notice.value).toBe('6');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(api.saveAvailabilityBooking).toHaveBeenCalledWith({
+      timezone: 'Europe/Berlin',
+      duration_min: 30,
+      notice_hours: 6,
+    });
+  });
 });
