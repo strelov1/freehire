@@ -73,7 +73,8 @@
     <div id="hosting" class="flex scroll-mt-20 flex-col gap-4">
       <BuddyMockSettingsForm bind:settings />
       <p class="text-sm text-base-content/70">
-        These hours are shared with your mentorship and booking links, and a meeting in any of them blocks the same time in the others.
+        These hours are shared with your mentorship and booking links, and a meeting in any of them blocks the same time
+        in the others.
       </p>
       <MentorScheduleEditor
         bind:rules

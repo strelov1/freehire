@@ -313,7 +313,6 @@ func Register(app *fiber.App, cfg Config) {
 
 	mentorshipH, mentorSuggestionsH := newMentorshipSurfaces(cfg, queries, mailClient, photoStore, resumeStore, profileSvc, bank)
 	bookingLinkH := newBookingLinkSurface(cfg, queries, plans)
-	availabilityH := newAvailabilitySurface(queries, plans)
 	inboxH.bookingLinks = bookingLinkH
 
 	app.Use(refuseCrossOriginCookieWrites(authH.browserOrigins))
@@ -375,7 +374,7 @@ func Register(app *fiber.App, cfg Config) {
 		mentorSuggestionsHandlers:    mentorSuggestionsH,
 		mentorshipHandlers:           mentorshipH,
 		bookingLinkHandlers:          bookingLinkH,
-		availabilityHandlers:         availabilityH,
+		availabilityHandlers:         newAvailabilitySurface(queries, plans),
 		savedSearchHandlers:          savedSearchH,
 		subscriptionHandlers:         subscriptionH,
 		timelineHandlers:             timelineH,

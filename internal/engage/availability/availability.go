@@ -133,7 +133,7 @@ func (s *Store) ReplaceWeekly(ctx context.Context, userID int64, rules []slots.R
 		if rule.IsDated() {
 			continue
 		}
-		p.Weekdays = append(p.Weekdays, int16(rule.Weekday()))
+		p.Weekdays = append(p.Weekdays, int16(rule.Weekday())) //nolint:gosec // a weekday is 0-6
 		p.StartTimes = append(p.StartTimes, pgClock(rule.Start()))
 		p.EndTimes = append(p.EndTimes, pgClock(rule.End()))
 	}
@@ -149,7 +149,7 @@ func (s *Store) Add(ctx context.Context, userID int64, rule slots.Rule) (slots.R
 		year, month, day := rule.Date().Parts()
 		p.OnDate = pgtype.Date{Time: time.Date(year, month, day, 0, 0, 0, 0, time.UTC), Valid: true}
 	} else {
-		p.Weekday = pgtype.Int2{Int16: int16(rule.Weekday()), Valid: true}
+		p.Weekday = pgtype.Int2{Int16: int16(rule.Weekday()), Valid: true} //nolint:gosec // a weekday is 0-6
 	}
 	row, err := s.q.CreateUserAvailabilityRule(ctx, p)
 	if err != nil {
@@ -172,6 +172,7 @@ func (s *Store) SaveSettings(ctx context.Context, userID int64, zone string, st 
 	}
 	_, err := s.q.UpsertUserAvailabilitySettings(ctx, db.UpsertUserAvailabilitySettingsParams{
 		UserID: userID, Timezone: zone,
+		//nolint:gosec // both were bounds-checked above (≤ 60 and ≤ 10080 minutes)
 		BookingDurationMin: int32(st.Duration / time.Minute), BookingNoticeMin: int32(st.Notice / time.Minute),
 	})
 	return err

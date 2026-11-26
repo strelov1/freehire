@@ -40,6 +40,12 @@ SELECT * FROM user_availability_settings WHERE user_id = $1;
 SELECT * FROM user_availability_settings WHERE user_id = ANY (sqlc.arg(user_ids)::bigint[]);
 
 -- name: UpsertUserAvailabilitySettings :one
+-- Product zones follow, as in SetUserAvailabilityZone.
+WITH mentor_zone AS (
+    UPDATE mentors m SET timezone = sqlc.arg(timezone)::text WHERE m.user_id = sqlc.arg(user_id)::bigint
+), buddy_zone AS (
+    UPDATE buddy_mock_settings b SET timezone = sqlc.arg(timezone)::text WHERE b.user_id = sqlc.arg(user_id)::bigint
+)
 INSERT INTO user_availability_settings (user_id, timezone, booking_duration_min, booking_notice_min)
 VALUES (sqlc.arg(user_id), sqlc.arg(timezone), sqlc.arg(booking_duration_min), sqlc.arg(booking_notice_min))
 ON CONFLICT (user_id) DO UPDATE
@@ -93,9 +99,15 @@ ORDER BY 1, 3;
 
 -- name: SetUserAvailabilityZone :exec
 -- A product's zone edit follows into the shared settings, which would otherwise keep
--- driving slots with the old zone. No row, nothing to follow.
-UPDATE user_availability_settings SET timezone = sqlc.arg(timezone), updated_at = now()
- WHERE user_id = sqlc.arg(user_id);
+-- driving slots with the old zone. No row, nothing to follow. The product zones are set
+-- too, so every form shows the one zone and resaving it cannot undo an edit made elsewhere.
+WITH mentor_zone AS (
+    UPDATE mentors m SET timezone = sqlc.arg(timezone)::text WHERE m.user_id = sqlc.arg(user_id)::bigint
+), buddy_zone AS (
+    UPDATE buddy_mock_settings b SET timezone = sqlc.arg(timezone)::text WHERE b.user_id = sqlc.arg(user_id)::bigint
+)
+UPDATE user_availability_settings u SET timezone = sqlc.arg(timezone)::text, updated_at = now()
+ WHERE u.user_id = sqlc.arg(user_id)::bigint;
 
 -- name: EnsureUserAvailabilityZoneFromMentor :exec
 -- Hours written through a product are stated in that product's zone; without a settings row
@@ -110,6 +122,12 @@ SELECT s.user_id, s.timezone FROM buddy_mock_settings s WHERE s.user_id = $1
 ON CONFLICT (user_id) DO NOTHING;
 
 -- name: UpsertUserAvailabilityZone :exec
+-- Sets the one zone, product zones included (see SetUserAvailabilityZone).
+WITH mentor_zone AS (
+    UPDATE mentors m SET timezone = sqlc.arg(timezone)::text WHERE m.user_id = sqlc.arg(user_id)::bigint
+), buddy_zone AS (
+    UPDATE buddy_mock_settings b SET timezone = sqlc.arg(timezone)::text WHERE b.user_id = sqlc.arg(user_id)::bigint
+)
 INSERT INTO user_availability_settings (user_id, timezone)
 VALUES (sqlc.arg(user_id), sqlc.arg(timezone))
 ON CONFLICT (user_id) DO UPDATE SET timezone = EXCLUDED.timezone, updated_at = now();

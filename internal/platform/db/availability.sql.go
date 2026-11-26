@@ -323,8 +323,13 @@ func (q *Queries) ReplaceUserAvailabilityWeekly(ctx context.Context, arg Replace
 }
 
 const setUserAvailabilityZone = `-- name: SetUserAvailabilityZone :exec
-UPDATE user_availability_settings SET timezone = $1, updated_at = now()
- WHERE user_id = $2
+WITH mentor_zone AS (
+    UPDATE mentors m SET timezone = $1::text WHERE m.user_id = $2::bigint
+), buddy_zone AS (
+    UPDATE buddy_mock_settings b SET timezone = $1::text WHERE b.user_id = $2::bigint
+)
+UPDATE user_availability_settings u SET timezone = $1::text, updated_at = now()
+ WHERE u.user_id = $2::bigint
 `
 
 type SetUserAvailabilityZoneParams struct {
@@ -333,13 +338,19 @@ type SetUserAvailabilityZoneParams struct {
 }
 
 // A product's zone edit follows into the shared settings, which would otherwise keep
-// driving slots with the old zone. No row, nothing to follow.
+// driving slots with the old zone. No row, nothing to follow. The product zones are set
+// too, so every form shows the one zone and resaving it cannot undo an edit made elsewhere.
 func (q *Queries) SetUserAvailabilityZone(ctx context.Context, arg SetUserAvailabilityZoneParams) error {
 	_, err := q.db.Exec(ctx, setUserAvailabilityZone, arg.Timezone, arg.UserID)
 	return err
 }
 
 const upsertUserAvailabilitySettings = `-- name: UpsertUserAvailabilitySettings :one
+WITH mentor_zone AS (
+    UPDATE mentors m SET timezone = $2::text WHERE m.user_id = $1::bigint
+), buddy_zone AS (
+    UPDATE buddy_mock_settings b SET timezone = $2::text WHERE b.user_id = $1::bigint
+)
 INSERT INTO user_availability_settings (user_id, timezone, booking_duration_min, booking_notice_min)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id) DO UPDATE
@@ -355,6 +366,7 @@ type UpsertUserAvailabilitySettingsParams struct {
 	BookingNoticeMin   int32  `json:"booking_notice_min"`
 }
 
+// Product zones follow, as in SetUserAvailabilityZone.
 func (q *Queries) UpsertUserAvailabilitySettings(ctx context.Context, arg UpsertUserAvailabilitySettingsParams) (UserAvailabilitySetting, error) {
 	row := q.db.QueryRow(ctx, upsertUserAvailabilitySettings,
 		arg.UserID,
@@ -374,6 +386,11 @@ func (q *Queries) UpsertUserAvailabilitySettings(ctx context.Context, arg Upsert
 }
 
 const upsertUserAvailabilityZone = `-- name: UpsertUserAvailabilityZone :exec
+WITH mentor_zone AS (
+    UPDATE mentors m SET timezone = $2::text WHERE m.user_id = $1::bigint
+), buddy_zone AS (
+    UPDATE buddy_mock_settings b SET timezone = $2::text WHERE b.user_id = $1::bigint
+)
 INSERT INTO user_availability_settings (user_id, timezone)
 VALUES ($1, $2)
 ON CONFLICT (user_id) DO UPDATE SET timezone = EXCLUDED.timezone, updated_at = now()
@@ -384,6 +401,7 @@ type UpsertUserAvailabilityZoneParams struct {
 	Timezone string `json:"timezone"`
 }
 
+// Sets the one zone, product zones included (see SetUserAvailabilityZone).
 func (q *Queries) UpsertUserAvailabilityZone(ctx context.Context, arg UpsertUserAvailabilityZoneParams) error {
 	_, err := q.db.Exec(ctx, upsertUserAvailabilityZone, arg.UserID, arg.Timezone)
 	return err

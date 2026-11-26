@@ -81,9 +81,6 @@ func (h *availabilityHandlers) ReplaceAvailabilityWeekly(ctx context.Context, re
 	if err != nil {
 		return err
 	}
-	if err := h.setZone(ctx, userID, req.Timezone); err != nil {
-		return err
-	}
 	rules := make([]slots.Rule, 0, len(req.Rules))
 	for _, item := range req.Rules {
 		raw := ruleRequestIn(item)
@@ -96,6 +93,9 @@ func (h *availabilityHandlers) ReplaceAvailabilityWeekly(ctx context.Context, re
 			return err
 		}
 		rules = append(rules, rule)
+	}
+	if err := h.setZone(ctx, userID, req.Timezone); err != nil {
+		return err
 	}
 	return h.store.ReplaceWeekly(ctx, userID, rules)
 }

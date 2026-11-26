@@ -36,18 +36,16 @@ func (r *QueriesRepository) MockSettings(ctx context.Context, userID int64) (Moc
 }
 
 func (r *QueriesRepository) SaveMockSettings(ctx context.Context, userID int64, s MockSettings) (MockSettings, error) {
-	old, oldErr := r.q.GetBuddyMockSettings(ctx, userID)
 	row, err := r.q.UpsertBuddyMockSettings(ctx, db.UpsertBuddyMockSettingsParams{
 		UserID: userID, Timezone: s.Timezone, MeetingUrl: s.MeetingURL, Topics: s.Topics, Paused: s.Paused,
 	})
 	if err != nil {
 		return MockSettings{}, err
 	}
-	// Only a changed product zone is followed, so other edits cannot undo a zone set elsewhere.
-	if oldErr == nil && old.Timezone != s.Timezone {
-		if err := r.avail().FollowZone(ctx, userID, s.Timezone); err != nil {
-			return MockSettings{}, err
-		}
+	// Zone edits keep every product's zone equal (see SetUserAvailabilityZone), so following
+	// on every save is safe, and a retry repairs a follow that failed.
+	if err := r.avail().FollowZone(ctx, userID, s.Timezone); err != nil {
+		return MockSettings{}, err
 	}
 	return mockSettingsFromRow(row), nil
 }

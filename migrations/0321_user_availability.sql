@@ -28,7 +28,11 @@ CREATE INDEX IF NOT EXISTS user_availability_user_idx ON user_availability (user
 CREATE TABLE IF NOT EXISTS user_availability_settings (
     user_id              bigint      PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
     timezone             text        NOT NULL,
+    -- CHECK bounds it to 15-60.
+    -- squawk-ignore prefer-bigint-over-int
     booking_duration_min integer     NOT NULL DEFAULT 30,
+    -- CHECK bounds it to 0-10080.
+    -- squawk-ignore prefer-bigint-over-int
     booking_notice_min   integer     NOT NULL DEFAULT 720,
     updated_at           timestamptz NOT NULL DEFAULT now(),
 

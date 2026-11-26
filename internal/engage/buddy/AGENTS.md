@@ -56,8 +56,9 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
   links all read it, and `ListUserBusy` unions their meetings (mentor sessions as mentor or
   seeker, mocks, booking-link meetings, application interviews, synced Google busy), so a
   meeting in one blocks the same time in the others. A settings row, once saved, decides the
-  zone; the product zone applies before that. A race across products is closed only by each
-  `Book` re-deriving its slot, not by a cross-table constraint. `mentor_availability` and
+  zone, and setting it rewrites every product zone to match; the product zone applies before that. A race across products is NOT closed: each `Book`
+  re-derives its slot, which narrows the window, but no cross-table constraint stops two
+  products booking the same time at once. `mentor_availability` and
   `buddy_mock_availability` are no longer read; a follow-up migration drops them.
 - **One person, one mock at a time, whatever the role.** `buddy_mock_participants` holds a
   row per person per mock under one `EXCLUDE` (`user_id =`, `[)` range `&&`, `WHERE active`);
