@@ -169,7 +169,7 @@ var blocks = map[string][]string{
 	// socialdigest is outbound engagement like broadcast and notify, with a public audience.
 	// It reads the catalogue (job) and the view rollup (application).
 	"engage": {
-		"bookinglink", "broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "emailevents", "emailnotify", "emailprefs",
+		"availability", "bookinglink", "broadcast", "buddy", "changehook", "community", "companyfeedback", "companywatch", "emailevents", "emailnotify", "emailprefs",
 		// limitnudge is outbound engagement like prowelcome. The trigger (a free-tier ceiling
 		// refusal) is written by ai/plan.Store into plan_limit_hits, so it never imports ai/plan.
 		"limitnudge",

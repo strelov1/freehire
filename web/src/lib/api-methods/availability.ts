@@ -18,7 +18,10 @@ export function availabilityApi({ call, requestData }: Http) {
     rules: { weekday: number; start: string; end: string }[],
     timezone?: string,
   ): Promise<void> {
-    await call('/api/v1/me/availability/weekly', jsonBody('PUT', { rules, timezone }));
+    await call(
+      '/api/v1/me/availability/weekly',
+      jsonBody('PUT', { rules, timezone } satisfies Schemas['AvailabilityWeeklyBody']),
+    );
   }
 
   async function addAvailabilityDated(
@@ -29,7 +32,7 @@ export function availabilityApi({ call, requestData }: Http) {
   ): Promise<MentorAvailabilityRule> {
     return requestData<MentorAvailabilityRule>(
       '/api/v1/me/availability/overrides',
-      jsonBody('POST', { date, start, end, timezone }),
+      jsonBody('POST', { date, start, end, timezone } satisfies Schemas['AvailabilityRuleBody']),
     );
   }
 

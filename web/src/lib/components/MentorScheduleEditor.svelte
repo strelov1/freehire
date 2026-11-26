@@ -24,7 +24,7 @@
     schedule: AvailabilityApi;
     /** What an empty week means on the page hosting the editor. */
     emptyMessage: string;
-    /** True while the week on screen differs from the stored one. */
+    /** True while the week on screen differs from the stored one or a write is in flight. */
     unsaved?: boolean;
   } = $props();
 
@@ -43,7 +43,7 @@
   const dirty = $derived(JSON.stringify(weekRows(draft)) !== stored);
   const hasStoredWeek = $derived(split.weekly.length > 0);
   $effect(() => {
-    unsaved = dirty;
+    unsaved = dirty || saving;
   });
 
   function setDay(index: number, on: boolean) {

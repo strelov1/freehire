@@ -73,65 +73,68 @@
   {#if loadError}
     <p class="text-xs text-destructive" role="alert">{loadError}</p>
   {:else if availability}
-    <p class="text-xs text-muted-foreground">
-      Times are in {zone}. These hours are shared with your mentorship, mock interviews and booking links, and a meeting
-      in any of them blocks the same time in the others.
-    </p>
-    <MentorScheduleEditor
-      bind:rules={availability.rules}
-      bind:unsaved={weekUnsaved}
-      {schedule}
-      emptyMessage="No hours saved yet. Until you add some, the agent offers Monday to Friday, 10:00 to 18:00."
-    />
-    <div class="flex flex-wrap items-end gap-3">
-      <label class="block text-sm">
-        <span class="text-muted-foreground">Meeting length</span>
-        <select bind:value={duration} class={selectClass}>
-          {#each DURATIONS as d (d)}<option value={d}>{d} min</option>{/each}
-        </select>
-      </label>
-      <label class="block text-sm">
-        <span class="text-muted-foreground">Shortest notice</span>
-        <select bind:value={notice} class={selectClass}>
-          {#each NOTICES as h (h)}<option value={h}>{noticeLabel(h)}</option>{/each}
-        </select>
-      </label>
-      <Button variant="outline" size="sm" disabled={savingBooking} onclick={() => void saveBooking()}>Save</Button>
-      {#if bookingNote}<span class="text-xs text-muted-foreground" role="status">{bookingNote}</span>{/if}
-    </div>
-
-    {#if onconnect}
-      <div class="flex flex-col gap-2 text-sm">
-        <h4 class="font-medium">What the agent does</h4>
-        <ul class="list-disc space-y-1 pl-5 text-muted-foreground">
-          <li>
-            Reads your Gmail for interview invitations about jobs you applied to, and answers only those that ask for a
-            time and nothing else. Every other email stays with you.
-          </li>
-          <li>
-            Offers three times from the hours above, minus busy time in your Google Calendar and your other Freehire
-            meetings, plus your booking link.
-          </li>
-          <li>
-            Replies from your Gmail in short fixed wording with only the times and the link. Never your salary, contacts
-            or other details.
-          </li>
-          <li>When the recruiter picks a time, it adds a Google Meet event to your Calendar and invites them.</li>
-          <li>If the recruiter goes quiet, it follows up at most twice.</li>
-          <li>Sends you one email a day with what it did. You can turn it off here at any time.</li>
-        </ul>
-        <label class="flex items-start gap-2">
-          <input type="checkbox" bind:checked={agreed} class="mt-0.5 size-4 accent-current" />
-          <span>I have checked my hours and want Freehire to answer interview invitations for me.</span>
+    <!-- Locked while the settings save, so Google continues with exactly what was stored. -->
+    <fieldset disabled={savingBooking} class="flex min-w-0 flex-col gap-4">
+      <p class="text-xs text-muted-foreground">
+        Times are in {zone}. These hours are shared with your mentorship, mock interviews and booking links, and a
+        meeting in any of them blocks the same time in the others.
+      </p>
+      <MentorScheduleEditor
+        bind:rules={availability.rules}
+        bind:unsaved={weekUnsaved}
+        {schedule}
+        emptyMessage="No hours saved yet. Until you add some, the agent offers Monday to Friday, 10:00 to 18:00."
+      />
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="block text-sm">
+          <span class="text-muted-foreground">Meeting length</span>
+          <select bind:value={duration} class={selectClass}>
+            {#each DURATIONS as d (d)}<option value={d}>{d} min</option>{/each}
+          </select>
         </label>
-        <div class="flex flex-wrap items-center gap-3">
-          <Button variant="primary" size="sm" disabled={!agreed || weekUnsaved || savingBooking} onclick={connect}>
-            Continue with Google
-          </Button>
-          {#if weekUnsaved}<span class="text-xs text-muted-foreground">Save your weekly hours first.</span>{/if}
-        </div>
+        <label class="block text-sm">
+          <span class="text-muted-foreground">Shortest notice</span>
+          <select bind:value={notice} class={selectClass}>
+            {#each NOTICES as h (h)}<option value={h}>{noticeLabel(h)}</option>{/each}
+          </select>
+        </label>
+        <Button variant="outline" size="sm" disabled={savingBooking} onclick={() => void saveBooking()}>Save</Button>
+        {#if bookingNote}<span class="text-xs text-muted-foreground" role="status">{bookingNote}</span>{/if}
       </div>
-    {/if}
+
+      {#if onconnect}
+        <div class="flex flex-col gap-2 text-sm">
+          <h4 class="font-medium">What the agent does</h4>
+          <ul class="list-disc space-y-1 pl-5 text-muted-foreground">
+            <li>
+              Reads your Gmail for interview invitations about jobs you applied to, and answers only those that ask for
+              a time and nothing else. Every other email stays with you.
+            </li>
+            <li>
+              Offers three times from the hours above, minus busy time in your Google Calendar and your other Freehire
+              meetings, plus your booking link.
+            </li>
+            <li>
+              Replies from your Gmail in short fixed wording with only the times and the link. Never your salary,
+              contacts or other details.
+            </li>
+            <li>When the recruiter picks a time, it adds a Google Meet event to your Calendar and invites them.</li>
+            <li>If the recruiter goes quiet, it follows up at most twice.</li>
+            <li>Sends you one email a day with what it did. You can turn it off here at any time.</li>
+          </ul>
+          <label class="flex items-start gap-2">
+            <input type="checkbox" bind:checked={agreed} class="mt-0.5 size-4 accent-current" />
+            <span>I have checked my hours and want Freehire to answer interview invitations for me.</span>
+          </label>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button variant="primary" size="sm" disabled={!agreed || weekUnsaved || savingBooking} onclick={connect}>
+              Continue with Google
+            </Button>
+            {#if weekUnsaved}<span class="text-xs text-muted-foreground">Save your weekly hours first.</span>{/if}
+          </div>
+        </div>
+      {/if}
+    </fieldset>
   {:else}
     <p class="text-xs text-muted-foreground">Loading your hours…</p>
   {/if}
