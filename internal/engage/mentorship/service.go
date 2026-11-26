@@ -84,16 +84,19 @@ type Repository interface {
 	ReactivateProfile(ctx context.Context, userID int64) (Profile, error)
 
 	ListAvailability(ctx context.Context, mentorID int64) ([]slots.Rule, error)
+	// AvailabilityZone is the zone the account's shared hours are stated in; empty when the
+	// user never saved settings, and the profile's own zone applies.
+	AvailabilityZone(ctx context.Context, mentorID int64) (string, error)
 	ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []slots.Rule) error
 	AddAvailabilityRule(ctx context.Context, mentorID int64, rule slots.Rule) error
 	DeleteAvailabilityRule(ctx context.Context, ruleID, mentorID int64) error
 
-	// ListBusy is the mentor's occupied time in a window: confirmed bookings plus synced calendar
-	// busy intervals. Buffers are NOT applied here; the slot engine widens them, since they may
+	// ListBusy is the mentor's occupied time in a window across every product: mentor sessions,
+	// mocks, booking-link meetings, application interviews and synced calendar busy intervals. Buffers are NOT applied here; the slot engine widens them, since they may
 	// change between reads.
 	ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]slots.Interval, error)
-	// ListBusyByKind is ListBusy's two sources kept apart, for the mentor's own calendar
-	// breakdown.
+	// ListBusyByKind is ListBusy split into the sessions this mentor gives and all other busy
+	// time, for the mentor's own calendar breakdown.
 	ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error)
 
 	// CreateBooking writes a confirmed booking. The adapter translates the EXCLUDE constraint

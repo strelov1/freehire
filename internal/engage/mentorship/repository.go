@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -126,6 +127,7 @@ func (r *QueriesRepository) PublishedProfileBySlug(ctx context.Context, slug str
 // UpdateProfile applies an edit. The no-row case is the owner guard failing, which is
 // reported as "not found", never "not yours", so another's profile is not confirmed.
 func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) (Profile, error) {
+	old, oldErr := r.q.GetMentorByUserID(ctx, in.UserID)
 	row, err := r.q.UpdateMentorProfile(ctx, db.UpdateMentorProfileParams{
 		UserID:             in.UserID,
 		DisplayName:        in.DisplayName,
@@ -148,6 +150,12 @@ func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) 
 	}
 	if err != nil {
 		return Profile{}, err
+	}
+	// Only a changed product zone is followed, so a bio edit cannot undo a zone set elsewhere.
+	if oldErr == nil && old.Timezone != in.Timezone {
+		if err := availability.New(r.q).FollowZone(ctx, in.UserID, in.Timezone); err != nil {
+			return Profile{}, err
+		}
 	}
 	return profileFromRow(row), nil
 }

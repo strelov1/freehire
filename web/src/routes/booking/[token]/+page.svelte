@@ -46,7 +46,7 @@
 <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6">
   <header class="flex flex-col gap-2">
     <h1 class="text-2xl font-semibold">Book a time</h1>
-    <p class="text-muted-foreground">Pick a 30-minute slot for a call with the candidate. No account needed.</p>
+    <p class="text-muted-foreground">Pick a slot for a call with the candidate. No account needed.</p>
   </header>
 
   {#if booked}

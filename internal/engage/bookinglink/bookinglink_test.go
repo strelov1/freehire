@@ -8,6 +8,7 @@ import (
 	"time"
 
 	aiplan "github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
@@ -18,6 +19,11 @@ type fakeRepo struct {
 	busy    []slots.Interval
 	booked  []NewBooking
 	bookErr error
+	sched   availability.Schedule
+}
+
+func (f *fakeRepo) Schedule(context.Context, int64) (availability.Schedule, error) {
+	return f.sched, nil
 }
 
 func (f *fakeRepo) Upsert(_ context.Context, userID, appID int64, seed, hash []byte, zone string) (Link, bool, error) {
@@ -231,7 +237,79 @@ func TestTokenForHealsAHashAfterTheKeyChanged(t *testing.T) {
 	if err != nil || !ok || tok == old {
 		t.Fatalf("TokenFor = %q, %v, %v", tok, ok, err)
 	}
-	if _, _, err := s.live(context.Background(), tok); err != nil {
+	if _, err := s.live(context.Background(), tok); err != nil {
 		t.Fatalf("the healed token must resolve: %v", err)
+	}
+}
+
+// Saved settings: 60-minute meetings, 48 h notice. now is Monday 06:00 UTC, so the first
+// bookable Berlin hour is Wednesday 10:00 (09:00 UTC is >= now+48h only from 06:00 on).
+func TestSavedDurationAndNoticeShapeSlotsAndTheBooking(t *testing.T) {
+	s, repo, tok := enabled(t)
+	repo.sched = availability.Schedule{
+		Rules:    defaultRules,
+		Zone:     "Europe/Berlin",
+		Settings: &availability.Settings{Duration: time.Hour, Notice: 48 * time.Hour},
+	}
+	res, err := s.Slots(context.Background(), tok, "UTC")
+	if err != nil || len(res.Slots) == 0 {
+		t.Fatalf("slots %d, err %v", len(res.Slots), err)
+	}
+	for _, iv := range res.Slots {
+		if iv.End.Sub(iv.Start) != time.Hour || iv.Start.Before(now.Add(48*time.Hour)) {
+			t.Fatalf("slot %v breaks 60 min / 48 h", iv)
+		}
+	}
+	at := time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC)
+	b, err := s.Book(context.Background(), BookInput{Token: tok, StartsAt: at, Name: "J", Email: "j@acme.com"})
+	if err != nil || !b.EndsAt.Equal(at.Add(time.Hour)) {
+		t.Fatalf("booking %+v, err %v", b, err)
+	}
+	tue := time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)
+	if _, err := s.Book(context.Background(), BookInput{Token: tok, StartsAt: tue, Name: "J", Email: "j@acme.com"}); !errors.Is(err, ErrSlotUnavailable) {
+		t.Fatalf("inside the notice: %v", err)
+	}
+}
+
+// A saved schedule with Friday closed offers no Friday, and a saved zone beats the link's.
+func TestSavedHoursReplaceTheDefaultWeek(t *testing.T) {
+	s, repo, tok := enabled(t)
+	start, _ := slots.NewTimeOfDay(10, 0)
+	end, _ := slots.NewTimeOfDay(18, 0)
+	var rules []slots.Rule
+	for _, d := range []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday} {
+		r, err := slots.NewWeeklyRule(d, start, end)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rules = append(rules, r)
+	}
+	repo.sched = availability.Schedule{Rules: rules, Zone: "UTC", Settings: &availability.Settings{Duration: SlotDuration, Notice: MinimumNotice}}
+	res, err := s.Slots(context.Background(), tok, "UTC")
+	if err != nil || len(res.Slots) == 0 {
+		t.Fatalf("slots %d, err %v", len(res.Slots), err)
+	}
+	for _, iv := range res.Slots {
+		if iv.Start.Weekday() == time.Friday || iv.Start.Hour() < 10 {
+			t.Fatalf("slot %v outside the saved hours", iv)
+		}
+	}
+}
+
+// Settings saved but no weekly rules: the default week still applies, in the saved length.
+func TestSettingsWithoutRulesUseTheDefaultWeek(t *testing.T) {
+	s, repo, tok := enabled(t)
+	repo.sched = availability.Schedule{Zone: "Europe/Berlin", Settings: &availability.Settings{Duration: time.Hour, Notice: 48 * time.Hour}}
+	res, err := s.Slots(context.Background(), tok, "UTC")
+	if err != nil || len(res.Slots) == 0 {
+		t.Fatalf("slots %d, err %v", len(res.Slots), err)
+	}
+	for _, iv := range res.Slots {
+		if iv.End.Sub(iv.Start) != time.Hour || iv.Start.Weekday() == time.Saturday || iv.Start.Weekday() == time.Sunday {
+			t.Fatalf("slot %v is not a 60-minute weekday slot", iv)
+		}
+	}
+	if res.Slots[1].Start.Sub(res.Slots[0].Start) != time.Hour {
+		t.Fatalf("slots %v and %v are not 60 minutes apart", res.Slots[0], res.Slots[1])
 	}
 }

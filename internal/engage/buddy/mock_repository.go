@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -25,15 +26,28 @@ func (r *QueriesRepository) MockSettings(ctx context.Context, userID int64) (Moc
 	if err != nil {
 		return MockSettings{}, false, err
 	}
-	return mockSettingsFromRow(row), true, nil
+	settings := mockSettingsFromRow(row)
+	if sc, err := r.avail().Load(ctx, userID); err != nil {
+		return MockSettings{}, false, err
+	} else if sc.Zone != "" {
+		settings.Timezone = sc.Zone
+	}
+	return settings, true, nil
 }
 
 func (r *QueriesRepository) SaveMockSettings(ctx context.Context, userID int64, s MockSettings) (MockSettings, error) {
+	old, oldErr := r.q.GetBuddyMockSettings(ctx, userID)
 	row, err := r.q.UpsertBuddyMockSettings(ctx, db.UpsertBuddyMockSettingsParams{
 		UserID: userID, Timezone: s.Timezone, MeetingUrl: s.MeetingURL, Topics: s.Topics, Paused: s.Paused,
 	})
 	if err != nil {
 		return MockSettings{}, err
+	}
+	// Only a changed product zone is followed, so other edits cannot undo a zone set elsewhere.
+	if oldErr == nil && old.Timezone != s.Timezone {
+		if err := r.avail().FollowZone(ctx, userID, s.Timezone); err != nil {
+			return MockSettings{}, err
+		}
 	}
 	return mockSettingsFromRow(row), nil
 }
@@ -42,109 +56,36 @@ func mockSettingsFromRow(row db.BuddyMockSetting) MockSettings {
 	return MockSettings{Timezone: row.Timezone, MeetingURL: row.MeetingUrl, Topics: row.Topics, Paused: row.Paused}
 }
 
-// MockAvailability skips a row the domain cannot represent rather than failing the read:
-// one corrupt row must not make a member unbookable, and the CHECKs stop one existing.
+func (r *QueriesRepository) avail() *availability.Store { return availability.New(r.q) }
+
+// MockAvailability is the member's shared availability (see engage/availability).
 func (r *QueriesRepository) MockAvailability(ctx context.Context, userID int64) ([]slots.Rule, error) {
-	rows, err := r.q.ListBuddyMockAvailability(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]slots.Rule, 0, len(rows))
-	for _, row := range rows {
-		if rule, ok := mockRuleFromRow(row); ok {
-			out = append(out, rule.WithID(row.ID))
-		}
-	}
-	return out, nil
+	sc, err := r.avail().Load(ctx, userID)
+	return sc.Rules, err
 }
 
 func (r *QueriesRepository) ReplaceMockWeekly(ctx context.Context, userID int64, rules []slots.Rule) error {
-	p := db.ReplaceBuddyMockWeeklyParams{
-		UserID: userID, Weekdays: []int16{}, StartTimes: []pgtype.Time{}, EndTimes: []pgtype.Time{},
+	if err := r.q.EnsureUserAvailabilityZoneFromBuddy(ctx, userID); err != nil {
+		return err
 	}
-	for _, rule := range rules {
-		p.Weekdays = append(p.Weekdays, int16(rule.Weekday()))
-		p.StartTimes = append(p.StartTimes, pgClock(rule.Start()))
-		p.EndTimes = append(p.EndTimes, pgClock(rule.End()))
-	}
-	return r.q.ReplaceBuddyMockWeekly(ctx, p)
+	return r.avail().ReplaceWeekly(ctx, userID, rules)
 }
 
 func (r *QueriesRepository) AddMockRule(ctx context.Context, userID int64, rule slots.Rule) (slots.Rule, error) {
-	p := db.CreateBuddyMockAvailabilityRuleParams{
-		UserID: userID, StartTime: pgClock(rule.Start()), EndTime: pgClock(rule.End()),
-	}
-	if rule.IsDated() {
-		year, month, day := rule.Date().Parts()
-		p.OnDate = pgtype.Date{Time: time.Date(year, month, day, 0, 0, 0, 0, time.UTC), Valid: true}
-	} else {
-		p.Weekday = pgtype.Int2{Int16: int16(rule.Weekday()), Valid: true}
-	}
-	row, err := r.q.CreateBuddyMockAvailabilityRule(ctx, p)
-	if err != nil {
+	if err := r.q.EnsureUserAvailabilityZoneFromBuddy(ctx, userID); err != nil {
 		return slots.Rule{}, err
 	}
-	return rule.WithID(row.ID), nil
+	return r.avail().Add(ctx, userID, rule)
 }
 
 func (r *QueriesRepository) DeleteMockRule(ctx context.Context, userID, ruleID int64) (bool, error) {
-	n, err := r.q.DeleteBuddyMockAvailabilityRule(ctx, db.DeleteBuddyMockAvailabilityRuleParams{ID: ruleID, UserID: userID})
-	return n == 1, err
+	return r.avail().Delete(ctx, userID, ruleID)
 }
 
-// mockRuleFromRow rebuilds a domain rule, reporting false for a row that is neither shape.
-// mentorship keeps the same conversion for mentor_availability; the two tables are
-// different sqlc types, so each adapter converts its own.
-func mockRuleFromRow(row db.BuddyMockAvailability) (slots.Rule, bool) {
-	start, startOK := clockFromPg(row.StartTime)
-	end, endOK := clockFromPg(row.EndTime)
-	if !startOK || !endOK {
-		return slots.Rule{}, false
-	}
-	if row.OnDate.Valid {
-		date, err := slots.NewDate(row.OnDate.Time.Year(), row.OnDate.Time.Month(), row.OnDate.Time.Day())
-		if err != nil {
-			return slots.Rule{}, false
-		}
-		rule, err := slots.NewDatedRule(date, start, end)
-		return rule, err == nil
-	}
-	if !row.Weekday.Valid {
-		return slots.Rule{}, false
-	}
-	rule, err := slots.NewWeeklyRule(time.Weekday(row.Weekday.Int16), start, end)
-	return rule, err == nil
-}
-
-// pgClock renders a wall-clock time as microseconds since midnight; 24:00 is a valid
-// Postgres time and how a rule reaches the end of its day.
-func pgClock(t slots.TimeOfDay) pgtype.Time {
-	return pgtype.Time{Microseconds: int64(t.Minutes()) * 60 * 1_000_000, Valid: true}
-}
-
-// clockFromPg reads one back, refusing a value finer than a minute rather than rounding it.
-func clockFromPg(t pgtype.Time) (slots.TimeOfDay, bool) {
-	const microsPerMinute = 60 * 1_000_000
-	if !t.Valid || t.Microseconds%microsPerMinute != 0 {
-		return slots.TimeOfDay{}, false
-	}
-	minutes := int(t.Microseconds / microsPerMinute)
-	got, err := slots.NewTimeOfDay(minutes/60, minutes%60)
-	return got, err == nil
-}
-
+// MockBusy is the member's occupied time across every product, not only mocks.
 func (r *QueriesRepository) MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error) {
-	rows, err := r.q.ListBuddyMockBusy(ctx, db.ListBuddyMockBusyParams{
-		UserID: userID, WindowStart: pgconv.Instant(from), WindowEnd: pgconv.Instant(to),
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]slots.Interval, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
-	}
-	return out, nil
+	all, err := r.avail().Busy(ctx, []int64{userID}, from, to)
+	return availability.Intervals(all[userID]), err
 }
 
 // constraintMockNoOverlap is the EXCLUDE that keeps one person out of two overlapping mocks
@@ -347,8 +288,19 @@ func (r *QueriesRepository) MockHostCandidates(ctx context.Context, viewerID int
 	if err != nil {
 		return nil, err
 	}
+	ids := make([]int64, len(rows))
+	for i, row := range rows {
+		ids[i] = row.UserID
+	}
+	schedules, err := r.avail().LoadMany(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]MockHostCandidate, len(rows))
 	for i, row := range rows {
+		if zone := schedules[row.UserID].Zone; zone != "" {
+			row.Timezone = zone
+		}
 		out[i] = MockHostCandidate{
 			UserID: row.UserID, Handle: row.Handle, Card: summarize(decodeCV(row.ResumeStructured), row.Countries),
 			Timezone: row.Timezone, Topics: row.Topics,
@@ -357,33 +309,22 @@ func (r *QueriesRepository) MockHostCandidates(ctx context.Context, viewerID int
 	return out, nil
 }
 
-// MockAvailabilityFor skips an unrepresentable row as MockAvailability does.
 func (r *QueriesRepository) MockAvailabilityFor(ctx context.Context, userIDs []int64) (map[int64][]slots.Rule, error) {
-	rows, err := r.q.ListBuddyMockAvailabilityForUsers(ctx, userIDs)
-	if err != nil {
-		return nil, err
+	schedules, err := r.avail().LoadMany(ctx, userIDs)
+	out := make(map[int64][]slots.Rule, len(schedules))
+	for id, sc := range schedules {
+		out[id] = sc.Rules
 	}
-	out := make(map[int64][]slots.Rule, len(userIDs))
-	for _, row := range rows {
-		if rule, ok := mockRuleFromRow(row); ok {
-			out[row.UserID] = append(out[row.UserID], rule.WithID(row.ID))
-		}
-	}
-	return out, nil
+	return out, err
 }
 
 func (r *QueriesRepository) MockBusyFor(ctx context.Context, userIDs []int64, from, to time.Time) (map[int64][]slots.Interval, error) {
-	rows, err := r.q.ListBuddyMockBusyForUsers(ctx, db.ListBuddyMockBusyForUsersParams{
-		UserIds: userIDs, WindowStart: pgconv.Instant(from), WindowEnd: pgconv.Instant(to),
-	})
-	if err != nil {
-		return nil, err
+	all, err := r.avail().Busy(ctx, userIDs, from, to)
+	out := make(map[int64][]slots.Interval, len(all))
+	for id, b := range all {
+		out[id] = availability.Intervals(b)
 	}
-	out := make(map[int64][]slots.Interval, len(userIDs))
-	for _, row := range rows {
-		out[row.UserID] = append(out[row.UserID], slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
-	}
-	return out, nil
+	return out, err
 }
 
 func (r *QueriesRepository) MocksDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Mock, error) {

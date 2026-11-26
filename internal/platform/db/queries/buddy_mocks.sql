@@ -12,47 +12,6 @@ SET timezone = EXCLUDED.timezone, meeting_url = EXCLUDED.meeting_url, topics = E
     paused = EXCLUDED.paused, updated_at = now()
 RETURNING *;
 
--- name: ListBuddyMockAvailability :many
--- Every availability row of a member, both shapes: an override only means anything beside
--- the weekly rules it replaces.
-SELECT * FROM buddy_mock_availability WHERE user_id = $1 ORDER BY id;
-
--- name: ReplaceBuddyMockWeekly :exec
--- Swap the recurring week in one statement, leaving dated overrides alone: half of the
--- edit applied is a member bookable at hours they just removed. The three arrays are one
--- row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
--- multi-array form of unnest).
-WITH cleared AS (
-    DELETE FROM buddy_mock_availability
-    WHERE user_id = sqlc.arg(user_id)::bigint AND weekday IS NOT NULL
-)
-INSERT INTO buddy_mock_availability (user_id, weekday, start_time, end_time)
-SELECT sqlc.arg(user_id)::bigint, w.weekday, s.start_time, e.end_time
-FROM unnest(sqlc.arg(weekdays)::smallint[]) WITH ORDINALITY AS w (weekday, ord)
-JOIN unnest(sqlc.arg(start_times)::time[]) WITH ORDINALITY AS s (start_time, ord) ON s.ord = w.ord
-JOIN unnest(sqlc.arg(end_times)::time[]) WITH ORDINALITY AS e (end_time, ord) ON e.ord = w.ord;
-
--- name: CreateBuddyMockAvailabilityRule :one
--- One row, weekly or dated; which one is whichever of weekday and on_date is set.
-INSERT INTO buddy_mock_availability (user_id, weekday, on_date, start_time, end_time)
-VALUES (sqlc.arg(user_id), sqlc.narg(weekday), sqlc.narg(on_date), sqlc.arg(start_time), sqlc.arg(end_time))
-RETURNING *;
-
--- name: DeleteBuddyMockAvailabilityRule :execrows
--- The user_id guard scopes the delete to the owner's own schedule.
-DELETE FROM buddy_mock_availability WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
-
--- name: ListBuddyMockBusy :many
--- A member's occupied time in a window: every mock they are in, as host or as guest. The
--- slot engine subtracts it from their availability.
-SELECT starts_at, ends_at
-FROM buddy_mock_participants
-WHERE user_id = sqlc.arg(user_id)
-  AND active
-  AND starts_at < sqlc.arg(window_end)
-  AND ends_at > sqlc.arg(window_start)
-ORDER BY starts_at;
-
 -- name: CountFutureBuddyMocksAsGuest :one
 -- The spam bound's count: confirmed mocks the member is a guest in that have not started.
 SELECT count(*) FROM buddy_mocks
@@ -319,7 +278,7 @@ JOIN users u ON u.id = m.user_id
 WHERE NOT s.paused
   AND m.user_id <> sqlc.arg(viewer_id)::bigint
   AND (sqlc.narg(topic)::text IS NULL OR sqlc.narg(topic)::text = ANY (s.topics))
-  AND EXISTS (SELECT 1 FROM buddy_mock_availability a WHERE a.user_id = m.user_id)
+  AND EXISTS (SELECT 1 FROM user_availability a WHERE a.user_id = m.user_id)
   AND NOT EXISTS (
       SELECT 1 FROM user_blocks b
       WHERE (b.blocker_id = sqlc.arg(viewer_id)::bigint AND b.blocked_id = m.user_id)
@@ -327,18 +286,3 @@ WHERE NOT s.paused
 ORDER BY s.updated_at DESC, m.user_id
 LIMIT sqlc.arg(row_limit);
 
--- name: ListBuddyMockAvailabilityForUsers :many
--- ListBuddyMockAvailability for many members in one statement.
-SELECT * FROM buddy_mock_availability
-WHERE user_id = ANY (sqlc.arg(user_ids)::bigint[])
-ORDER BY user_id, id;
-
--- name: ListBuddyMockBusyForUsers :many
--- ListBuddyMockBusy for many members in one statement.
-SELECT user_id, starts_at, ends_at
-FROM buddy_mock_participants
-WHERE user_id = ANY (sqlc.arg(user_ids)::bigint[])
-  AND active
-  AND starts_at < sqlc.arg(window_end)
-  AND ends_at > sqlc.arg(window_start)
-ORDER BY user_id, starts_at;

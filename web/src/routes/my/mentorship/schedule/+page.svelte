@@ -30,6 +30,9 @@
   <!-- Read-only view of what the rules below resolve to, once bookings and synced
        calendar time are taken into account. Editing still happens in the form. -->
   <MentorScheduleCalendar calendar={data.calendar} />
+  <p class="text-sm text-base-content/70">
+    These hours are shared with your mock interviews and booking links, and a meeting in any of them blocks the same time in the others.
+  </p>
   <MentorScheduleEditor
     bind:rules={availability}
     schedule={mentorSchedule}

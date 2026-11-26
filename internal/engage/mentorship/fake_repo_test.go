@@ -268,6 +268,8 @@ func (r *fakeRepo) ListAvailability(_ context.Context, mentorID int64) ([]slots.
 	return r.availability[mentorID], nil
 }
 
+func (r *fakeRepo) AvailabilityZone(context.Context, int64) (string, error) { return "", nil }
+
 func (r *fakeRepo) ReplaceWeeklyAvailability(_ context.Context, mentorID int64, rules []slots.Rule) error {
 	var kept []slots.Rule
 	for _, rule := range r.availability[mentorID] {

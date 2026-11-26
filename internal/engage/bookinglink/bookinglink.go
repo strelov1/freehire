@@ -1,6 +1,6 @@
 // Package bookinglink is the candidate's booking link: one unguessable public page per
-// application where a recruiter, with no account, books a 30-minute slot from the
-// candidate's default hours. See AGENTS.md for the rules every change here keeps.
+// application where a recruiter, with no account, books a slot from the
+// hours in the candidate's calendar. See AGENTS.md for the rules every change here keeps.
 package bookinglink
 
 import (
@@ -19,14 +19,16 @@ import (
 	"unicode/utf8"
 
 	aiplan "github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
-// The fixed shape of every link until the schedule editor (#4918): weekdays 10:00-18:00 in
-// the candidate's zone, 30-minute slots, bookable from 12 hours to 14 days ahead.
+// The shape of a link whose owner never saved availability: weekdays 10:00-18:00 in the
+// link's zone, 30-minute slots, bookable from 12 hours to 14 days ahead. Saved hours, zone,
+// meeting length and notice (engage/availability) replace all but the horizon.
 const (
-	SlotDuration  = 30 * time.Minute
-	MinimumNotice = 12 * time.Hour
+	SlotDuration  = availability.DefaultBookingDuration
+	MinimumNotice = availability.DefaultBookingNotice
 	Horizon       = 14 * 24 * time.Hour
 	dayStartHour  = 10
 	dayEndHour    = 18
@@ -36,8 +38,6 @@ const (
 	maxNameRunes  = 200
 	maxEmailBytes = 254
 )
-
-var session = slots.SessionParams{Duration: SlotDuration, MinimumNotice: MinimumNotice, Horizon: Horizon}
 
 // defaultRules is Mon-Fri dayStartHour-dayEndHour, built once; the inputs are constants, so
 // a failure is a programming error.
@@ -100,6 +100,9 @@ type Repository interface {
 	ForApplication(ctx context.Context, userID, applicationID int64) (Link, bool, error)
 	ByHash(ctx context.Context, hash []byte) (Link, bool, error)
 	SetHash(ctx context.Context, linkID int64, hash []byte) error
+	// Schedule is the owner's shared availability (hours, zone, meeting length, notice).
+	Schedule(ctx context.Context, userID int64) (availability.Schedule, error)
+	// Busy is the owner's occupied time across every product.
 	Busy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error)
 	// Book writes the booking, the application's interview and its ledger event in one
 	// transaction, answering ErrSlotUnavailable when the EXCLUDE refuses it.
@@ -193,50 +196,79 @@ func (s *Service) TokenFor(ctx context.Context, userID, applicationID int64) (st
 
 // live resolves a public token to its link, refusing one whose owner is no longer paid with
 // the same ErrNotFound an unknown token gets.
-func (s *Service) live(ctx context.Context, token string) (Link, *time.Location, error) {
+func (s *Service) live(ctx context.Context, token string) (Link, error) {
 	l, ok, err := s.repo.ByHash(ctx, hashOf(token))
 	if err != nil {
-		return Link{}, nil, err
+		return Link{}, err
 	}
 	if !ok {
-		return Link{}, nil, ErrNotFound
+		return Link{}, ErrNotFound
 	}
 	if _, err := s.plans.RequirePaid(ctx, l.UserID); err != nil {
 		if errors.Is(err, aiplan.ErrPaymentRequired) {
-			return Link{}, nil, ErrNotFound
+			return Link{}, ErrNotFound
 		}
-		return Link{}, nil, err
+		return Link{}, err
 	}
-	zone, ok := ianaZone(l.Zone)
-	if !ok {
-		return Link{}, nil, fmt.Errorf("%w: booking link %d has timezone %q", slots.ErrNoOwnerZone, l.ID, l.Zone)
-	}
-	return l, zone, nil
+	return l, nil
 }
 
-// slotsFor runs the engine over the default hours and the owner's booked meetings. Busy is
-// read a day wider than the window on both sides, as buddy's hostSlots does.
-func (s *Service) slotsFor(ctx context.Context, l Link, zone *time.Location, from, to time.Time, viewerZone string) (slots.SlotResult, error) {
+// plan is what a link offers: the owner's saved hours, zone, meeting length and notice, or
+// the default week while they have no weekly rules.
+func (s *Service) plan(ctx context.Context, l Link) ([]slots.Rule, *time.Location, slots.SessionParams, error) {
+	sc, err := s.repo.Schedule(ctx, l.UserID)
+	if err != nil {
+		return nil, nil, slots.SessionParams{}, err
+	}
+	rules, zoneName := sc.Rules, sc.Zone
+	params := slots.SessionParams{Duration: SlotDuration, MinimumNotice: MinimumNotice, Horizon: Horizon}
+	if sc.Settings != nil {
+		params.Duration, params.MinimumNotice = sc.Settings.Duration, sc.Settings.Notice
+	}
+	// The default week stands in whenever there are no weekly rules; dated overrides still apply on top.
+	if !slices.ContainsFunc(rules, func(r slots.Rule) bool { return !r.IsDated() }) {
+		rules = append(slices.Clone(rules), defaultRules...)
+	}
+	if zoneName == "" {
+		zoneName = l.Zone
+	}
+	zone, ok := ianaZone(zoneName)
+	if !ok {
+		return nil, nil, params, fmt.Errorf("%w: booking link %d has timezone %q", slots.ErrNoOwnerZone, l.ID, zoneName)
+	}
+	return rules, zone, params, nil
+}
+
+// slotsFor runs the engine over the owner's hours and every meeting they have in any
+// product. Busy is read a day wider than the window on both sides, as buddy's hostSlots
+// does. It returns the meeting length the slots were cut with.
+func (s *Service) slotsFor(ctx context.Context, l Link, from, to time.Time, viewerZone string) (slots.SlotResult, time.Duration, error) {
+	rules, zone, params, err := s.plan(ctx, l)
+	if err != nil {
+		return slots.SlotResult{}, 0, err
+	}
 	busy, err := s.repo.Busy(ctx, l.UserID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
 	if err != nil {
-		return slots.SlotResult{}, err
+		return slots.SlotResult{}, 0, err
 	}
-	return slots.Slots(slots.SlotRequest{
-		Rules: defaultRules, OwnerZone: zone, Params: session, Busy: busy,
+	res, err := slots.Slots(slots.SlotRequest{
+		Rules: rules, OwnerZone: zone, Params: params, Busy: busy,
 		From: from, To: to, Now: s.now(), ViewerZone: viewerZone,
 	})
+	return res, params.Duration, err
 }
 
 // Slots is the link's free slots from now to the horizon, in the viewer's zone (UTC when
 // unknown; the result says which).
 func (s *Service) Slots(ctx context.Context, token, viewerZone string) (slots.SlotResult, error) {
-	l, zone, err := s.live(ctx, token)
+	l, err := s.live(ctx, token)
 	if err != nil {
 		return slots.SlotResult{}, err
 	}
 	now := s.now()
-	end := now.Add(Horizon + SlotDuration)
-	result, err := s.slotsFor(ctx, l, zone, now, end, viewerZone)
+	// A window a full hour past the horizon covers the longest meeting a link offers.
+	end := now.Add(Horizon + time.Hour)
+	result, _, err := s.slotsFor(ctx, l, now, end, viewerZone)
 	if err != nil || len(result.Slots) == 0 {
 		return result, err
 	}
@@ -280,11 +312,11 @@ func (s *Service) Book(ctx context.Context, in BookInput) (NewBooking, error) {
 	if err != nil {
 		return NewBooking{}, err
 	}
-	l, zone, err := s.live(ctx, in.Token)
+	l, err := s.live(ctx, in.Token)
 	if err != nil {
 		return NewBooking{}, err
 	}
-	res, err := s.slotsFor(ctx, l, zone, in.StartsAt.AddDate(0, 0, -1), in.StartsAt.AddDate(0, 0, 1), "UTC")
+	res, duration, err := s.slotsFor(ctx, l, in.StartsAt.AddDate(0, 0, -1), in.StartsAt.AddDate(0, 0, 1), "UTC")
 	if err != nil {
 		return NewBooking{}, err
 	}
@@ -292,7 +324,7 @@ func (s *Service) Book(ctx context.Context, in BookInput) (NewBooking, error) {
 		return NewBooking{}, ErrSlotUnavailable
 	}
 	b := NewBooking{
-		Link: l, StartsAt: in.StartsAt.UTC(), EndsAt: in.StartsAt.UTC().Add(SlotDuration),
+		Link: l, StartsAt: in.StartsAt.UTC(), EndsAt: in.StartsAt.UTC().Add(duration),
 		RecruiterName: name, RecruiterEmail: email,
 	}
 	busy, err := s.calendarBusy(ctx, l.UserID, b.StartsAt, b.EndsAt)
