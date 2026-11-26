@@ -1,0 +1,240 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"math/rand/v2"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/ingest/atsboard"
+	"github.com/strelov1/freehire/internal/ingest/atsdetect"
+	"github.com/strelov1/freehire/internal/job/qualityaudit"
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/externalid"
+	"github.com/strelov1/freehire/internal/platform/safehttp"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
+	"github.com/strelov1/freehire/internal/platform/worker"
+)
+
+// The successor pass (-successors) runs on its own timer on the crawl host, where the Scrapling
+// tier is, not in the weekly measuring run on core: it writes a list for a human to act on (the
+// SuperPlane "Board successors" canvas reads it), not gauges.
+
+// successorFileEnv names the JSON report's path; the canvas reads it.
+const successorFileEnv = "QUALITY_AUDIT_SUCCESSORS_FILE"
+
+// successorReport is the file's shape, a contract with the canvas prompt in freehire-ops.
+type successorReport struct {
+	GeneratedAt time.Time       `json:"generated_at"`
+	WindowDays  int32           `json:"window_days"`
+	Chronic     int64           `json:"chronic_boards"`
+	Probed      int             `json:"probed_boards"`
+	Moves       []successorMove `json:"moves"`
+}
+
+type successorMove struct {
+	Provider     string    `json:"provider"`
+	Board        string    `json:"board"`
+	Region       string    `json:"region"`
+	Company      string    `json:"company"`
+	OpenJobs     int64     `json:"open_jobs"`
+	FailingSince time.Time `json:"failing_since"`
+	LastError    string    `json:"last_error"`
+	ProbedURL    string    `json:"probed_url"`
+	Target       string    `json:"target"`
+	Evidence     string    `json:"evidence"`
+	// SuccessorProvider/Board are empty when the target is not an ATS we recognise.
+	SuccessorProvider string `json:"successor_provider"`
+	SuccessorBoard    string `json:"successor_board"`
+	// SuccessorStatus is the successor's catalogue status: "absent", "pending", "active" or
+	// "retired"; "" when there is no recognised successor.
+	SuccessorStatus  string `json:"successor_status"`
+	SuccessorCompany string `json:"successor_company"`
+}
+
+func runSuccessors(dryRun bool) int {
+	path := os.Getenv(successorFileEnv)
+	if path == "" && !dryRun {
+		log.Printf("quality-audit: %s is unset, nothing to write", successorFileEnv)
+		return worker.Skip(successorFileEnv)
+	}
+	days, err := worker.EnvInt32("QUALITY_AUDIT_SUCCESSOR_DAYS", 7)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	maxBoards, err := worker.EnvInt32("QUALITY_AUDIT_SUCCESSOR_MAX", 2000)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	maxRequests, err := worker.EnvInt64("QUALITY_AUDIT_SUCCESSOR_MAX_REQUESTS", 8000)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	finder := &qualityaudit.SuccessorFinder{
+		Direct:        safehttp.NewClient(probeTimeout),
+		Name:          nameBoard,
+		MaxRequests:   maxRequests,
+		HostInterval:  hostInterval,
+		MaxCrawlDelay: maxCrawlDelay,
+		HostWorkers:   hostWorkers,
+	}
+	if raw := strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_URL")); raw != "" {
+		tr, err := scraplingfetch.New(scraplingfetch.Config{
+			URL: raw, Token: strings.TrimSpace(os.Getenv("SCRAPLING_FETCH_TOKEN")),
+		}, scraplingfetch.ModeHTTP, false, time.Minute)
+		if err != nil {
+			log.Printf("config: %v", err)
+			return 1
+		}
+		finder.Fallback = &http.Client{Transport: tr, Timeout: time.Minute}
+	} else {
+		log.Print("quality-audit: successors: SCRAPLING_FETCH_URL unset, refused hosts are not retried")
+	}
+
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+	q := db.New(pool)
+
+	report, err := findSuccessors(ctx, q, finder, days, maxBoards)
+	if err != nil {
+		log.Printf("quality-audit: successors: %v", err)
+		return 1
+	}
+	body, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		log.Printf("quality-audit: successors: %v", err)
+		return 1
+	}
+	if dryRun {
+		fmt.Println(string(body))
+		return 0
+	}
+	if err := worker.WriteTextfile(filepath.Dir(path), filepath.Base(path), string(body)+"\n"); err != nil {
+		log.Printf("quality-audit: successors: %v", err)
+		return 1
+	}
+	return 0
+}
+
+// nameBoard is the catalogue board a page is: its URL through atsboard, else a self-hosted
+// career site's platform marker (body empty skips the marker).
+func nameBoard(u *url.URL, body string) (provider, board string, ok bool) {
+	if src, b, _, ok := atsboard.Recognize(u.String()); ok {
+		return src, b, true
+	}
+	if body == "" {
+		return "", "", false
+	}
+	return atsdetect.DetectSelfHosted(body, u.Hostname())
+}
+
+type successorQueries interface {
+	ListChronicBoards(context.Context, db.ListChronicBoardsParams) ([]db.ListChronicBoardsRow, error)
+	SuccessorAuditBoardJobs(context.Context, db.SuccessorAuditBoardJobsParams) (db.SuccessorAuditBoardJobsRow, error)
+	GetBoardForResolve(context.Context, db.GetBoardForResolveParams) (db.Board, error)
+}
+
+type successorProber interface {
+	Run(context.Context, []qualityaudit.ChronicBoard) []qualityaudit.Move
+}
+
+// findSuccessors probes a random maxBoards of the boards unreachable for days, so a capped run
+// reaches a different share of a large backlog each time, and resolves each move's successor
+// against the catalogue.
+func findSuccessors(ctx context.Context, q successorQueries, finder successorProber, days, maxBoards int32) (successorReport, error) {
+	report := successorReport{GeneratedAt: time.Now().UTC(), WindowDays: days, Moves: []successorMove{}}
+	rows, err := q.ListChronicBoards(ctx, db.ListChronicBoardsParams{
+		AgeWindow: pgtype.Interval{Days: days, Valid: true}, MaxBoards: 100000,
+	})
+	if err != nil {
+		return report, fmt.Errorf("list chronic boards: %w", err)
+	}
+	if len(rows) > 0 {
+		report.Chronic = rows[0].Total
+	}
+	rand.Shuffle(len(rows), func(i, j int) { rows[i], rows[j] = rows[j], rows[i] }) //nolint:gosec // Only selects which boards a capped run probes.
+
+	var boards []qualityaudit.ChronicBoard
+	for _, r := range rows {
+		if len(boards) >= int(maxBoards) {
+			break
+		}
+		if r.Board == "" { // a boardless provider's own record has no board to move
+			continue
+		}
+		jobs, err := q.SuccessorAuditBoardJobs(ctx, db.SuccessorAuditBoardJobsParams{
+			Source: r.Provider, BoardPattern: externalid.BoardPattern(r.Board),
+		})
+		if err != nil {
+			return report, fmt.Errorf("jobs of %s/%s: %w", r.Provider, r.Board, err)
+		}
+		if jobs.LatestUrl == "" {
+			continue
+		}
+		old, err := catalogBoard(ctx, q, r.Provider, r.Board)
+		if err != nil {
+			return report, err
+		}
+		since := r.FirstSeenAt
+		if r.LastSuccessAt.Valid {
+			since = r.LastSuccessAt
+		}
+		boards = append(boards, qualityaudit.ChronicBoard{
+			Provider: r.Provider, Board: r.Board, Region: r.Region, Company: old.Company,
+			OpenJobs: jobs.OpenJobs, LatestURL: jobs.LatestUrl, FailingSince: since.Time, LastError: r.LastError.String,
+		})
+	}
+	report.Probed = len(boards)
+	log.Printf("quality-audit: successors: probing %d of %d chronic boards", len(boards), report.Chronic)
+
+	for _, m := range finder.Run(ctx, boards) {
+		out := successorMove{
+			Provider: m.Board.Provider, Board: m.Board.Board, Region: m.Board.Region, Company: m.Board.Company,
+			OpenJobs: m.Board.OpenJobs, FailingSince: m.Board.FailingSince, LastError: m.Board.LastError,
+			ProbedURL: m.ProbedURL, Target: m.Target, Evidence: m.Evidence,
+			SuccessorProvider: m.SuccessorProvider, SuccessorBoard: m.SuccessorBoard,
+		}
+		if m.SuccessorBoard != "" {
+			next, err := catalogBoard(ctx, q, m.SuccessorProvider, m.SuccessorBoard)
+			if err != nil {
+				return report, err
+			}
+			out.SuccessorStatus, out.SuccessorCompany = next.Status, next.Company
+		}
+		log.Printf("quality-audit: successors: %s/%s -> %s (%s/%s, %s)", out.Provider, out.Board, out.Target,
+			out.SuccessorProvider, out.SuccessorBoard, out.SuccessorStatus)
+		report.Moves = append(report.Moves, out)
+	}
+	log.Printf("quality-audit: successors: %d move(s) found", len(report.Moves))
+	return report, ctx.Err()
+}
+
+// catalogBoard reads a board's catalogue row, reporting status "absent" when there is none.
+func catalogBoard(ctx context.Context, q successorQueries, provider, board string) (db.Board, error) {
+	b, err := q.GetBoardForResolve(ctx, db.GetBoardForResolveParams{Provider: provider, Board: board})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.Board{Status: "absent"}, nil
+	}
+	if err != nil {
+		return db.Board{}, fmt.Errorf("catalogue %s/%s: %w", provider, board, err)
+	}
+	return b, nil
+}

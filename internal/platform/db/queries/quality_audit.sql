@@ -80,3 +80,13 @@ ORDER BY source;
 -- When the remote check last judged anything, NULL when it never has.
 SELECT max(judged_at)::timestamptz AS judged_at
 FROM remote_audit_judgements;
+
+-- name: SuccessorAuditBoardJobs :one
+-- One chronic board's postings for the successor pass (qualityaudit.FindSuccessors): how many
+-- are still open, and the newest one's URL, the page the pass probes for a move. The board is
+-- matched by its external_id prefix (externalid.BoardPattern), which jobs_source_extid_pattern_idx
+-- serves.
+SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
+       coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
+FROM jobs
+WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern);
