@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -71,13 +72,23 @@ type successorMove struct {
 	ClosedJobs int64 `json:"closed_jobs"`
 }
 
-// renamedTenant is a move the pass applies itself: the same provider's board, live in the catalogue
-// and crawling, now holds the old board's postings (a tenant renamed on its platform). Retiring
-// the old board stops a crawl that can only fail, and its postings are already carried by the
-// successor. Every other move needs a human: another platform, or a board the catalogue lacks.
+// renamedTenant is a move the pass applies itself: the platform says the old board is gone
+// (goneEvidence) and its pages point at the same provider's board, live in the catalogue and
+// crawling. Retiring the old board stops a crawl that can only fail; its postings are already
+// carried by the successor. A board failing for our own reasons (a WAF, a page cap) is never
+// retired here, even when a posting page redirects: on CareerPlug a franchise's postings redirect
+// to the network's board while the franchise's own board stays live (2026-11-26). Every other move
+// needs a human: another platform, or a board the catalogue lacks.
 func renamedTenant(m successorMove) bool {
-	return m.SuccessorProvider == m.Provider && m.SuccessorStatus == "active" && !m.SuccessorChronic
+	return m.SuccessorProvider == m.Provider && m.SuccessorStatus == "active" && !m.SuccessorChronic &&
+		goneEvidence.MatchString(m.LastError)
 }
+
+// goneEvidence is the platform itself saying the board is gone: the adapters' ErrBoardGone text,
+// a 404/410 on the board's listing, or its host no longer resolving.
+// shortcut: matches board_health.last_error text; a structured gone reason on board_health would
+// be sturdier if an adapter's wording changes.
+var goneEvidence = regexp.MustCompile(`board no longer exists|status 404|status 410|no such host`)
 
 type boardRetirer interface {
 	Retire(ctx context.Context, provider, board, region string) (boardcatalog.Retirement, error)

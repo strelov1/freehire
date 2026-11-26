@@ -113,11 +113,12 @@ func (f *fakeRetirer) Retire(_ context.Context, provider, board, _ string) (boar
 
 func TestApplyMovesRetiresOnlyRenamedTenants(t *testing.T) {
 	report := successorReport{Moves: []successorMove{
-		{Provider: "trakstar", Board: "old", SuccessorProvider: "trakstar", SuccessorBoard: "new", SuccessorStatus: "active"},
-		{Provider: "trakstar", Board: "sick", SuccessorProvider: "trakstar", SuccessorBoard: "alsosick", SuccessorStatus: "active", SuccessorChronic: true},
-		{Provider: "icims", Board: "acme", SuccessorProvider: "jibe", SuccessorBoard: "talent.acme.com", SuccessorStatus: "active"},
-		{Provider: "pandape", Board: "a", SuccessorProvider: "pandape", SuccessorBoard: "b", SuccessorStatus: "absent"},
-		{Provider: "inhire", Board: "x", SuccessorProvider: "inhire", SuccessorBoard: "y", SuccessorStatus: "active"},
+		{Provider: "trakstar", Board: "old", SuccessorProvider: "trakstar", SuccessorBoard: "new", SuccessorStatus: "active", LastError: "GET https://old.hire.trakstar.com/jobfeeds/old: status 404"},
+		{Provider: "trakstar", Board: "sick", SuccessorProvider: "trakstar", SuccessorBoard: "alsosick", SuccessorStatus: "active", SuccessorChronic: true, LastError: "status 404"},
+		{Provider: "icims", Board: "acme", SuccessorProvider: "jibe", SuccessorBoard: "talent.acme.com", SuccessorStatus: "active", LastError: "status 404"},
+		{Provider: "pandape", Board: "a", SuccessorProvider: "pandape", SuccessorBoard: "b", SuccessorStatus: "absent", LastError: "board no longer exists on the platform"},
+		{Provider: "careerplug", Board: "franchise", SuccessorProvider: "careerplug", SuccessorBoard: "network", SuccessorStatus: "active", LastError: "GET https://franchise.careerplug.com/jobs: WAF challenge"},
+		{Provider: "inhire", Board: "x", SuccessorProvider: "inhire", SuccessorBoard: "y", SuccessorStatus: "active", LastError: "pandape: board \"x\": board no longer exists on the platform"},
 	}}
 	repo := &fakeRetirer{}
 	if err := applyMoves(context.Background(), repo, &report, 1, true); err != nil {
@@ -126,7 +127,7 @@ func TestApplyMovesRetiresOnlyRenamedTenants(t *testing.T) {
 	if len(repo.retired) != 1 || repo.retired[0] != "trakstar/old" {
 		t.Fatalf("retired %v, want only trakstar/old (cap 1)", repo.retired)
 	}
-	if !report.Moves[0].Retired || report.Moves[0].ClosedJobs != 4 || report.Moves[4].Retired {
+	if !report.Moves[0].Retired || report.Moves[0].ClosedJobs != 4 || report.Moves[4].Retired || report.Moves[5].Retired {
 		t.Fatalf("moves = %+v", report.Moves)
 	}
 
