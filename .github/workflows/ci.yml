@@ -221,6 +221,12 @@ jobs:
         env:
           SHARD: ${{ matrix.task }}
           TESTDB_ADMIN_URL: postgres://hire:hire@127.0.0.1:5432/postgres?sslmode=disable
+          # The packages run as parallel processes sharing one testcontainers session, so they share
+          # one Ryuk reaper. When it starts removing itself after a package ends, a package reusing it
+          # fails with `wait for reaper: unexpected container status "removing"`, which
+          # testcontainers-go v0.45 does not retry. The runner VM is thrown away with the job, so
+          # there is nothing for Ryuk to clean up here.
+          TESTCONTAINERS_RYUK_DISABLED: "true"
         run: |
           mapfile -t packages < "$RUNNER_TEMP/integration-packages.txt"
           if [ "${#packages[@]}" -eq 0 ]; then
