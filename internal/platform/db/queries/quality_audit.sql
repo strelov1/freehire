@@ -89,4 +89,4 @@ FROM remote_audit_judgements;
 SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
        coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
 FROM jobs
-WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern);
+WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern) AND NOT is_private;

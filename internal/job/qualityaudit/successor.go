@@ -130,11 +130,11 @@ func (f *SuccessorFinder) host(ctx context.Context, origin string, boards []Chro
 	var moves []Move
 	for _, b := range boards {
 		m, found, ok := f.board(ctx, p, rules, b)
-		if !ok {
-			break
-		}
 		if found {
 			moves = append(moves, m)
+		}
+		if !ok {
+			break
 		}
 	}
 	return moves
@@ -142,19 +142,25 @@ func (f *SuccessorFinder) host(ctx context.Context, origin string, boards []Chro
 
 // board probes one board's pages in turn and returns the first move to a recognised board, else
 // the first move anywhere (a site that went to an ATS we have no adapter for reads the same). ok
-// is false when the budget is spent or the run stopped.
+// is false when the budget is spent or the run stopped; a move found before that is still
+// returned.
 func (f *SuccessorFinder) board(ctx context.Context, p *pacer, rules robots, b ChronicBoard) (m Move, found, ok bool) {
 	var unknown *Move
+	retained := func(ok bool) (Move, bool, bool) {
+		if unknown != nil {
+			return *unknown, true, ok
+		}
+		return Move{}, false, ok
+	}
 	consider := func(move Move) bool {
 		if sameBoard(b, move) {
 			return false
 		}
 		target, _ := url.Parse(move.Target)
-		probed, _ := url.Parse(move.ProbedURL)
 		if target != nil && noisePage.MatchString(target.Host+target.Path) {
 			return false
 		}
-		if move.SuccessorBoard == "" && sameSite(target, probed) {
+		if move.SuccessorBoard == "" && onVendorSite(b, target) {
 			// A dead hosted tenant sent to its vendor's own site (acme.bamboohr.com -> bamboohr.com)
 			// is the vendor saying the account is closed, not an employer moving.
 			return false
@@ -174,11 +180,11 @@ func (f *SuccessorFinder) board(ctx context.Context, p *pacer, rules robots, b C
 		}
 		page, ok := f.get(ctx, p, f.Direct, probe)
 		if !ok {
-			return Move{}, false, false
+			return retained(false)
 		}
 		if f.Fallback != nil && refused(page.status) {
 			if page, ok = f.get(ctx, p, f.Fallback, probe); !ok {
-				return Move{}, false, false
+				return retained(false)
 			}
 		}
 		if page.status == 0 {
@@ -187,11 +193,11 @@ func (f *SuccessorFinder) board(ctx context.Context, p *pacer, rules robots, b C
 		move := Move{Board: b, ProbedURL: probe}
 		if !sameHost(requested, page.final) {
 			move.Evidence, move.Target = EvidenceHTTPRedirect, page.final.String()
-			move.SuccessorProvider, move.SuccessorBoard = f.successorOf(requested, page.final, page.body)
+			move.SuccessorProvider, move.SuccessorBoard = f.successorOf(b, page.final, page.body)
 			if consider(move) {
 				return move, true, true
 			}
-			continue
+			// The landing page may itself send the browser on; its script is read below.
 		}
 		for _, target := range pageRedirects(page.final, page.body) {
 			if sameHost(target, page.final) {
@@ -200,23 +206,20 @@ func (f *SuccessorFinder) board(ctx context.Context, p *pacer, rules robots, b C
 			// One request to a host this pass has no pacing for: it draws on the budget only.
 			next, ok := f.get(ctx, &pacer{budget: p.budget}, f.Direct, target.String())
 			if !ok {
-				return Move{}, false, false
+				return retained(false)
 			}
 			landed := target
 			if next.status != 0 {
 				landed = next.final
 			}
 			move.Evidence, move.Target = EvidencePageRedirect, landed.String()
-			move.SuccessorProvider, move.SuccessorBoard = f.successorOf(requested, landed, next.body)
+			move.SuccessorProvider, move.SuccessorBoard = f.successorOf(b, landed, next.body)
 			if consider(move) {
 				return move, true, true
 			}
 		}
 	}
-	if unknown != nil {
-		return *unknown, true, true
-	}
-	return Move{}, false, true
+	return retained(true)
 }
 
 // successorProbeURLs are the pages that show a move: the newest posting, the host's home when
@@ -241,11 +244,10 @@ func (f *SuccessorFinder) successorProbeURLs(b ChronicBoard) []string {
 }
 
 // successorOf names the board a page is: by its URL first, then by a self-hosted career site's
-// platform marker. A marker is read only off the probed page's own site: on the old vendor's site
-// it is that vendor's own (recruitee.com carries "teamtailor", and a dead Recruitee tenant is sent
-// there).
-func (f *SuccessorFinder) successorOf(probed, u *url.URL, body string) (provider, board string) {
-	if sameSite(probed, u) {
+// platform marker. A marker is not read on the old board's vendor's site, where it is that
+// vendor's own (recruitee.com carries "teamtailor", and a dead Recruitee tenant is sent there).
+func (f *SuccessorFinder) successorOf(b ChronicBoard, u *url.URL, body string) (provider, board string) {
+	if onVendorSite(b, u) {
 		body = ""
 	}
 	provider, board, _ = f.Name(u, body)
@@ -264,6 +266,7 @@ var pageRedirectRes = []*regexp.Regexp{
 	regexp.MustCompile(`location(?:\.href)?\s*=\s*["']([^"']+)["']`),
 	regexp.MustCompile(`location\.(?:replace|assign)\(\s*["']([^"']+)["']`),
 	regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*?url=([^"'>\s]+)`),
+	regexp.MustCompile(`(?i)<meta[^>]+content=["'][^"']*?url=([^"'>\s]+)["'][^>]*http-equiv=["']?refresh`),
 }
 
 // pageRedirects returns the absolute http(s) URLs a page redirects to, resolved against base.
@@ -288,14 +291,18 @@ func pageRedirects(base *url.URL, body string) []*url.URL {
 // It matches whole host labels or path segments, so /jobs/registered-nurse is not one.
 var noisePage = regexp.MustCompile(`(?i)(^|[/.])(log-?in|sign[-_]?(in|up)|register|maintenance-page|invalid-url)([/.]|$)`)
 
-// sameSite reports two URLs under one registrable domain.
-func sameSite(a, b *url.URL) bool {
-	if a == nil || b == nil {
+// onVendorSite reports a target on the site of the vendor hosting the old board: under the
+// registrable domain of its posting host, when that host is the vendor's (acme.bamboohr.com)
+// rather than the board itself. A self-hosted board's identity is its host (careers.acme.org),
+// so a move within the employer's own domain (to a Jibe site on talent.acme.org) still counts.
+func onVendorSite(b ChronicBoard, target *url.URL) bool {
+	posting, err := url.Parse(b.LatestURL)
+	if err != nil || target == nil || strings.EqualFold(posting.Hostname(), b.Board) {
 		return false
 	}
-	da, errA := publicsuffix.EffectiveTLDPlusOne(a.Hostname())
-	db, errB := publicsuffix.EffectiveTLDPlusOne(b.Hostname())
-	return errA == nil && errB == nil && strings.EqualFold(da, db)
+	vendor, errA := publicsuffix.EffectiveTLDPlusOne(posting.Hostname())
+	site, errB := publicsuffix.EffectiveTLDPlusOne(target.Hostname())
+	return errA == nil && errB == nil && strings.EqualFold(vendor, site)
 }
 
 func sameHost(a, b *url.URL) bool {

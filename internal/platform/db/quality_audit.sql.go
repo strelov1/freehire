@@ -256,7 +256,7 @@ const successorAuditBoardJobs = `-- name: SuccessorAuditBoardJobs :one
 SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
        coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
 FROM jobs
-WHERE source = $1 AND external_id LIKE $2
+WHERE source = $1 AND external_id LIKE $2 AND NOT is_private
 `
 
 type SuccessorAuditBoardJobsParams struct {

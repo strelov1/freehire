@@ -160,14 +160,14 @@ func TestSuccessorFallbackOnlyForRefusedFirstHop(t *testing.T) {
 
 func TestPageRedirects(t *testing.T) {
 	base, _ := url.Parse("https://a.example/x/")
-	body := `<meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
+	body := `<meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
 window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&amp;b=2')</script>`
 	var got []string
 	for _, u := range pageRedirects(base, body) {
 		got = append(got, u.String())
 	}
-	want := []string{"https://b.example/p?a=1&b=2", "https://a.example/moved"}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+	want := []string{"https://b.example/p?a=1&b=2", "https://a.example/moved", "https://a.example/reversed"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("pageRedirects = %v, want %v", got, want)
 	}
 }
@@ -224,6 +224,73 @@ func TestNoisePage(t *testing.T) {
 	} {
 		if noisePage.MatchString(target) != noise {
 			t.Errorf("noisePage(%s) = %v, want %v", target, !noise, noise)
+		}
+	}
+}
+
+// An old posting sent to an unrecognised landing page whose script names the successor.
+func TestSuccessorFollowsLandingPageScript(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Host == "acme.teamtailor.com" && r.URL.Path != "/robots.txt":
+			http.Redirect(w, r, "http://www.acme.example/careers", http.StatusFound)
+		case r.Host == "www.acme.example":
+			_, _ = w.Write([]byte(`<script>location.replace("http://jobs.lever.co/acme")</script>`))
+		case r.Host == "jobs.lever.co":
+			_, _ = w.Write([]byte(`lever`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	moves := newFinder(hostsClient(srv), nil).Run(context.Background(), []ChronicBoard{{
+		Provider: "teamtailor", Board: "acme", LatestURL: "http://acme.teamtailor.com/jobs/1",
+	}})
+	if len(moves) != 1 || moves[0].SuccessorProvider != "lever" || moves[0].SuccessorBoard != "acme" {
+		t.Fatalf("moves = %+v", moves)
+	}
+}
+
+// A self-hosted board moving within the employer's own domain keeps its marker read.
+func TestSuccessorEmployerDomainMove(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Host == "careers.acme.example" && r.URL.Path != "/robots.txt":
+			http.Redirect(w, r, "http://talent.acme.example/jobs", http.StatusFound)
+		case r.Host == "talent.acme.example":
+			_, _ = w.Write([]byte(`jibeapply`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	moves := newFinder(hostsClient(srv), nil).Run(context.Background(), []ChronicBoard{{
+		Provider: "phenom", Board: "careers.acme.example", LatestURL: "http://careers.acme.example/job/1",
+	}})
+	if len(moves) != 1 || moves[0].SuccessorProvider != "jibe" || moves[0].SuccessorBoard != "talent.acme.example" {
+		t.Fatalf("moves = %+v", moves)
+	}
+}
+
+// A move already seen is kept when the budget runs out before the board's last probe.
+func TestSuccessorKeepsMoveWhenBudgetEnds(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Host == "careers-acme.icims.com" && r.URL.Path != "/robots.txt" {
+			http.Redirect(w, r, "http://www.acme.example/", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	board := ChronicBoard{Provider: "icims", Board: "acme", LatestURL: "http://careers-acme.icims.com/jobs/1/x/job"}
+	for budget, want := range map[int64]int{2: 1, 1: 0} { // robots.txt, then the posting
+		f := newFinder(hostsClient(srv), nil)
+		f.MaxRequests = budget
+		if moves := f.Run(context.Background(), []ChronicBoard{board}); len(moves) != want {
+			t.Fatalf("budget %d: moves = %+v, want %d", budget, moves, want)
 		}
 	}
 }
