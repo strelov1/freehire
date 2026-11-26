@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -74,18 +75,13 @@ func (r *QueriesRepository) SetHash(ctx context.Context, linkID int64, hash []by
 	return r.q.SetBookingLinkTokenHash(ctx, db.SetBookingLinkTokenHashParams{ID: linkID, TokenHash: hash})
 }
 
+func (r *QueriesRepository) Schedule(ctx context.Context, userID int64) (availability.Schedule, error) {
+	return availability.New(r.q).Load(ctx, userID)
+}
+
 func (r *QueriesRepository) Busy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error) {
-	rows, err := r.q.ListBookingLinkBusy(ctx, db.ListBookingLinkBusyParams{
-		UserID: userID, FromAt: pgconv.Instant(from), ToAt: pgconv.Instant(to),
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]slots.Interval, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
-	}
-	return out, nil
+	all, err := availability.New(r.q).Busy(ctx, []int64{userID}, from, to)
+	return availability.Intervals(all[userID]), err
 }
 
 func (r *QueriesRepository) Book(ctx context.Context, b NewBooking) error {

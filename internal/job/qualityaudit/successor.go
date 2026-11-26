@@ -2,7 +2,6 @@ package qualityaudit
 
 import (
 	"context"
-	"html"
 	"io"
 	"math/rand/v2"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	xhtml "golang.org/x/net/html"
 	"golang.org/x/net/publicsuffix"
 
 	"github.com/strelov1/freehire/internal/job/liveness"
@@ -260,49 +260,71 @@ func sameBoard(b ChronicBoard, m Move) bool {
 	return m.SuccessorProvider == b.Provider && strings.EqualFold(m.SuccessorBoard, b.Board)
 }
 
-// pageRedirectRes find a redirect a page performs itself: a script assigning the location, or a
-// meta refresh. iCIMS writes `window.top.location.href = 'https:\/\/…'` with escaped slashes.
-var pageRedirectRes = []*regexp.Regexp{
+// scriptRedirects find a script assigning the page's location. iCIMS writes
+// `window.top.location.href = 'https:\/\/…'` with escaped slashes.
+var scriptRedirects = []*regexp.Regexp{
 	regexp.MustCompile(`location(?:\.href)?\s*=\s*["']([^"']+)["']`),
 	regexp.MustCompile(`location\.(?:replace|assign)\(\s*["']([^"']+)["']`),
-	regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']?refresh["']?[^>]*content=["'][^"']*?url=([^"'>\s]+)`),
-	regexp.MustCompile(`(?i)<meta[^>]+content=["'][^"']*?url=([^"'>\s]+)["'][^>]*http-equiv=["']?refresh`),
 }
 
-// eventHandlers are on*= attributes, quoted or not (an unquoted value ends at whitespace or >). An
-// interaction handler such as a button's onclick="window.location='…'" runs on a click, not on
-// load (a Tenstreet posting's Apply button, freehire#5209), so it is removed before matching;
-// onload is kept, since it does run as the page loads. Only tags are searched (htmlTag), so a
-// script's own text (`const once = location.replace(…)`) is never read as an attribute.
-var (
-	htmlTag       = regexp.MustCompile(`<[a-zA-Z][^>]*>`)
-	eventHandlers = regexp.MustCompile(`(?is)\son([a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
-)
+// refreshURL is the target in a meta refresh's content ("0; url=/moved").
+var refreshURL = regexp.MustCompile(`(?i)url\s*=\s*['"]?([^'"\s;]+)`)
 
-func dropInteractionHandlers(body string) string {
-	return htmlTag.ReplaceAllStringFunc(body, func(tag string) string {
-		return eventHandlers.ReplaceAllStringFunc(tag, func(attr string) string {
-			if strings.EqualFold(eventHandlers.FindStringSubmatch(attr)[1], "load") {
-				return attr
-			}
-			return ""
-		})
-	})
-}
-
-// pageRedirects returns the absolute http(s) URLs a page redirects to, resolved against base.
+// pageRedirects returns the absolute http(s) URLs a page sends the browser to as it loads,
+// resolved against base: a <script>'s location assignment, an onload handler's, or a meta refresh.
+// The page is tokenized as HTML, so an interaction handler (a button's onclick, a Tenstreet
+// posting's Apply button, freehire#5209) is never read, whatever its quoting or content.
 func pageRedirects(base *url.URL, body string) []*url.URL {
-	body = dropInteractionHandlers(body)
-	var out []*url.URL
-	for _, re := range pageRedirectRes {
-		for _, m := range re.FindAllStringSubmatch(body, -1) {
-			raw := html.UnescapeString(strings.ReplaceAll(m[1], `\/`, "/"))
-			u, err := base.Parse(raw)
-			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-				continue
-			}
-			out = append(out, u)
+	var code, targets []string
+	z := xhtml.NewTokenizer(strings.NewReader(body))
+	inScript := false
+	for {
+		tt := z.Next()
+		if tt == xhtml.ErrorToken {
+			break
 		}
+		switch tt {
+		case xhtml.StartTagToken, xhtml.SelfClosingTagToken:
+			t := z.Token()
+			inScript = t.Data == "script" && tt == xhtml.StartTagToken
+			var equiv, content string
+			for _, a := range t.Attr {
+				switch a.Key {
+				case "onload":
+					code = append(code, a.Val)
+				case "http-equiv":
+					equiv = a.Val
+				case "content":
+					content = a.Val
+				}
+			}
+			if t.Data == "meta" && strings.EqualFold(equiv, "refresh") {
+				if m := refreshURL.FindStringSubmatch(content); m != nil {
+					targets = append(targets, m[1])
+				}
+			}
+		case xhtml.EndTagToken:
+			inScript = false
+		case xhtml.TextToken:
+			if inScript {
+				code = append(code, string(z.Text()))
+			}
+		}
+	}
+	for _, c := range code {
+		for _, re := range scriptRedirects {
+			for _, m := range re.FindAllStringSubmatch(c, -1) {
+				targets = append(targets, strings.ReplaceAll(m[1], `\/`, "/"))
+			}
+		}
+	}
+	var out []*url.URL
+	for _, raw := range targets {
+		u, err := base.Parse(raw)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			continue
+		}
+		out = append(out, u)
 	}
 	return out
 }

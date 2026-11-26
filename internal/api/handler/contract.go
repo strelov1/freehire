@@ -64,6 +64,7 @@ type contractHandlers struct {
 	*promoHandlers
 	*mentorSuggestionsHandlers
 	*bookingLinkHandlers
+	*availabilityHandlers
 	*mentorshipHandlers
 	*savedSearchHandlers
 	*subscriptionHandlers

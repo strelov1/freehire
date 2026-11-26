@@ -20,6 +20,15 @@
   // A taken time leaves the list on refresh, and the form with it: this stays above the list.
   let taken = $state('');
   let booked = $state<{ slot: MentorSlot; day: string } | null>(null);
+  // The link's meeting length is the owner's setting; every slot carries it.
+  let sessionMinutes = $state(30);
+
+  async function loadSlots(timezone: string, signal: AbortSignal) {
+    const result = await api.getBookingSlots(data.token, timezone, signal);
+    const first = result.slots[0];
+    if (first) sessionMinutes = (Date.parse(first.ends_at) - Date.parse(first.starts_at)) / 60_000;
+    return result;
+  }
 
   async function book(slot: MentorSlot, day: string, refused: () => void) {
     booking = true;
@@ -46,7 +55,7 @@
 <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6">
   <header class="flex flex-col gap-2">
     <h1 class="text-2xl font-semibold">Book a time</h1>
-    <p class="text-muted-foreground">Pick a 30-minute slot for a call with the candidate. No account needed.</p>
+    <p class="text-muted-foreground">Pick a slot for a call with the candidate. No account needed.</p>
   </header>
 
   {#if booked}
@@ -58,8 +67,8 @@
       <p role="alert" class="text-destructive text-sm">{taken} was just taken. Please pick another time.</p>
     {/if}
     <MentorBookingView
-      loadSlots={(_from, _to, timezone, signal) => api.getBookingSlots(data.token, timezone, signal)}
-      sessionMinutes={30}
+      loadSlots={(_from, _to, timezone, signal) => loadSlots(timezone, signal)}
+      {sessionMinutes}
       counterpart="the candidate"
     >
       {#snippet booker({ slot, day, refused })}

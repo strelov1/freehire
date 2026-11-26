@@ -9,10 +9,13 @@ sees 30-minute slots and books one with a name and an address, no account (GH is
 page `web/src/routes/booking/[token]`, the candidate's switch in the job drawer's History tab.
 
 ## Always true
-- **Slots come from `internal/engage/slots` only**, over the package constants (weekdays
-  10:00-18:00 in the zone stored on the link, 30 minutes, 12 h notice, 14-day horizon) minus
-  the owner's confirmed bookings across all their links and their other confirmed
-  application interviews (no end = 30 minutes; `booking_link` ones counted once).
+- **Slots come from `internal/engage/slots` only**, over the owner's shared hours
+  (`engage/availability`: weekly rules, dated overrides, zone, meeting length 15/30/45/60,
+  notice 0-168 h) minus their confirmed meetings in every product (booking links, mentor
+  sessions as mentor or seeker, buddy mocks, other application interviews; no end = 30
+  minutes; `booking_link` interviews counted once). An owner with no settings row and no
+  rules keeps the default: Mon-Fri 10:00-18:00 in the link's zone, 30 minutes, 12 h notice.
+  The horizon is always 14 days.
 - A candidate with a connected Google Calendar grant also gets live primary-calendar
   free/busy checked on the list and again for the exact interval immediately before the
   booking write. Google returns only interval bounds. They filter whole slots, so a busy

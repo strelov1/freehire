@@ -165,30 +165,6 @@ SET status = 'pending', paused = false, updated_at = now()
 WHERE user_id = $1 AND status = 'withdrawn'
 RETURNING *;
 
--- name: ListMentorAvailability :many
--- Every availability row for a mentor, both shapes. The slot engine wants all of them at
--- once — an override only means anything beside the weekly rules it replaces — so this
--- deliberately does not filter by window.
-SELECT * FROM mentor_availability WHERE mentor_id = $1 ORDER BY id;
-
--- name: CreateMentorAvailabilityRule :one
--- One availability row, weekly or dated. Which shape it is comes from which of weekday
--- and on_date is non-NULL; the mentor_availability_shape_check CHECK rejects a row that
--- sets both or neither, and the Go type cannot construct one either way.
-INSERT INTO mentor_availability (mentor_id, weekday, on_date, start_time, end_time)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING *;
-
--- name: DeleteMentorAvailabilityRule :execrows
--- The mentor_id guard scopes the delete to the owner's own schedule.
-DELETE FROM mentor_availability WHERE id = $1 AND mentor_id = $2;
-
--- name: DeleteMentorWeeklyAvailability :execrows
--- Clears the recurring week, leaving dated overrides alone. The cabinet edits the week as
--- a whole — a schedule is a shape, not a list of rows a user reasons about individually —
--- so a save is this followed by inserts, inside one transaction.
-DELETE FROM mentor_availability WHERE mentor_id = $1 AND weekday IS NOT NULL;
-
 -- name: CreateMentorBooking :one
 -- Book a session. The mentor_bookings_no_overlap EXCLUDE constraint is what guarantees
 -- two confirmed bookings cannot share an instant, so a lost race raises a constraint
@@ -224,27 +200,6 @@ JOIN mentors m ON m.id = b.mentor_id
 JOIN users mu ON mu.id = m.user_id
 JOIN users su ON su.id = b.seeker_user_id
 WHERE b.id = $1;
-
--- name: ListMentorBusyBookings :many
--- The busy set the slot engine subtracts: this mentor's CONFIRMED bookings overlapping
--- the window. Buffers are NOT applied here — the engine widens these, because the buffers
--- are the mentor's and may change between two reads of the same booking.
--- Half-open on both sides, matching the EXCLUDE constraint and Interval.Overlaps: a
--- booking that merely abuts the window is not in it.
-SELECT starts_at, ends_at
-FROM mentor_bookings
-WHERE mentor_id = $1 AND status = 'confirmed'
-  AND starts_at < sqlc.arg(window_end) AND ends_at > sqlc.arg(window_start)
-ORDER BY starts_at;
-
--- name: ListMentorBusyIntervals :many
--- The other half of the busy set: intervals read from the mentor's own calendar. Empty
--- until that sync ships, and carries only the bounds — no title, no attendee.
-SELECT starts_at, ends_at
-FROM mentor_busy_intervals
-WHERE mentor_id = $1
-  AND starts_at < sqlc.arg(window_end) AND ends_at > sqlc.arg(window_start)
-ORDER BY starts_at;
 
 -- name: UpsertMentorBusyInterval :exec
 -- One row per synced busy interval, source fixed to 'google_calendar' (the only writer
@@ -380,3 +335,16 @@ VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (booking_id) DO UPDATE
 SET rating = EXCLUDED.rating, comment = EXCLUDED.comment, updated_at = now()
 RETURNING *;
+
+-- name: ListMentorBusyIntervals :many
+-- The other half of the busy set: intervals read from the mentor's own calendar. Empty
+-- until that sync ships, and carries only the bounds — no title, no attendee.
+SELECT starts_at, ends_at
+FROM mentor_busy_intervals
+WHERE mentor_id = $1
+  AND starts_at < sqlc.arg(window_end) AND ends_at > sqlc.arg(window_start)
+ORDER BY starts_at;
+
+-- name: GetMentorUserID :one
+-- The account behind a mentor profile, for the per-user availability and busy time.
+SELECT user_id FROM mentors WHERE id = $1;
