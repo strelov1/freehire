@@ -252,6 +252,34 @@ func (q *Queries) SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAud
 	return items, nil
 }
 
+const successorAuditBoardJobs = `-- name: SuccessorAuditBoardJobs :one
+SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
+       coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
+FROM jobs
+WHERE source = $1 AND external_id LIKE $2 AND NOT is_private
+`
+
+type SuccessorAuditBoardJobsParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+type SuccessorAuditBoardJobsRow struct {
+	OpenJobs  int64  `json:"open_jobs"`
+	LatestUrl string `json:"latest_url"`
+}
+
+// One chronic board's postings for the successor pass (qualityaudit.FindSuccessors): how many
+// are still open, and the newest one's URL, the page the pass probes for a move. The board is
+// matched by its external_id prefix (externalid.BoardPattern), which jobs_source_extid_pattern_idx
+// serves.
+func (q *Queries) SuccessorAuditBoardJobs(ctx context.Context, arg SuccessorAuditBoardJobsParams) (SuccessorAuditBoardJobsRow, error) {
+	row := q.db.QueryRow(ctx, successorAuditBoardJobs, arg.Source, arg.BoardPattern)
+	var i SuccessorAuditBoardJobsRow
+	err := row.Scan(&i.OpenJobs, &i.LatestUrl)
+	return i, err
+}
+
 const tallyRemoteAuditJudgements = `-- name: TallyRemoteAuditJudgements :many
 SELECT source,
        count(*)::bigint                                                         AS sampled,

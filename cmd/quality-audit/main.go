@@ -9,6 +9,10 @@
 //   - remote: ask a model, for ~QUALITY_AUDIT_REMOTE_MAX postings tagged remote, what each
 //     posting's own text says about where the work is done, and keep the judgement.
 //
+// A third pass, -successors, runs alone on its own timer: it finds chronic boards whose pages now
+// point at another board (an employer that moved ATS) and writes them as JSON for a human to act
+// on (see successors.go).
+//
 // It MEASURES and never acts: no posting is closed, reopened or retagged. Results go out as
 // gauges through the node_exporter textfile collector, raw counts only — the alert rules own
 // every threshold. Without PROM_TEXTFILE_DIR it is a no-op that never opens the pool, unless
@@ -94,7 +98,11 @@ func main() { worker.Main(run) }
 
 func run() int {
 	dryRun := flag.Bool("dry-run", false, "run both passes, store nothing, print the exposition")
+	successors := flag.Bool("successors", false, "run only the successor pass: find chronic boards that moved, write "+successorFileEnv+" (with -dry-run, print it)")
 	flag.Parse()
+	if *successors {
+		return runSuccessors(*dryRun)
+	}
 
 	dir := os.Getenv(worker.PromTextfileDirEnv)
 	if dir == "" && !*dryRun {
