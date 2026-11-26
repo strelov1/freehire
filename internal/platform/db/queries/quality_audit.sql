@@ -90,3 +90,14 @@ SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
        coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
 FROM jobs
 WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern) AND NOT is_private;
+
+-- name: LockSuccessorAuditBoardHealth :one
+-- The old board's crawl evidence, locked for the transaction that retires it (cmd/quality-audit
+-- -apply-moved), so a crawl recording a success meanwhile waits and the retirement re-checks what
+-- the network pass saw minutes earlier. last_seen is the last success, or first sight for a board
+-- that never succeeded, as ListChronicBoards measures it.
+SELECT coalesce(last_success_at, first_seen_at)::timestamptz AS last_seen,
+       coalesce(last_error, '')::text AS last_error
+FROM board_health
+WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board)) AND region = sqlc.arg(region)
+FOR UPDATE;

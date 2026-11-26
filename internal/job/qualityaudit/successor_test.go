@@ -320,3 +320,17 @@ func TestSuccessorPrefersScriptOverMetaRefresh(t *testing.T) {
 		t.Fatalf("moves = %+v, want lever/acme", moves)
 	}
 }
+
+func TestRefreshTarget(t *testing.T) {
+	for content, want := range map[string]string{
+		"0; url=/moved":                                "/moved",
+		"5; URL=https://jobs.example/s;t=acme":         "https://jobs.example/s;t=acme",
+		"0; url=https://careers.example/o'reilly/jobs": "https://careers.example/o'reilly/jobs",
+		`0; url='https://a.example/x' `:                "https://a.example/x",
+		"30":                                           "",
+	} {
+		if got, _ := refreshTarget(content); got != want {
+			t.Errorf("refreshTarget(%q) = %q, want %q", content, got, want)
+		}
+	}
+}

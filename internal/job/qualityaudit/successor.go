@@ -267,9 +267,27 @@ var scriptRedirects = []*regexp.Regexp{
 	regexp.MustCompile(`location\.(?:replace|assign)\(\s*["']([^"']+)["']`),
 }
 
-// refreshURL is the target in a meta refresh's content ("0; url=/moved"). The URL runs to the end
-// of the content, semicolons included (search;tenant=acme), as browsers read it.
-var refreshURL = regexp.MustCompile(`(?i)url\s*=\s*['"]?([^'"\s]+)`)
+// refreshKey finds the url= of a meta refresh's content ("0; url=/moved").
+var refreshKey = regexp.MustCompile(`(?i)url\s*=\s*`)
+
+// refreshTarget is the URL in a meta refresh's content. It runs to the end of the content,
+// semicolons included (search;tenant=acme), as browsers read it; a quote ends it only when one
+// opened it, so an apostrophe inside the path (o'reilly, decoded from &#39;) stays.
+func refreshTarget(content string) (string, bool) {
+	loc := refreshKey.FindStringIndex(content)
+	if loc == nil {
+		return "", false
+	}
+	rest := strings.TrimSpace(content[loc[1]:])
+	if rest != "" && (rest[0] == '\'' || rest[0] == '"') {
+		if end := strings.IndexByte(rest[1:], rest[0]); end >= 0 {
+			rest = rest[1 : end+1]
+		} else {
+			rest = rest[1:]
+		}
+	}
+	return rest, rest != ""
+}
 
 // pageRedirects returns the absolute http(s) URLs a page sends the browser to as it loads,
 // resolved against base: a <script>'s location assignment, an onload handler's, or a meta refresh.
@@ -300,8 +318,8 @@ func pageRedirects(base *url.URL, body string) []*url.URL {
 				}
 			}
 			if t.Data == "meta" && strings.EqualFold(equiv, "refresh") {
-				if m := refreshURL.FindStringSubmatch(content); m != nil {
-					refreshes = append(refreshes, m[1])
+				if target, ok := refreshTarget(content); ok {
+					refreshes = append(refreshes, target)
 				}
 			}
 		case xhtml.EndTagToken:
