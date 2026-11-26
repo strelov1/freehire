@@ -34,6 +34,7 @@ import { emailPrefsApi } from './api-methods/email-prefs';
 import { onboardingApi } from './api-methods/onboarding';
 import { bookingApi } from './api-methods/booking';
 import { sponsoredApi } from './api-methods/sponsored';
+import { availabilityApi } from './api-methods/availability';
 
 export type {
   Slice,
@@ -171,6 +172,7 @@ export function createApi(
     ...onboardingApi(http),
     ...bookingApi(http),
     ...sponsoredApi(http),
+    ...availabilityApi(http),
     openCoverLetterStream,
   };
 }
