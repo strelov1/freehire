@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -236,13 +237,14 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 	}
 
 	// Caller's own auto-apply status, a signed-in-only overlay like MyVote above. No row is
-	// the common case (nil, not logged); a lookup failure also degrades to nil. Scoped to
-	// autoApplyEnqueueSources so other jobs skip a query that could only come back empty.
-	if userID, ok := auth.UserIDFromContext(ctx); ok && autoApplyEnqueueSources[job.Source] {
+	// the common case (nil, not logged); a lookup failure also degrades to nil. Scoped to the
+	// sources auto-apply can queue (autoapply.Queueable, the enqueue gate) so other jobs skip
+	// a query that could only come back empty.
+	if userID, ok := auth.UserIDFromContext(ctx); ok && autoapply.Queueable(job.Source) {
 		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(ctx, db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
 		}); err == nil {
-			status := autoApplyEntryStatus(entry.ReviewDecision, entry.FailedAt, entry.BlockedAt)
+			status := string(autoapply.EntryStatusOf(entry.ReviewDecision, entry.FailedAt, entry.BlockedAt))
 			view.AutoApplyStatus = &status
 		}
 	}

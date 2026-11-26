@@ -74,11 +74,11 @@ func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID in
 // keeps its kind: a *fiber.Error reads as its message and its status is what MCP metrics
 // classify a refusal by (observability.ErrorCode); a bare error would count as internal_error.
 func toolError(err error) error {
-	var refused *autoApplyAllowanceRefusal
+	var spent *autoapply.AllowanceRefusal
 	switch {
 	// The day's auto-apply allowance is spent: the 402 the start route answers it with.
-	case errors.As(err, &refused):
-		return assistant.WithLogReason(fiber.NewError(fiber.StatusPaymentRequired, err.Error()), "auto-apply allowance spent")
+	case errors.As(err, &spent):
+		return assistant.WithLogReason(fiber.NewError(fiber.StatusPaymentRequired, decisionRefusal(spent.Decision).message), "auto-apply allowance spent")
 	case errors.Is(err, plan.ErrPaymentRequired):
 		return assistant.WithLogReason(fiber.NewError(fiber.StatusPaymentRequired, err.Error()), "paid plan required")
 	case errors.Is(err, plan.ErrRefused):
@@ -111,7 +111,7 @@ func (h *assistantHandlers) autoApplySlugTool(name, title, description string, e
 			}
 			out, err := run(ctx, userID, slug)
 			if err != nil {
-				return nil, slugToolError(slug, err)
+				return nil, slugToolError(slug, autoApplyEnqueueError(err))
 			}
 			return out, nil
 		})

@@ -1,4 +1,4 @@
-package handler
+package autoapply
 
 import (
 	"testing"
@@ -6,20 +6,20 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 )
 
-// A plain env read, not memoized (see autoApplyEligibilityEnforce's doc comment) — this
+// A plain env read, not memoized (see EligibilityEnforce's doc comment) — this
 // is what makes it possible to test both branches with t.Setenv in one test binary at
 // all, which a sync.OnceValue-memoized version (an earlier draft of this flag) could not.
 func TestAutoApplyEligibilityEnforce_ReadsTheEnvVarEachCall(t *testing.T) {
 	t.Setenv("AUTO_APPLY_ELIGIBILITY_ENFORCE", "")
-	if autoApplyEligibilityEnforce() {
+	if EligibilityEnforce() {
 		t.Error("want shadow mode (false) when the env var is unset")
 	}
 	t.Setenv("AUTO_APPLY_ELIGIBILITY_ENFORCE", "1")
-	if !autoApplyEligibilityEnforce() {
+	if !EligibilityEnforce() {
 		t.Error("want enforced (true) once the env var is set to 1")
 	}
 	t.Setenv("AUTO_APPLY_ELIGIBILITY_ENFORCE", "")
-	if autoApplyEligibilityEnforce() {
+	if EligibilityEnforce() {
 		t.Error("want shadow mode (false) again once the env var is cleared")
 	}
 }

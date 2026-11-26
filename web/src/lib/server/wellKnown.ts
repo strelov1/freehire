@@ -1,11 +1,12 @@
 import { API_INTERNAL_URL } from '$app/env/private';
 import { ssrTimeoutMs } from '#lib/server/api.js';
 
-// The OJCP discovery documents live at well-known paths the specification fixes, but the Go
-// service renders them: nginx routes /api/ to the backend and everything else to this Node
-// process, so a Go route at /.well-known/ itself would never receive a request. That was
-// found the only way it could be — deployed, with the API path answering 200 and the
-// manifest answering 404. Each route here is therefore a PROXY, not a copy: writing the
+// The discovery documents — OJCP's manifest and key set, and the OAuth authorization-server
+// and protected-resource metadata — live at well-known paths their specifications fix, but
+// the Go service renders them: nginx routes /api/ to the backend and everything else to
+// this Node process, so a Go route at /.well-known/ itself would never receive a request.
+// That was found the only way it could be — deployed, with the API path answering 200 and
+// the manifest answering 404. Each route here is therefore a PROXY, not a copy: writing the
 // JSON out in the SPA would put a second copy of what the Go service derives where nothing
 // can check it.
 

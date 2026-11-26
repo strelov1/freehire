@@ -133,19 +133,21 @@ rather than here — their census of `web/` was already off by a third.
 
 ## What `Dialog` does not cover
 
-Eight surfaces in `web/` were built by hand before this primitive was reached for. Three are
-now `Dialog` call sites — `ReportDialog`, `RequestReferralModal`, `DeleteAccountButton`. The
-other five are not stragglers; they are two gaps, and forcing either onto `Dialog` means
-re-adding by hand what it deliberately does not do.
+Eight surfaces in `web/` were built by hand before this primitive was reached for. Five are
+now `Dialog` call sites — `ReportDialog`, `RequestReferralModal`, `DeleteAccountButton`,
+`GmailConnectDialog` and `FollowUpDialog`. The other three are not stragglers; they are
+one gap, and forcing it onto `Dialog` means re-adding by hand what it deliberately does
+not do.
 
 - **A sheet.** `JobDrawer` and `FilterModalShell` stretch full-screen on mobile and sit as
   a centred, inset panel above `sm`, `CookieConsent` is a bottom banner. `Dialog` is a centred modal
   and offers no positioning. All three want the same thing — a **Sheet** primitive the system does not have.
-- **A structured dialog.** `GmailConnectDialog` and `FollowUpDialog` both want a bordered
-  header with an icon, a scrolling body and a bordered footer. `Dialog` renders its own
-  `p-6` box with the title, the description and the close button in fixed positions, and
-  `class` lands on `<dialog>` — it cannot be reshaped from the call site. Two call sites is
-  the evidence; a `header`/`footer` snippet pair is the likely answer.
+
+The two dialogs that last held out wanted a bordered icon header, a scrolling body and a
+bordered footer. They took the primitive instead: `title` and `description` are the header,
+the children are the body, and the action row is the last child — the same shape every other
+call site has. The icon tile beside the title was the only thing that did not survive; a
+header/footer snippet pair is still the answer if a surface ever needs one back.
 
 `CookieConsent` carries `role="dialog"` on a surface that is not modal — an accessibility
 defect, listed here so it is not mistaken for a migration target.

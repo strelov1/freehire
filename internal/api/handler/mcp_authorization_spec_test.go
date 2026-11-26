@@ -118,7 +118,8 @@ func drain(t *testing.T, client *http.Client, req *http.Request) specResponse {
 	return specResponse{URL: resp.Request.URL.String(), StatusCode: resp.StatusCode, Header: resp.Header, Body: body}
 }
 
-var proxyCall = regexp.MustCompile(`proxyWellKnownJSON\(\s*fetch,\s*'([^']+)'`)
+// The SvelteKit routes call proxyDiscoveryDocument(fetch, '<api path>', '<content type>').
+var proxyCall = regexp.MustCompile(`proxyDiscoveryDocument\(\s*fetch,\s*'([^']+)'`)
 
 // wellKnownProxies maps each /.well-known/... URL the SvelteKit app serves to the
 // API path it proxies, by reading web/src/routes/.well-known.
@@ -153,7 +154,7 @@ func wellKnownProxies(t *testing.T) map[string]string {
 		"/.well-known/oauth-authorization-server",
 	} {
 		if out[want] == "" {
-			t.Fatalf("no proxyWellKnownJSON route found for %s under web/src/routes (found %v); "+
+			t.Fatalf("no proxyDiscoveryDocument route found for %s under web/src/routes (found %v); "+
 				"the route is missing or its +server.ts no longer matches %s", want, out, proxyCall)
 		}
 	}
