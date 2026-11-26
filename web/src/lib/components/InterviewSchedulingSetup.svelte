@@ -22,6 +22,7 @@
   let savingBooking = $state(false);
   let bookingNote = $state('');
   let agreed = $state(false);
+  let weekUnsaved = $state(false);
 
   // A first save states the browser's zone; after that the stored zone stays.
   const zone = $derived(availability?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -43,17 +44,25 @@
     }
   });
 
-  async function saveBooking() {
+  async function saveBooking(): Promise<boolean> {
     savingBooking = true;
     bookingNote = '';
     try {
       await api.saveAvailabilityBooking({ timezone: zone, duration_min: duration, notice_hours: notice });
       bookingNote = 'Saved.';
+      return true;
     } catch (e) {
       bookingNote = errorMessage(e, 'Could not save.');
+      return false;
     } finally {
       savingBooking = false;
     }
+  }
+
+  // Consent covers what is on screen: store the length, notice and zone the user just
+  // reviewed, so the agent never starts from values or a zone that were only displayed.
+  async function connect() {
+    if (await saveBooking()) onconnect?.();
   }
 
   const noticeLabel = (h: number) => (h === 0 ? 'No notice' : h % 24 === 0 ? `${h / 24} d` : `${h} h`);
@@ -70,6 +79,7 @@
     </p>
     <MentorScheduleEditor
       bind:rules={availability.rules}
+      bind:unsaved={weekUnsaved}
       {schedule}
       emptyMessage="No hours saved yet. Until you add some, the agent offers Monday to Friday, 10:00 to 18:00."
     />
@@ -86,7 +96,7 @@
           {#each NOTICES as h (h)}<option value={h}>{noticeLabel(h)}</option>{/each}
         </select>
       </label>
-      <Button variant="outline" size="sm" disabled={savingBooking} onclick={saveBooking}>Save</Button>
+      <Button variant="outline" size="sm" disabled={savingBooking} onclick={() => void saveBooking()}>Save</Button>
       {#if bookingNote}<span class="text-xs text-muted-foreground" role="status">{bookingNote}</span>{/if}
     </div>
 
@@ -114,8 +124,11 @@
           <input type="checkbox" bind:checked={agreed} class="mt-0.5 size-4 accent-current" />
           <span>I have checked my hours and want Freehire to answer interview invitations for me.</span>
         </label>
-        <div>
-          <Button variant="primary" size="sm" disabled={!agreed} onclick={onconnect}>Continue with Google</Button>
+        <div class="flex flex-wrap items-center gap-3">
+          <Button variant="primary" size="sm" disabled={!agreed || weekUnsaved || savingBooking} onclick={connect}>
+            Continue with Google
+          </Button>
+          {#if weekUnsaved}<span class="text-xs text-muted-foreground">Save your weekly hours first.</span>{/if}
         </div>
       </div>
     {/if}

@@ -31,7 +31,12 @@ describe('InterviewSchedulingSetup', () => {
     expect(go.disabled).toBe(true);
     await fireEvent.click(screen.getByRole('checkbox', { name: /answer interview invitations/ }));
     await fireEvent.click(go);
-    expect(onconnect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onconnect).toHaveBeenCalledOnce());
+    expect(api.saveAvailabilityBooking).toHaveBeenCalledWith({
+      timezone: 'Europe/Berlin',
+      duration_min: 45,
+      notice_hours: 24,
+    });
   });
 
   it('saves meeting length and notice in the stored zone', async () => {

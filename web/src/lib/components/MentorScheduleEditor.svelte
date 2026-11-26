@@ -17,12 +17,15 @@
     rules = $bindable(),
     schedule,
     emptyMessage,
+    unsaved = $bindable(false),
   }: {
     rules: MentorAvailabilityRule[];
     /** Where the edits go: the mentor schedule's endpoints or the buddy mock ones. */
     schedule: AvailabilityApi;
     /** What an empty week means on the page hosting the editor. */
     emptyMessage: string;
+    /** True while the week on screen differs from the stored one. */
+    unsaved?: boolean;
   } = $props();
 
   const split = $derived(splitAvailability(rules));
@@ -39,6 +42,9 @@
   const stored = $derived(JSON.stringify(weekRows(weekDraft(split.weekly))));
   const dirty = $derived(JSON.stringify(weekRows(draft)) !== stored);
   const hasStoredWeek = $derived(split.weekly.length > 0);
+  $effect(() => {
+    unsaved = dirty;
+  });
 
   function setDay(index: number, on: boolean) {
     const day = draft[index];
