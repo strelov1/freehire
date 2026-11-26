@@ -259,12 +259,12 @@ fit-analysis page — see "Fit analysis surfaces in the tailoring workspace".
 
 ### Requirement: Fit analysis is a paid, daily-metered feature
 
-Running a fit analysis on the synchronous `POST /api/v1/jobs/:slug/match-analysis` endpoint or the streaming `GET /api/v1/jobs/:slug/match-analysis/stream` endpoint SHALL require a live Pro or Ultra plan and SHALL draw on the caller's daily `match` allowance (`plan.FeatureFit`), both checked BEFORE the LLM prompt-chain runs. The day is the UTC calendar day; the allowance resets at midnight UTC. Both paid plans are unlimited for a person: the daily figure in `plan.DefaultConfig` (60 on Pro, 180 on Ultra) is a fair-use guard against automation, never shown as a plan ceiling. Only the FIRST analysis of a distinct `(user, job)` pair is charged: a recompute of a pair the caller has already analysed is free. The charge is taken before the chain starts and given back when the run produces no analysis. A metering fault lets the run through uncharged (fail open); a failure to read the caller's plan refuses it with `503` (fail closed).
+A fit analysis on `POST /api/v1/jobs/:slug/match-analysis` or the SSE `GET /api/v1/jobs/:slug/match-analysis/stream` SHALL require a live Pro or Ultra plan and SHALL draw on the caller's daily `match` allowance (`plan.FeatureFit`), both checked BEFORE the LLM runs. The allowance resets at midnight UTC. Both plans are unlimited: the daily figure in `plan.DefaultConfig` (60 Pro, 180 Ultra) is a fair-use guard against automation, never shown as a ceiling. Only the FIRST analysis of a `(user, job)` pair is charged; a recompute is free. The charge is taken before the run and given back when no analysis is produced. A metering fault lets the run through uncharged (fail open); a failed plan read refuses it with `503` (fail closed).
 
 #### Scenario: Caller without a paid plan
 
 - **WHEN** a caller on no paid plan requests a new analysis on either endpoint
-- **THEN** the system responds `402`, never invokes the LLM, and persists nothing
+- **THEN** the system responds `402` and never invokes the LLM
 
 #### Scenario: New job within the allowance
 
@@ -273,8 +273,8 @@ Running a fit analysis on the synchronous `POST /api/v1/jobs/:slug/match-analysi
 
 #### Scenario: Fair-use guard reached
 
-- **WHEN** a paid caller who has reached today's fair-use guard requests an analysis for a job they have not analysed
-- **THEN** the system responds `402` with the `allowance` and its `resets_at`, never invokes the LLM, and persists nothing
+- **WHEN** a paid caller at today's fair-use guard requests an analysis for a job they have not analysed
+- **THEN** the system responds `402` with the `allowance` and its `resets_at` and never invokes the LLM
 
 #### Scenario: Recompute is free
 
@@ -293,12 +293,12 @@ Running a fit analysis on the synchronous `POST /api/v1/jobs/:slug/match-analysi
 
 #### Scenario: Failed analysis gives the charge back
 
-- **WHEN** a new-job analysis is charged but the LLM is unconfigured or errors, so no analysis is produced
+- **WHEN** a charged new-job analysis produces nothing because the LLM is unconfigured or errors
 - **THEN** the charge is released and today's usage is unchanged
 
 ### Requirement: Allowance state on the read endpoint
 
-The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return the caller's standing on today's fit-analysis allowance as `allowance`, and on the tailoring-session allowance as `tailor_allowance`, without invoking the LLM, so the client can show usage and pre-block a run the server would refuse. Both are omitted when the caller has no stored CV, since no analysis can run. Each carries `feature`, `used`, `unlimited`, `enforced`, `resets_at`, and `limit` only when the plan has a real ceiling (an unlimited plan's fair-use guard is never exposed as a limit). The standing is best-effort: when it cannot be read the field is omitted and the read still succeeds.
+The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return the caller's standing on today's fit-analysis allowance as `allowance` and on the tailoring allowance as `tailor_allowance`, without invoking the LLM, so the client can pre-block a run the server would refuse. Both are omitted when the caller has no stored CV, since no analysis can run. Each carries `feature`, `used`, `unlimited`, `enforced`, `resets_at`, and `limit` only for a real ceiling (a fair-use guard is never exposed). The standing is best-effort: when it cannot be read the field is omitted and the read still succeeds.
 
 #### Scenario: Allowance reported on read
 
