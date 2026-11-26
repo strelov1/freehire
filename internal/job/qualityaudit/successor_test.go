@@ -160,13 +160,13 @@ func TestSuccessorFallbackOnlyForRefusedFirstHop(t *testing.T) {
 
 func TestPageRedirects(t *testing.T) {
 	base, _ := url.Parse("https://a.example/x/")
-	body := `<div onclick="window.location='https://apply.example/c/acme'"></div><button onClick='location.href="/back"'>x</button><meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
+	body := `<div onclick="window.location='https://apply.example/c/acme'"></div><button onClick='location.href="/back"'>x</button><button onclick=location.assign('https://apply.example/')>y</button><body onload="location.href='/loaded'"><meta content="0; url=/reversed" http-equiv="refresh"><meta http-equiv="refresh" content="0; url=/moved"><script>if (location.href.indexOf('') >= 0) {}
 window.location = "mailto:x@y"; location.assign('https://b.example/p?a=1&amp;b=2')</script>`
 	var got []string
 	for _, u := range pageRedirects(base, body) {
 		got = append(got, u.String())
 	}
-	want := []string{"https://b.example/p?a=1&b=2", "https://a.example/moved", "https://a.example/reversed"}
+	want := []string{"https://a.example/loaded", "https://b.example/p?a=1&b=2", "https://a.example/moved", "https://a.example/reversed"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("pageRedirects = %v, want %v", got, want)
 	}

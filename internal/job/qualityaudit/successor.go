@@ -269,13 +269,24 @@ var pageRedirectRes = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)<meta[^>]+content=["'][^"']*?url=([^"'>\s]+)["'][^>]*http-equiv=["']?refresh`),
 }
 
-// eventHandlers are on*= attributes: a button's onclick="window.location='…'" runs on a click, not
-// on load (a Tenstreet posting's Apply button, freehire#5209), so it is removed before matching.
-var eventHandlers = regexp.MustCompile(`(?is)\son[a-z]+\s*=\s*("[^"]*"|'[^']*')`)
+// eventHandlers are on*= attributes, quoted or not (an unquoted value ends at whitespace or >). An
+// interaction handler such as a button's onclick="window.location='…'" runs on a click, not on
+// load (a Tenstreet posting's Apply button, freehire#5209), so it is removed before matching;
+// onload is kept, since it does run as the page loads.
+var eventHandlers = regexp.MustCompile(`(?is)\son([a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+
+func dropInteractionHandlers(body string) string {
+	return eventHandlers.ReplaceAllStringFunc(body, func(attr string) string {
+		if strings.EqualFold(eventHandlers.FindStringSubmatch(attr)[1], "load") {
+			return attr
+		}
+		return ""
+	})
+}
 
 // pageRedirects returns the absolute http(s) URLs a page redirects to, resolved against base.
 func pageRedirects(base *url.URL, body string) []*url.URL {
-	body = eventHandlers.ReplaceAllString(body, "")
+	body = dropInteractionHandlers(body)
 	var out []*url.URL
 	for _, re := range pageRedirectRes {
 		for _, m := range re.FindAllStringSubmatch(body, -1) {
