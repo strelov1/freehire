@@ -2255,6 +2255,24 @@ type User struct {
 	InterviewSchedulingEnabledAt    pgtype.Timestamptz `json:"interview_scheduling_enabled_at"`
 }
 
+type UserAvailability struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Weekday   pgtype.Int2        `json:"weekday"`
+	OnDate    pgtype.Date        `json:"on_date"`
+	StartTime pgtype.Time        `json:"start_time"`
+	EndTime   pgtype.Time        `json:"end_time"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type UserAvailabilitySetting struct {
+	UserID             int64              `json:"user_id"`
+	Timezone           string             `json:"timezone"`
+	BookingDurationMin int32              `json:"booking_duration_min"`
+	BookingNoticeMin   int32              `json:"booking_notice_min"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
 type UserBlock struct {
 	BlockerID int64              `json:"blocker_id"`
 	BlockedID int64              `json:"blocked_id"`

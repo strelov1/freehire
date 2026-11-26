@@ -430,6 +430,21 @@ func (s *AddAtomCreated) SetData(val jx.Raw) {
 }
 
 // A single item: `{"data": ...}`.
+type AddAvailabilityDatedCreated struct {
+	Data BuddyMockRuleOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *AddAvailabilityDatedCreated) GetData() BuddyMockRuleOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *AddAvailabilityDatedCreated) SetData(val BuddyMockRuleOut) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
 type AddAvailabilityOverrideCreated struct {
 	Data BuddyMockRuleOut `json:"data"`
 }
@@ -2484,6 +2499,215 @@ func (s *AutoApplyUnmappedField) SetRequired(val bool) {
 // SetReason sets the value of Reason.
 func (s *AutoApplyUnmappedField) SetReason(val string) {
 	s.Reason = val
+}
+
+// Ref: #/components/schemas/AvailabilityBookingBody
+type AvailabilityBookingBody struct {
+	// IANA zone the hours are stated in.
+	Timezone    string `json:"timezone"`
+	DurationMin int64  `json:"duration_min"`
+	NoticeHours int64  `json:"notice_hours"`
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *AvailabilityBookingBody) GetTimezone() string {
+	return s.Timezone
+}
+
+// GetDurationMin returns the value of DurationMin.
+func (s *AvailabilityBookingBody) GetDurationMin() int64 {
+	return s.DurationMin
+}
+
+// GetNoticeHours returns the value of NoticeHours.
+func (s *AvailabilityBookingBody) GetNoticeHours() int64 {
+	return s.NoticeHours
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *AvailabilityBookingBody) SetTimezone(val string) {
+	s.Timezone = val
+}
+
+// SetDurationMin sets the value of DurationMin.
+func (s *AvailabilityBookingBody) SetDurationMin(val int64) {
+	s.DurationMin = val
+}
+
+// SetNoticeHours sets the value of NoticeHours.
+func (s *AvailabilityBookingBody) SetNoticeHours(val int64) {
+	s.NoticeHours = val
+}
+
+// Ref: #/components/schemas/AvailabilityBookingOut
+type AvailabilityBookingOut struct {
+	// Meeting length of a booking link: 15, 30, 45 or 60.
+	DurationMin int64 `json:"duration_min"`
+	// Shortest notice before a booking-link meeting, in hours (0 to 168).
+	NoticeHours int64 `json:"notice_hours"`
+}
+
+// GetDurationMin returns the value of DurationMin.
+func (s *AvailabilityBookingOut) GetDurationMin() int64 {
+	return s.DurationMin
+}
+
+// GetNoticeHours returns the value of NoticeHours.
+func (s *AvailabilityBookingOut) GetNoticeHours() int64 {
+	return s.NoticeHours
+}
+
+// SetDurationMin sets the value of DurationMin.
+func (s *AvailabilityBookingOut) SetDurationMin(val int64) {
+	s.DurationMin = val
+}
+
+// SetNoticeHours sets the value of NoticeHours.
+func (s *AvailabilityBookingOut) SetNoticeHours(val int64) {
+	s.NoticeHours = val
+}
+
+// Ref: #/components/schemas/AvailabilityOut
+type AvailabilityOut struct {
+	// Weekly rules and dated overrides together.
+	Rules []BuddyMockRuleOut `json:"rules"`
+	// The zone the hours are stated in; null until settings were saved.
+	Timezone NilString `json:"timezone"`
+	// False while the user has neither hours nor settings, so booking links still use their default week
+	// (Mon-Fri 10-18, 30 min, 12 h).
+	Saved   bool                   `json:"saved"`
+	Booking AvailabilityBookingOut `json:"booking"`
+}
+
+// GetRules returns the value of Rules.
+func (s *AvailabilityOut) GetRules() []BuddyMockRuleOut {
+	return s.Rules
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *AvailabilityOut) GetTimezone() NilString {
+	return s.Timezone
+}
+
+// GetSaved returns the value of Saved.
+func (s *AvailabilityOut) GetSaved() bool {
+	return s.Saved
+}
+
+// GetBooking returns the value of Booking.
+func (s *AvailabilityOut) GetBooking() AvailabilityBookingOut {
+	return s.Booking
+}
+
+// SetRules sets the value of Rules.
+func (s *AvailabilityOut) SetRules(val []BuddyMockRuleOut) {
+	s.Rules = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *AvailabilityOut) SetTimezone(val NilString) {
+	s.Timezone = val
+}
+
+// SetSaved sets the value of Saved.
+func (s *AvailabilityOut) SetSaved(val bool) {
+	s.Saved = val
+}
+
+// SetBooking sets the value of Booking.
+func (s *AvailabilityOut) SetBooking(val AvailabilityBookingOut) {
+	s.Booking = val
+}
+
+// Ref: #/components/schemas/AvailabilityRuleBody
+type AvailabilityRuleBody struct {
+	// 0 (Sunday) through 6; null for a dated override.
+	Weekday OptNilInt64 `json:"weekday"`
+	// YYYY-MM-DD; null for a weekly rule.
+	Date OptNilString `json:"date"`
+	// HH:MM.
+	Start OptString `json:"start"`
+	// HH:MM; 24:00 means until midnight.
+	End OptString `json:"end"`
+	// IANA zone the hours are stated in; stored when present, 422 if invalid.
+	Timezone OptString `json:"timezone"`
+}
+
+// GetWeekday returns the value of Weekday.
+func (s *AvailabilityRuleBody) GetWeekday() OptNilInt64 {
+	return s.Weekday
+}
+
+// GetDate returns the value of Date.
+func (s *AvailabilityRuleBody) GetDate() OptNilString {
+	return s.Date
+}
+
+// GetStart returns the value of Start.
+func (s *AvailabilityRuleBody) GetStart() OptString {
+	return s.Start
+}
+
+// GetEnd returns the value of End.
+func (s *AvailabilityRuleBody) GetEnd() OptString {
+	return s.End
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *AvailabilityRuleBody) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// SetWeekday sets the value of Weekday.
+func (s *AvailabilityRuleBody) SetWeekday(val OptNilInt64) {
+	s.Weekday = val
+}
+
+// SetDate sets the value of Date.
+func (s *AvailabilityRuleBody) SetDate(val OptNilString) {
+	s.Date = val
+}
+
+// SetStart sets the value of Start.
+func (s *AvailabilityRuleBody) SetStart(val OptString) {
+	s.Start = val
+}
+
+// SetEnd sets the value of End.
+func (s *AvailabilityRuleBody) SetEnd(val OptString) {
+	s.End = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *AvailabilityRuleBody) SetTimezone(val OptString) {
+	s.Timezone = val
+}
+
+// Ref: #/components/schemas/AvailabilityWeeklyBody
+type AvailabilityWeeklyBody struct {
+	Rules []BuddyMockRule `json:"rules"`
+	// IANA zone the hours are stated in; stored when present, 422 if invalid.
+	Timezone OptString `json:"timezone"`
+}
+
+// GetRules returns the value of Rules.
+func (s *AvailabilityWeeklyBody) GetRules() []BuddyMockRule {
+	return s.Rules
+}
+
+// GetTimezone returns the value of Timezone.
+func (s *AvailabilityWeeklyBody) GetTimezone() OptString {
+	return s.Timezone
+}
+
+// SetRules sets the value of Rules.
+func (s *AvailabilityWeeklyBody) SetRules(val []BuddyMockRule) {
+	s.Rules = val
+}
+
+// SetTimezone sets the value of Timezone.
+func (s *AvailabilityWeeklyBody) SetTimezone(val OptString) {
+	s.Timezone = val
 }
 
 // Ref: #/components/schemas/BanRequest
@@ -9102,6 +9326,9 @@ type DeleteAssistantSessionNoContent struct{}
 // DeleteAtomNoContent is response for DeleteAtom operation.
 type DeleteAtomNoContent struct{}
 
+// DeleteAvailabilityEntryNoContent is response for DeleteAvailabilityEntry operation.
+type DeleteAvailabilityEntryNoContent struct{}
+
 // DeleteAvailabilityRuleNoContent is response for DeleteAvailabilityRule operation.
 type DeleteAvailabilityRuleNoContent struct{}
 
@@ -13444,6 +13671,21 @@ func (s *GetAutofillProfileOK) GetData() jx.Raw {
 
 // SetData sets the value of Data.
 func (s *GetAutofillProfileOK) SetData(val jx.Raw) {
+	s.Data = val
+}
+
+// A single item: `{"data": ...}`.
+type GetAvailabilityOK struct {
+	Data AvailabilityOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *GetAvailabilityOK) GetData() AvailabilityOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *GetAvailabilityOK) SetData(val AvailabilityOut) {
 	s.Data = val
 }
 
@@ -26778,6 +27020,9 @@ func (s *ReopenEmployerVacancyOK) SetData(val EmployerClosed) {
 	s.Data = val
 }
 
+// ReplaceAvailabilityWeeklyNoContent is response for ReplaceAvailabilityWeekly operation.
+type ReplaceAvailabilityWeeklyNoContent struct{}
+
 // A single item: `{"data": ...}`.
 type ReplaceResumeContactsFromCvOK struct {
 	Data jx.Raw `json:"data"`
@@ -28340,6 +28585,21 @@ func (s *SalaryMonth) SetP50(val int64) {
 // SetP75 sets the value of P75.
 func (s *SalaryMonth) SetP75(val int64) {
 	s.P75 = val
+}
+
+// A single item: `{"data": ...}`.
+type SaveAvailabilityBookingOK struct {
+	Data AvailabilityBookingOut `json:"data"`
+}
+
+// GetData returns the value of Data.
+func (s *SaveAvailabilityBookingOK) GetData() AvailabilityBookingOut {
+	return s.Data
+}
+
+// SetData sets the value of Data.
+func (s *SaveAvailabilityBookingOK) SetData(val AvailabilityBookingOut) {
+	s.Data = val
 }
 
 // Ref: #/components/schemas/SaveBankedAnswer

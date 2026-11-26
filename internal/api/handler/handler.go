@@ -374,6 +374,7 @@ func Register(app *fiber.App, cfg Config) {
 		mentorSuggestionsHandlers:    mentorSuggestionsH,
 		mentorshipHandlers:           mentorshipH,
 		bookingLinkHandlers:          bookingLinkH,
+		availabilityHandlers:         newAvailabilitySurface(queries, plans),
 		savedSearchHandlers:          savedSearchH,
 		subscriptionHandlers:         subscriptionH,
 		timelineHandlers:             timelineH,

@@ -26,6 +26,12 @@ type Handler interface {
 	//
 	// POST /me/experience/atoms
 	AddAtom(ctx context.Context, req jx.Raw) (*AddAtomCreated, error)
+	// AddAvailabilityDated implements addAvailabilityDated operation.
+	//
+	// Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+	//
+	// POST /me/availability/overrides
+	AddAvailabilityDated(ctx context.Context, req *AvailabilityRuleBody) (*AddAvailabilityDatedCreated, error)
 	// AddAvailabilityOverride implements addAvailabilityOverride operation.
 	//
 	// POST /me/mentorship/availability/overrides
@@ -496,6 +502,12 @@ type Handler interface {
 	//
 	// DELETE /me/experience/atoms/{id}
 	DeleteAtom(ctx context.Context, params DeleteAtomParams) error
+	// DeleteAvailabilityEntry implements deleteAvailabilityEntry operation.
+	//
+	// Remove one of the caller's own rules.
+	//
+	// DELETE /me/availability/{id}
+	DeleteAvailabilityEntry(ctx context.Context, params DeleteAvailabilityEntryParams) error
 	// DeleteAvailabilityRule implements deleteAvailabilityRule operation.
 	//
 	// DELETE /me/mentorship/availability/{id}
@@ -740,6 +752,12 @@ type Handler interface {
 	//
 	// GET /me/autofill-profile
 	GetAutofillProfile(ctx context.Context) (*GetAutofillProfileOK, error)
+	// GetAvailability implements getAvailability operation.
+	//
+	// The caller's availability: hours, zone and booking-link settings.
+	//
+	// GET /me/availability
+	GetAvailability(ctx context.Context) (*GetAvailabilityOK, error)
 	// GetBillingAttempts implements getBillingAttempts operation.
 	//
 	// The caller's 20 most recent Stripe charge attempts, newest first, including failed first purchases
@@ -2091,6 +2109,12 @@ type Handler interface {
 	//
 	// POST /employer/jobs/{slug}/reopen
 	ReopenEmployerVacancy(ctx context.Context, params ReopenEmployerVacancyParams) (*ReopenEmployerVacancyOK, error)
+	// ReplaceAvailabilityWeekly implements replaceAvailabilityWeekly operation.
+	//
+	// Swap the recurring week; dated overrides stay.
+	//
+	// PUT /me/availability/weekly
+	ReplaceAvailabilityWeekly(ctx context.Context, req *AvailabilityWeeklyBody) error
 	// ReplaceResumeContactsFromCv implements replaceResumeContactsFromCv operation.
 	//
 	// A full reset, not just identity fields — every owned field is replaced from the current structured
@@ -2282,6 +2306,13 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/match-analysis
 	RunMatchAnalysis(ctx context.Context, params RunMatchAnalysisParams) (RunMatchAnalysisRes, error)
+	// SaveAvailabilityBooking implements saveAvailabilityBooking operation.
+	//
+	// Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration
+	// or notice is 422.
+	//
+	// PUT /me/availability/booking
+	SaveAvailabilityBooking(ctx context.Context, req *AvailabilityBookingBody) (*SaveAvailabilityBookingOK, error)
 	// SaveBankedAnswer implements saveBankedAnswer operation.
 	//
 	// Saves under the question's topic, replacing the answer already there.

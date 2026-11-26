@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -147,6 +148,11 @@ func (r *QueriesRepository) UpdateProfile(ctx context.Context, in ProfileInput) 
 		return Profile{}, ErrProfileNotFound
 	}
 	if err != nil {
+		return Profile{}, err
+	}
+	// Zone edits keep every product's zone equal (see SetUserAvailabilityZone), so following
+	// on every save is safe, and a retry repairs a follow that failed.
+	if err := availability.New(r.q).FollowZone(ctx, in.UserID, in.Timezone); err != nil {
 		return Profile{}, err
 	}
 	return profileFromRow(row), nil

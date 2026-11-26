@@ -125,44 +125,6 @@ func (q *Queries) CancelMentorBooking(ctx context.Context, arg CancelMentorBooki
 	return i, err
 }
 
-const createMentorAvailabilityRule = `-- name: CreateMentorAvailabilityRule :one
-INSERT INTO mentor_availability (mentor_id, weekday, on_date, start_time, end_time)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, mentor_id, weekday, on_date, start_time, end_time, created_at
-`
-
-type CreateMentorAvailabilityRuleParams struct {
-	MentorID  int64       `json:"mentor_id"`
-	Weekday   pgtype.Int2 `json:"weekday"`
-	OnDate    pgtype.Date `json:"on_date"`
-	StartTime pgtype.Time `json:"start_time"`
-	EndTime   pgtype.Time `json:"end_time"`
-}
-
-// One availability row, weekly or dated. Which shape it is comes from which of weekday
-// and on_date is non-NULL; the mentor_availability_shape_check CHECK rejects a row that
-// sets both or neither, and the Go type cannot construct one either way.
-func (q *Queries) CreateMentorAvailabilityRule(ctx context.Context, arg CreateMentorAvailabilityRuleParams) (MentorAvailability, error) {
-	row := q.db.QueryRow(ctx, createMentorAvailabilityRule,
-		arg.MentorID,
-		arg.Weekday,
-		arg.OnDate,
-		arg.StartTime,
-		arg.EndTime,
-	)
-	var i MentorAvailability
-	err := row.Scan(
-		&i.ID,
-		&i.MentorID,
-		&i.Weekday,
-		&i.OnDate,
-		&i.StartTime,
-		&i.EndTime,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const createMentorBooking = `-- name: CreateMentorBooking :one
 INSERT INTO mentor_bookings (
     mentor_id, seeker_user_id, starts_at, ends_at, job_id, note, seeker_timezone, meeting_url
@@ -355,24 +317,6 @@ func (q *Queries) DecideMentorProfile(ctx context.Context, arg DecideMentorProfi
 	return i, err
 }
 
-const deleteMentorAvailabilityRule = `-- name: DeleteMentorAvailabilityRule :execrows
-DELETE FROM mentor_availability WHERE id = $1 AND mentor_id = $2
-`
-
-type DeleteMentorAvailabilityRuleParams struct {
-	ID       int64 `json:"id"`
-	MentorID int64 `json:"mentor_id"`
-}
-
-// The mentor_id guard scopes the delete to the owner's own schedule.
-func (q *Queries) DeleteMentorAvailabilityRule(ctx context.Context, arg DeleteMentorAvailabilityRuleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteMentorAvailabilityRule, arg.ID, arg.MentorID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteMentorBusyIntervalsInWindow = `-- name: DeleteMentorBusyIntervalsInWindow :exec
 DELETE FROM mentor_busy_intervals
 WHERE mentor_id = $1 AND source = 'google_calendar' AND starts_at < $2
@@ -393,21 +337,6 @@ type DeleteMentorBusyIntervalsInWindowParams struct {
 func (q *Queries) DeleteMentorBusyIntervalsInWindow(ctx context.Context, arg DeleteMentorBusyIntervalsInWindowParams) error {
 	_, err := q.db.Exec(ctx, deleteMentorBusyIntervalsInWindow, arg.MentorID, arg.WindowEnd)
 	return err
-}
-
-const deleteMentorWeeklyAvailability = `-- name: DeleteMentorWeeklyAvailability :execrows
-DELETE FROM mentor_availability WHERE mentor_id = $1 AND weekday IS NOT NULL
-`
-
-// Clears the recurring week, leaving dated overrides alone. The cabinet edits the week as
-// a whole — a schedule is a shape, not a list of rows a user reasons about individually —
-// so a save is this followed by inserts, inside one transaction.
-func (q *Queries) DeleteMentorWeeklyAvailability(ctx context.Context, mentorID int64) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteMentorWeeklyAvailability, mentorID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const deleteReminderClaim = `-- name: DeleteReminderClaim :execrows
@@ -560,6 +489,18 @@ func (q *Queries) GetMentorByUserID(ctx context.Context, userID int64) (Mentor, 
 		&i.Seniority,
 	)
 	return i, err
+}
+
+const getMentorUserID = `-- name: GetMentorUserID :one
+SELECT user_id FROM mentors WHERE id = $1
+`
+
+// The account behind a mentor profile, for the per-user availability and busy time.
+func (q *Queries) GetMentorUserID(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getMentorUserID, id)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
 }
 
 const getPublishedMentorBySlug = `-- name: GetPublishedMentorBySlug :one
@@ -831,85 +772,6 @@ func (q *Queries) ListBookingsDueForReminder(ctx context.Context, arg ListBookin
 			&i.SeekerEmail,
 			&i.MentorEmail,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMentorAvailability = `-- name: ListMentorAvailability :many
-SELECT id, mentor_id, weekday, on_date, start_time, end_time, created_at FROM mentor_availability WHERE mentor_id = $1 ORDER BY id
-`
-
-// Every availability row for a mentor, both shapes. The slot engine wants all of them at
-// once — an override only means anything beside the weekly rules it replaces — so this
-// deliberately does not filter by window.
-func (q *Queries) ListMentorAvailability(ctx context.Context, mentorID int64) ([]MentorAvailability, error) {
-	rows, err := q.db.Query(ctx, listMentorAvailability, mentorID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []MentorAvailability{}
-	for rows.Next() {
-		var i MentorAvailability
-		if err := rows.Scan(
-			&i.ID,
-			&i.MentorID,
-			&i.Weekday,
-			&i.OnDate,
-			&i.StartTime,
-			&i.EndTime,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMentorBusyBookings = `-- name: ListMentorBusyBookings :many
-SELECT starts_at, ends_at
-FROM mentor_bookings
-WHERE mentor_id = $1 AND status = 'confirmed'
-  AND starts_at < $2 AND ends_at > $3
-ORDER BY starts_at
-`
-
-type ListMentorBusyBookingsParams struct {
-	MentorID    int64              `json:"mentor_id"`
-	WindowEnd   pgtype.Timestamptz `json:"window_end"`
-	WindowStart pgtype.Timestamptz `json:"window_start"`
-}
-
-type ListMentorBusyBookingsRow struct {
-	StartsAt pgtype.Timestamptz `json:"starts_at"`
-	EndsAt   pgtype.Timestamptz `json:"ends_at"`
-}
-
-// The busy set the slot engine subtracts: this mentor's CONFIRMED bookings overlapping
-// the window. Buffers are NOT applied here — the engine widens these, because the buffers
-// are the mentor's and may change between two reads of the same booking.
-// Half-open on both sides, matching the EXCLUDE constraint and Interval.Overlaps: a
-// booking that merely abuts the window is not in it.
-func (q *Queries) ListMentorBusyBookings(ctx context.Context, arg ListMentorBusyBookingsParams) ([]ListMentorBusyBookingsRow, error) {
-	rows, err := q.db.Query(ctx, listMentorBusyBookings, arg.MentorID, arg.WindowEnd, arg.WindowStart)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListMentorBusyBookingsRow{}
-	for rows.Next() {
-		var i ListMentorBusyBookingsRow
-		if err := rows.Scan(&i.StartsAt, &i.EndsAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

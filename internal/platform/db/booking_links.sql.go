@@ -181,59 +181,6 @@ func (q *Queries) InsertBookingLinkBooking(ctx context.Context, arg InsertBookin
 	return id, err
 }
 
-const listBookingLinkBusy = `-- name: ListBookingLinkBusy :many
-SELECT b.starts_at, b.ends_at
-  FROM booking_link_bookings b
- WHERE b.user_id = $1
-   AND b.status = 'confirmed'
-   AND b.starts_at < $2
-   AND b.ends_at > $3
-UNION ALL
-SELECT i.starts_at, coalesce(i.ends_at, i.starts_at + interval '30 minutes') AS ends_at
-  FROM application_interviews i
- WHERE i.user_id = $1
-   AND i.status = 'confirmed'
-   AND i.source <> 'booking_link'
-   AND i.starts_at < $2
-   AND coalesce(i.ends_at, i.starts_at + interval '30 minutes') > $3
-ORDER BY starts_at
-`
-
-type ListBookingLinkBusyParams struct {
-	UserID int64              `json:"user_id"`
-	ToAt   pgtype.Timestamptz `json:"to_at"`
-	FromAt pgtype.Timestamptz `json:"from_at"`
-}
-
-type ListBookingLinkBusyRow struct {
-	StartsAt pgtype.Timestamptz `json:"starts_at"`
-	EndsAt   pgtype.Timestamptz `json:"ends_at"`
-}
-
-// The owner's busy time overlapping a window, for the slot engine: their confirmed
-// booking-link meetings, plus every other confirmed meeting freehire already shows on their
-// applications. Interviews a booking link wrote are skipped (counted once, as bookings); an
-// interview with no end is held for 30 minutes.
-func (q *Queries) ListBookingLinkBusy(ctx context.Context, arg ListBookingLinkBusyParams) ([]ListBookingLinkBusyRow, error) {
-	rows, err := q.db.Query(ctx, listBookingLinkBusy, arg.UserID, arg.ToAt, arg.FromAt)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBookingLinkBusyRow{}
-	for rows.Next() {
-		var i ListBookingLinkBusyRow
-		if err := rows.Scan(&i.StartsAt, &i.EndsAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const recordBookingCalendarInvitation = `-- name: RecordBookingCalendarInvitation :execrows
 WITH interview AS (
     UPDATE application_interviews i

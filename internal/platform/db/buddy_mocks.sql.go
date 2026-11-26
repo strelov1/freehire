@@ -148,42 +148,6 @@ func (q *Queries) CreateBuddyMock(ctx context.Context, arg CreateBuddyMockParams
 	return id, err
 }
 
-const createBuddyMockAvailabilityRule = `-- name: CreateBuddyMockAvailabilityRule :one
-INSERT INTO buddy_mock_availability (user_id, weekday, on_date, start_time, end_time)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, user_id, weekday, on_date, start_time, end_time, created_at
-`
-
-type CreateBuddyMockAvailabilityRuleParams struct {
-	UserID    int64       `json:"user_id"`
-	Weekday   pgtype.Int2 `json:"weekday"`
-	OnDate    pgtype.Date `json:"on_date"`
-	StartTime pgtype.Time `json:"start_time"`
-	EndTime   pgtype.Time `json:"end_time"`
-}
-
-// One row, weekly or dated; which one is whichever of weekday and on_date is set.
-func (q *Queries) CreateBuddyMockAvailabilityRule(ctx context.Context, arg CreateBuddyMockAvailabilityRuleParams) (BuddyMockAvailability, error) {
-	row := q.db.QueryRow(ctx, createBuddyMockAvailabilityRule,
-		arg.UserID,
-		arg.Weekday,
-		arg.OnDate,
-		arg.StartTime,
-		arg.EndTime,
-	)
-	var i BuddyMockAvailability
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Weekday,
-		&i.OnDate,
-		&i.StartTime,
-		&i.EndTime,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const createBuddyMockReview = `-- name: CreateBuddyMockReview :execrows
 INSERT INTO buddy_mock_reviews (mock_id, author_user_id, subject_user_id, rating, comment)
 SELECT m.id, $1::bigint,
@@ -215,24 +179,6 @@ func (q *Queries) CreateBuddyMockReview(ctx context.Context, arg CreateBuddyMock
 		arg.Comment,
 		arg.MockID,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteBuddyMockAvailabilityRule = `-- name: DeleteBuddyMockAvailabilityRule :execrows
-DELETE FROM buddy_mock_availability WHERE id = $1 AND user_id = $2
-`
-
-type DeleteBuddyMockAvailabilityRuleParams struct {
-	ID     int64 `json:"id"`
-	UserID int64 `json:"user_id"`
-}
-
-// The user_id guard scopes the delete to the owner's own schedule.
-func (q *Queries) DeleteBuddyMockAvailabilityRule(ctx context.Context, arg DeleteBuddyMockAvailabilityRuleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteBuddyMockAvailabilityRule, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
@@ -459,161 +405,6 @@ func (q *Queries) ListBuddyMemberRevealedReviews(ctx context.Context, arg ListBu
 	return items, nil
 }
 
-const listBuddyMockAvailability = `-- name: ListBuddyMockAvailability :many
-SELECT id, user_id, weekday, on_date, start_time, end_time, created_at FROM buddy_mock_availability WHERE user_id = $1 ORDER BY id
-`
-
-// Every availability row of a member, both shapes: an override only means anything beside
-// the weekly rules it replaces.
-func (q *Queries) ListBuddyMockAvailability(ctx context.Context, userID int64) ([]BuddyMockAvailability, error) {
-	rows, err := q.db.Query(ctx, listBuddyMockAvailability, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []BuddyMockAvailability{}
-	for rows.Next() {
-		var i BuddyMockAvailability
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Weekday,
-			&i.OnDate,
-			&i.StartTime,
-			&i.EndTime,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyMockAvailabilityForUsers = `-- name: ListBuddyMockAvailabilityForUsers :many
-SELECT id, user_id, weekday, on_date, start_time, end_time, created_at FROM buddy_mock_availability
-WHERE user_id = ANY ($1::bigint[])
-ORDER BY user_id, id
-`
-
-// ListBuddyMockAvailability for many members in one statement.
-func (q *Queries) ListBuddyMockAvailabilityForUsers(ctx context.Context, userIds []int64) ([]BuddyMockAvailability, error) {
-	rows, err := q.db.Query(ctx, listBuddyMockAvailabilityForUsers, userIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []BuddyMockAvailability{}
-	for rows.Next() {
-		var i BuddyMockAvailability
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Weekday,
-			&i.OnDate,
-			&i.StartTime,
-			&i.EndTime,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyMockBusy = `-- name: ListBuddyMockBusy :many
-SELECT starts_at, ends_at
-FROM buddy_mock_participants
-WHERE user_id = $1
-  AND active
-  AND starts_at < $2
-  AND ends_at > $3
-ORDER BY starts_at
-`
-
-type ListBuddyMockBusyParams struct {
-	UserID      int64              `json:"user_id"`
-	WindowEnd   pgtype.Timestamptz `json:"window_end"`
-	WindowStart pgtype.Timestamptz `json:"window_start"`
-}
-
-type ListBuddyMockBusyRow struct {
-	StartsAt pgtype.Timestamptz `json:"starts_at"`
-	EndsAt   pgtype.Timestamptz `json:"ends_at"`
-}
-
-// A member's occupied time in a window: every mock they are in, as host or as guest. The
-// slot engine subtracts it from their availability.
-func (q *Queries) ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyParams) ([]ListBuddyMockBusyRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyMockBusy, arg.UserID, arg.WindowEnd, arg.WindowStart)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBuddyMockBusyRow{}
-	for rows.Next() {
-		var i ListBuddyMockBusyRow
-		if err := rows.Scan(&i.StartsAt, &i.EndsAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyMockBusyForUsers = `-- name: ListBuddyMockBusyForUsers :many
-SELECT user_id, starts_at, ends_at
-FROM buddy_mock_participants
-WHERE user_id = ANY ($1::bigint[])
-  AND active
-  AND starts_at < $2
-  AND ends_at > $3
-ORDER BY user_id, starts_at
-`
-
-type ListBuddyMockBusyForUsersParams struct {
-	UserIds     []int64            `json:"user_ids"`
-	WindowEnd   pgtype.Timestamptz `json:"window_end"`
-	WindowStart pgtype.Timestamptz `json:"window_start"`
-}
-
-type ListBuddyMockBusyForUsersRow struct {
-	UserID   int64              `json:"user_id"`
-	StartsAt pgtype.Timestamptz `json:"starts_at"`
-	EndsAt   pgtype.Timestamptz `json:"ends_at"`
-}
-
-// ListBuddyMockBusy for many members in one statement.
-func (q *Queries) ListBuddyMockBusyForUsers(ctx context.Context, arg ListBuddyMockBusyForUsersParams) ([]ListBuddyMockBusyForUsersRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyMockBusyForUsers, arg.UserIds, arg.WindowEnd, arg.WindowStart)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBuddyMockBusyForUsersRow{}
-	for rows.Next() {
-		var i ListBuddyMockBusyForUsersRow
-		if err := rows.Scan(&i.UserID, &i.StartsAt, &i.EndsAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listBuddyMockHostCandidates = `-- name: ListBuddyMockHostCandidates :many
 SELECT m.user_id, m.handle, m.countries, u.resume_structured,
        s.timezone, s.topics
@@ -623,7 +414,7 @@ JOIN users u ON u.id = m.user_id
 WHERE NOT s.paused
   AND m.user_id <> $1::bigint
   AND ($2::text IS NULL OR $2::text = ANY (s.topics))
-  AND EXISTS (SELECT 1 FROM buddy_mock_availability a WHERE a.user_id = m.user_id)
+  AND EXISTS (SELECT 1 FROM user_availability a WHERE a.user_id = m.user_id)
   AND NOT EXISTS (
       SELECT 1 FROM user_blocks b
       WHERE (b.blocker_id = $1::bigint AND b.blocked_id = m.user_id)
@@ -883,39 +674,6 @@ func (q *Queries) RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMo
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const replaceBuddyMockWeekly = `-- name: ReplaceBuddyMockWeekly :exec
-WITH cleared AS (
-    DELETE FROM buddy_mock_availability
-    WHERE user_id = $1::bigint AND weekday IS NOT NULL
-)
-INSERT INTO buddy_mock_availability (user_id, weekday, start_time, end_time)
-SELECT $1::bigint, w.weekday, s.start_time, e.end_time
-FROM unnest($2::smallint[]) WITH ORDINALITY AS w (weekday, ord)
-JOIN unnest($3::time[]) WITH ORDINALITY AS s (start_time, ord) ON s.ord = w.ord
-JOIN unnest($4::time[]) WITH ORDINALITY AS e (end_time, ord) ON e.ord = w.ord
-`
-
-type ReplaceBuddyMockWeeklyParams struct {
-	UserID     int64         `json:"user_id"`
-	Weekdays   []int16       `json:"weekdays"`
-	StartTimes []pgtype.Time `json:"start_times"`
-	EndTimes   []pgtype.Time `json:"end_times"`
-}
-
-// Swap the recurring week in one statement, leaving dated overrides alone: half of the
-// edit applied is a member bookable at hours they just removed. The three arrays are one
-// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
-// multi-array form of unnest).
-func (q *Queries) ReplaceBuddyMockWeekly(ctx context.Context, arg ReplaceBuddyMockWeeklyParams) error {
-	_, err := q.db.Exec(ctx, replaceBuddyMockWeekly,
-		arg.UserID,
-		arg.Weekdays,
-		arg.StartTimes,
-		arg.EndTimes,
-	)
-	return err
 }
 
 const upsertBuddyMockSettings = `-- name: UpsertBuddyMockSettings :one

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/engage/availability"
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -20,72 +21,73 @@ import (
 // ErrSlotUnavailable, not a 500.
 const constraintNoOverlap = "mentor_bookings_no_overlap"
 
-// ListAvailability reads every availability row for a mentor, in both shapes. A row the
-// domain cannot represent (weekday and date together, which the CHECK forbids) is skipped
-// so one corrupt row cannot make a mentor unbookable.
+// availability is the user's shared calendar behind a mentor profile (see engage/availability).
+func (r *QueriesRepository) availability() *availability.Store { return availability.New(r.q) }
+
+// ListAvailability reads every availability row of the mentor's account, in both shapes.
 func (r *QueriesRepository) ListAvailability(ctx context.Context, mentorID int64) ([]slots.Rule, error) {
-	rows, err := r.q.ListMentorAvailability(ctx, mentorID)
+	userID, err := r.q.GetMentorUserID(ctx, mentorID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]slots.Rule, 0, len(rows))
-	for _, row := range rows {
-		rule, ok := ruleFromRow(row)
-		if !ok {
-			continue
-		}
-		// Labelled with its row id so the cabinet can delete an override.
-		out = append(out, rule.WithID(row.ID))
-	}
-	return out, nil
+	sc, err := r.availability().Load(ctx, userID)
+	return sc.Rules, err
 }
 
-// ReplaceWeeklyAvailability swaps the recurring week in one transaction, leaving dated
-// overrides alone. Transactional so a half-applied edit never makes removed hours bookable.
+// AvailabilityZone is the zone the account's saved hours are stated in, empty before any
+// settings were saved (the caller then uses the profile's own zone).
+func (r *QueriesRepository) AvailabilityZone(ctx context.Context, mentorID int64) (string, error) {
+	userID, err := r.q.GetMentorUserID(ctx, mentorID)
+	if err != nil {
+		return "", err
+	}
+	sc, err := r.availability().Load(ctx, userID)
+	return sc.Zone, err
+}
+
+// ReplaceWeeklyAvailability swaps the recurring week in one statement, leaving dated
+// overrides alone, so a half-applied edit never makes removed hours bookable.
 func (r *QueriesRepository) ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []slots.Rule) error {
-	tx, err := r.pool.Begin(ctx)
+	userID, err := r.q.GetMentorUserID(ctx, mentorID)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := r.q.WithTx(tx)
-	if _, err := q.DeleteMentorWeeklyAvailability(ctx, mentorID); err != nil {
+	if err := r.q.EnsureUserAvailabilityZoneFromMentor(ctx, mentorID); err != nil {
 		return err
 	}
-	for _, rule := range rules {
-		if rule.IsDated() {
-			continue
-		}
-		if _, err := q.CreateMentorAvailabilityRule(ctx, availabilityParams(mentorID, rule)); err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
+	return r.availability().ReplaceWeekly(ctx, userID, rules)
 }
 
 // AddAvailabilityRule adds one row, which is how a dated override is written.
 func (r *QueriesRepository) AddAvailabilityRule(ctx context.Context, mentorID int64, rule slots.Rule) error {
-	_, err := r.q.CreateMentorAvailabilityRule(ctx, availabilityParams(mentorID, rule))
+	userID, err := r.q.GetMentorUserID(ctx, mentorID)
+	if err != nil {
+		return err
+	}
+	if err := r.q.EnsureUserAvailabilityZoneFromMentor(ctx, mentorID); err != nil {
+		return err
+	}
+	_, err = r.availability().Add(ctx, userID, rule)
 	return err
 }
 
 // DeleteAvailabilityRule removes one row of the owner's own schedule.
 func (r *QueriesRepository) DeleteAvailabilityRule(ctx context.Context, ruleID, mentorID int64) error {
-	rows, err := r.q.DeleteMentorAvailabilityRule(ctx, db.DeleteMentorAvailabilityRuleParams{
-		ID: ruleID, MentorID: mentorID,
-	})
+	userID, err := r.q.GetMentorUserID(ctx, mentorID)
 	if err != nil {
 		return err
 	}
-	if rows == 0 {
+	ok, err := r.availability().Delete(ctx, userID, ruleID)
+	if err != nil {
+		return err
+	}
+	if !ok {
 		return ErrProfileNotFound
 	}
 	return nil
 }
 
-// ListBusy is the mentor's occupied time: confirmed bookings plus synced calendar
-// intervals, unioned here rather than in SQL so each source stays one query.
+// ListBusy is the mentor's occupied time across every product.
 func (r *QueriesRepository) ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]slots.Interval, error) {
 	booked, busy, err := r.listBusyByKind(ctx, mentorID, from, to)
 	if err != nil {
@@ -94,39 +96,28 @@ func (r *QueriesRepository) ListBusy(ctx context.Context, mentorID int64, from, 
 	return append(booked, busy...), nil
 }
 
-// ListBusyByKind is ListBusy's two sources kept apart, for the mentor's own calendar
-// breakdown.
+// ListBusyByKind is ListBusy split into the sessions this mentor gives and everything else,
+// for the mentor's own calendar breakdown.
 func (r *QueriesRepository) ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error) {
 	return r.listBusyByKind(ctx, mentorID, from, to)
 }
 
-// listBusyByKind reads a mentor's confirmed bookings and synced calendar intervals as two
-// separate slices, each ordered ascending by start.
 func (r *QueriesRepository) listBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error) {
-	bookings, err := r.q.ListMentorBusyBookings(ctx, db.ListMentorBusyBookingsParams{
-		MentorID:    mentorID,
-		WindowStart: pgconv.Instant(from),
-		WindowEnd:   pgconv.Instant(to),
-	})
+	userID, err := r.q.GetMentorUserID(ctx, mentorID)
 	if err != nil {
 		return nil, nil, err
 	}
-	calendar, err := r.q.ListMentorBusyIntervals(ctx, db.ListMentorBusyIntervalsParams{
-		MentorID:    mentorID,
-		WindowStart: pgconv.Instant(from),
-		WindowEnd:   pgconv.Instant(to),
-	})
+	all, err := r.availability().Busy(ctx, []int64{userID}, from, to)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	booked = make([]slots.Interval, 0, len(bookings))
-	for _, row := range bookings {
-		booked = append(booked, slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
-	}
-	busy = make([]slots.Interval, 0, len(calendar))
-	for _, row := range calendar {
-		busy = append(busy, slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
+	booked, busy = []slots.Interval{}, []slots.Interval{}
+	for _, b := range all[userID] {
+		if b.Source == availability.SourceMentor {
+			booked = append(booked, b.Interval)
+		} else {
+			busy = append(busy, b.Interval)
+		}
 	}
 	return booked, busy, nil
 }
@@ -330,71 +321,6 @@ func (r *QueriesRepository) ReleaseReminderClaim(ctx context.Context, bookingID 
 		OffsetMinutes: int32(offset / time.Minute),
 	})
 	return err
-}
-
-// availabilityParams turns a domain rule into the row's two shapes: a weekly rule sets
-// weekday and leaves on_date NULL, a dated one the reverse. The CHECK rejects anything
-// else, and the domain type cannot build it.
-func availabilityParams(mentorID int64, rule slots.Rule) db.CreateMentorAvailabilityRuleParams {
-	params := db.CreateMentorAvailabilityRuleParams{
-		MentorID:  mentorID,
-		StartTime: timeOfDayToPg(rule.Start()),
-		EndTime:   timeOfDayToPg(rule.End()),
-	}
-	if rule.IsDated() {
-		year, month, day := rule.Date().Parts()
-		params.OnDate = pgtype.Date{
-			Time:  time.Date(year, month, day, 0, 0, 0, 0, time.UTC),
-			Valid: true,
-		}
-		return params
-	}
-	params.Weekday = pgtype.Int2{Int16: int16(rule.Weekday()), Valid: true}
-	return params
-}
-
-// ruleFromRow rebuilds a domain rule, reporting false for a row that is neither shape.
-func ruleFromRow(row db.MentorAvailability) (slots.Rule, bool) {
-	start, startOK := timeOfDayFromPg(row.StartTime)
-	end, endOK := timeOfDayFromPg(row.EndTime)
-	if !startOK || !endOK {
-		return slots.Rule{}, false
-	}
-
-	if row.OnDate.Valid {
-		date, err := slots.NewDate(row.OnDate.Time.Year(), row.OnDate.Time.Month(), row.OnDate.Time.Day())
-		if err != nil {
-			return slots.Rule{}, false
-		}
-		rule, err := slots.NewDatedRule(date, start, end)
-		return rule, err == nil
-	}
-	if !row.Weekday.Valid {
-		return slots.Rule{}, false
-	}
-	rule, err := slots.NewWeeklyRule(time.Weekday(row.Weekday.Int16), start, end)
-	return rule, err == nil
-}
-
-// timeOfDayToPg renders a wall-clock time as the microseconds-since-midnight pgtype.Time
-// carries. 24:00 is a valid time in Postgres and is how a rule reaches the end of its day.
-func timeOfDayToPg(t slots.TimeOfDay) pgtype.Time {
-	return pgtype.Time{Microseconds: int64(t.Minutes()) * 60 * 1_000_000, Valid: true}
-}
-
-// timeOfDayFromPg reads one back, rejecting a stored value finer than a minute rather
-// than rounding it — a rounded hour is a mentor's stated hours quietly moved.
-func timeOfDayFromPg(t pgtype.Time) (slots.TimeOfDay, bool) {
-	if !t.Valid {
-		return slots.TimeOfDay{}, false
-	}
-	const microsPerMinute = 60 * 1_000_000
-	if t.Microseconds%microsPerMinute != 0 {
-		return slots.TimeOfDay{}, false
-	}
-	minutes := int(t.Microseconds / microsPerMinute)
-	got, err := slots.NewTimeOfDay(minutes/60, minutes%60)
-	return got, err == nil
 }
 
 // optionalInt8 turns a zero id into the NULL the column holds for "no vacancy".
