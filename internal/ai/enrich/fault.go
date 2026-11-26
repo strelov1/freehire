@@ -3,6 +3,7 @@ package enrich
 import (
 	"errors"
 
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
@@ -24,6 +25,11 @@ func postingAtFault(err error) bool {
 		// The model could not produce JSON for this input; a retry generally reproduces it.
 		return true
 	case errors.Is(err, errInvalidPayload):
+		return true
+	case errors.Is(err, llm.ErrContentRefused):
+		// The provider's safety filter rejected this posting's text, and it will again. As an
+		// upstream failure it was re-claimed on every lease expiry for the whole grace window,
+		// two refused calls each time, and every one of them traced as a failed generation.
 		return true
 	case pgerr.IsDataCorrupted(err):
 		// The row will never load, whatever else is healthy.

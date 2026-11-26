@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/outbox"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
@@ -284,15 +285,15 @@ func (rn *run) process(ctx context.Context, entry Claimed) outbox.Outcome {
 }
 
 // enrich asks the provider for a payload and validates it, retrying once on a transient
-// transport failure. Deterministic failures (unparseable response, payload invalid after
-// sanitizing) are not retried in-process; the outbox re-tries them next cron run.
+// transport failure. Deterministic failures (unparseable response, content refusal, payload
+// invalid after sanitizing) are not retried in-process; the outbox re-tries them next cron run.
 func (rn *run) enrich(ctx context.Context, job JobInput) (Enrichment, error) {
 	var lastErr error
 	for range 2 {
 		enr, err := rn.provider.Enrich(ctx, job)
 		if err != nil {
 			lastErr = err
-			if errors.Is(err, errUnparseableResponse) {
+			if errors.Is(err, errUnparseableResponse) || errors.Is(err, llm.ErrContentRefused) {
 				break
 			}
 			continue

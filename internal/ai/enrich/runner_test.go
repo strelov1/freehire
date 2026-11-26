@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
@@ -258,6 +259,25 @@ func TestRun_unparseableResponseIsNotRetried(t *testing.T) {
 	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
 	if prov.callCount() != 1 {
 		t.Errorf("provider called %d times, want 1 (an unparseable response must not be retried in-process)", prov.callCount())
+	}
+	if len(store.failed) != 1 || stats.Failed != 1 {
+		t.Errorf("failed=%v stats=%+v, want one failure", store.failed, stats)
+	}
+}
+
+func TestRun_contentRefusalIsNotRetried(t *testing.T) {
+	store := &fakeStore{
+		claims: [][]Claimed{{{OutboxID: 5, JobID: 100, TargetVersion: Version}}},
+		jobs:   map[int64]JobInput{100: {Title: "x"}},
+	}
+	prov := &funcProvider{fn: func(JobInput) (Enrichment, error) {
+		// The provider's filter judges the prompt, so the identical re-call is refused too.
+		return Enrichment{}, fmt.Errorf("llm: generate: %w", llm.ErrContentRefused)
+	}}
+
+	stats, _ := Runner{Provider: prov, Store: store, wait: noWait}.Run(context.Background(), opts())
+	if prov.callCount() != 1 {
+		t.Errorf("provider called %d times, want 1 (a content refusal must not be retried in-process)", prov.callCount())
 	}
 	if len(store.failed) != 1 || stats.Failed != 1 {
 		t.Errorf("failed=%v stats=%+v, want one failure", store.failed, stats)

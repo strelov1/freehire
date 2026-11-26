@@ -263,7 +263,7 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string, opts ...
 	callOpts := append([]llms.CallOption{llms.WithJSONMode()}, c.temperatureOptions()...)
 	resp, err := model.GenerateContent(ctx, messages, callOpts...)
 	if err != nil {
-		wrapped := fmt.Errorf("llm: generate: %w", err)
+		wrapped := fmt.Errorf("llm: generate: %w", markRefusal(err))
 		g := gen()
 		g.Err = wrapped
 		g.Cancelled = callerCancelled(ctx)
@@ -284,6 +284,34 @@ func (c *Client) GenerateJSON(ctx context.Context, system, user string, opts ...
 	g.Usage = UsageFrom(resp.Choices[0])
 	c.observe(g)
 	return out, nil
+}
+
+// ErrContentRefused marks a call the provider's safety filter rejected for its content. It
+// is a verdict on the prompt, not on the gateway: the same input draws the same refusal, so
+// a caller should neither retry it in-process nor wait it out like an outage.
+var ErrContentRefused = errors.New("llm: content refused by provider filter")
+
+// refusalPhrases are the provider texts that mean a content refusal. langchaingo surfaces a
+// non-200 answer only as "API returned unexpected status code: N: <provider message>", and a
+// 400 alone is not enough: a malformed request is a 400 too, and that one is ours. The list
+// is the providers' own wording, lower-cased; z.ai (code 1301) answers with the first one.
+var refusalPhrases = []string{
+	"potentially unsafe or sensitive content",
+	"content filtering",
+	"content policy violation",
+	"content_filter",
+}
+
+// markRefusal wraps err with ErrContentRefused when its text is a provider's content refusal
+// and returns it unchanged otherwise, so an unrecognised failure keeps its old meaning.
+func markRefusal(err error) error {
+	msg := strings.ToLower(err.Error())
+	for _, phrase := range refusalPhrases {
+		if strings.Contains(msg, phrase) {
+			return fmt.Errorf("%w: %w", ErrContentRefused, err)
+		}
+	}
+	return err
 }
 
 // contextOverrules replaces a provider's claim of success with our own context's error when
@@ -354,7 +382,7 @@ func (c *Client) GenerateJSONStream(
 	// Log the duration so slow stages stay observable without a tracer.
 	log.Printf("llm: stream model=%s dur=%s err=%v", c.modelID, time.Since(start).Round(time.Millisecond), err)
 	if err != nil {
-		wrapped := fmt.Errorf("llm: generate stream: %w", err)
+		wrapped := fmt.Errorf("llm: generate stream: %w", markRefusal(err))
 		g := gen()
 		g.Err = wrapped
 		g.Cancelled = callerCancelled(ctx)

@@ -3,8 +3,10 @@ package enrich
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/outbox"
 )
 
@@ -36,6 +38,11 @@ func TestRunnerReportsFaultToTheStore(t *testing.T) {
 			name:        "gateway error is not the posting's fault",
 			providerErr: errors.New("API returned unexpected status code: 502"),
 			wantAtFault: false,
+		},
+		{
+			name:        "content refusal is the posting's fault",
+			providerErr: fmt.Errorf("llm: generate: %w: %w", llm.ErrContentRefused, errors.New("API returned unexpected status code: 400")),
+			wantAtFault: true,
 		},
 		{
 			name:        "unparseable response is the posting's fault",

@@ -328,6 +328,31 @@ func TestGenerateJSON_providerErrorIsNotCancelled(t *testing.T) {
 	}
 }
 
+func TestGenerateJSON_contentRefusalIsMarked(t *testing.T) {
+	// The exact text langchaingo returns for z.ai's filter (code 1301).
+	refusal := errors.New("API returned unexpected status code: 400: System detected potentially unsafe or " +
+		"sensitive content in input or generation. Please avoid using prompts that may generate sensitive content.")
+	c := &Client{model: &fakeModel{err: refusal}, timeout: time.Second}
+
+	_, err := c.GenerateJSON(context.Background(), "s", "u")
+	if !errors.Is(err, ErrContentRefused) {
+		t.Errorf("error %v is not marked ErrContentRefused", err)
+	}
+	if !errors.Is(err, refusal) {
+		t.Errorf("error %v no longer wraps the provider error", err)
+	}
+}
+
+func TestGenerateJSON_otherBadRequestIsNotARefusal(t *testing.T) {
+	// A 400 alone is a malformed request, which is ours; only the filter's wording is a refusal.
+	c := &Client{model: &fakeModel{err: errors.New("API returned unexpected status code: 400: invalid response_format")}, timeout: time.Second}
+
+	_, err := c.GenerateJSON(context.Background(), "s", "u")
+	if err == nil || errors.Is(err, ErrContentRefused) {
+		t.Errorf("error %v must not be marked ErrContentRefused", err)
+	}
+}
+
 func TestGenerateJSON_nilTracerIsUnchanged(t *testing.T) {
 	// A client with no tracer must behave exactly as before: no panic, same result.
 	f := &fakeModel{resp: `{"a":1}`}
