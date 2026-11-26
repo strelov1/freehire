@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ingest/atsboard"
 	"github.com/strelov1/freehire/internal/ingest/atsdetect"
@@ -90,13 +91,55 @@ func renamedTenant(m successorMove) bool {
 // be sturdier if an adapter's wording changes.
 var goneEvidence = regexp.MustCompile(`board no longer exists|status 404|status 410|no such host`)
 
-type boardRetirer interface {
-	Retire(ctx context.Context, provider, board, region string) (boardcatalog.Retirement, error)
+// moveApplier retires one move's old board if, at the moment of the write, the move still holds.
+type moveApplier interface {
+	RetireIfStillMoved(ctx context.Context, m successorMove) (r boardcatalog.Retirement, held bool, err error)
+}
+
+// txApplier re-checks a move and retires it in one transaction. The old board's board_health row
+// is locked first, so a crawl recording a success meanwhile waits for the commit, and the check
+// reads what is true now rather than what the network pass saw minutes earlier.
+type txApplier struct {
+	pool   *pgxpool.Pool
+	window time.Duration
+}
+
+func (a txApplier) RetireIfStillMoved(ctx context.Context, m successorMove) (boardcatalog.Retirement, bool, error) {
+	var out boardcatalog.Retirement
+	held := false
+	err := pgx.BeginFunc(ctx, a.pool, func(tx pgx.Tx) error {
+		q := db.New(tx)
+		health, err := q.LockSuccessorAuditBoardHealth(ctx, db.LockSuccessorAuditBoardHealthParams{
+			Provider: m.Provider, Board: m.Board, Region: m.Region,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // already retired, or its health row is gone: nothing to retire
+		}
+		if err != nil {
+			return err
+		}
+		if !health.LastSeen.Valid || time.Since(health.LastSeen.Time) < a.window || !goneEvidence.MatchString(health.LastError) {
+			return nil // the board recovered, or its latest failure is not the platform's "gone"
+		}
+		next, err := catalogBoard(ctx, q, m.SuccessorProvider, m.SuccessorBoard)
+		if err != nil {
+			return err
+		}
+		if next.Status != "active" {
+			return nil
+		}
+		held = true
+		out, err = boardcatalog.NewQueriesRepository(q).Retire(ctx, m.Provider, m.Board, m.Region)
+		return err
+	})
+	return out, held, err
 }
 
 // applyMoves retires the old board of every renamed tenant in the report, at most maxRetire of
 // them: more in one run than a renamed-tenant day ever produced is worth a human looking first.
-func applyMoves(ctx context.Context, repo boardRetirer, report *successorReport, maxRetire int, apply bool) error {
+// A move that no longer holds at the write is left alone. On an error the moves applied so far stay
+// marked in the report, so the caller can still publish them.
+func applyMoves(ctx context.Context, applier moveApplier, report *successorReport, maxRetire int, apply bool) error {
 	n := 0
 	for i := range report.Moves {
 		m := &report.Moves[i]
@@ -112,9 +155,13 @@ func applyMoves(ctx context.Context, repo boardRetirer, report *successorReport,
 			log.Printf("quality-audit: successors: would retire %s/%s, moved to %s/%s (-apply-moved to retire)", m.Provider, m.Board, m.SuccessorProvider, m.SuccessorBoard)
 			continue
 		}
-		r, err := repo.Retire(ctx, m.Provider, m.Board, m.Region)
+		r, held, err := applier.RetireIfStillMoved(ctx, *m)
 		if err != nil {
 			return fmt.Errorf("retire %s/%s: %w", m.Provider, m.Board, err)
+		}
+		if !held {
+			log.Printf("quality-audit: successors: %s/%s no longer qualifies at the write; left alone", m.Provider, m.Board)
+			continue
 		}
 		m.Retired, m.ClosedJobs = r.Retired, r.Closed
 		log.Printf("quality-audit: successors: retired %s/%s (moved to %s/%s), closed %d posting(s)", m.Provider, m.Board, m.SuccessorProvider, m.SuccessorBoard, r.Closed)
@@ -182,9 +229,11 @@ func runSuccessors(dryRun, applyMoved bool) int {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if err := applyMoves(ctx, boardcatalog.NewQueriesRepository(q), &report, int(maxRetire), applyMoved && !dryRun); err != nil {
-		log.Printf("quality-audit: successors: %v", err)
-		return 1
+	applier := txApplier{pool: pool, window: time.Duration(days) * 24 * time.Hour}
+	applyErr := applyMoves(ctx, applier, &report, int(maxRetire), applyMoved && !dryRun)
+	if applyErr != nil {
+		// The report is still written below: it records the retirements that did happen.
+		log.Printf("quality-audit: successors: %v", applyErr)
 	}
 	body, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
@@ -193,10 +242,13 @@ func runSuccessors(dryRun, applyMoved bool) int {
 	}
 	if dryRun {
 		fmt.Println(string(body))
-		return 0
+		return 0 // a dry run applies nothing, so applyErr is always nil here
 	}
 	if err := worker.WriteTextfile(filepath.Dir(path), filepath.Base(path), string(body)+"\n"); err != nil {
 		log.Printf("quality-audit: successors: %v", err)
+		return 1
+	}
+	if applyErr != nil {
 		return 1
 	}
 	return 0

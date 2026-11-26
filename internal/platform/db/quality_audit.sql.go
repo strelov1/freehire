@@ -132,6 +132,36 @@ func (q *Queries) ListLivenessAuditSources(ctx context.Context, minOpen int64) (
 	return items, nil
 }
 
+const lockSuccessorAuditBoardHealth = `-- name: LockSuccessorAuditBoardHealth :one
+SELECT coalesce(last_success_at, first_seen_at)::timestamptz AS last_seen,
+       coalesce(last_error, '')::text AS last_error
+FROM board_health
+WHERE provider = $1 AND lower(board) = lower($2) AND region = $3
+FOR UPDATE
+`
+
+type LockSuccessorAuditBoardHealthParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+type LockSuccessorAuditBoardHealthRow struct {
+	LastSeen  pgtype.Timestamptz `json:"last_seen"`
+	LastError string             `json:"last_error"`
+}
+
+// The old board's crawl evidence, locked for the transaction that retires it (cmd/quality-audit
+// -apply-moved), so a crawl recording a success meanwhile waits and the retirement re-checks what
+// the network pass saw minutes earlier. last_seen is the last success, or first sight for a board
+// that never succeeded, as ListChronicBoards measures it.
+func (q *Queries) LockSuccessorAuditBoardHealth(ctx context.Context, arg LockSuccessorAuditBoardHealthParams) (LockSuccessorAuditBoardHealthRow, error) {
+	row := q.db.QueryRow(ctx, lockSuccessorAuditBoardHealth, arg.Provider, arg.Board, arg.Region)
+	var i LockSuccessorAuditBoardHealthRow
+	err := row.Scan(&i.LastSeen, &i.LastError)
+	return i, err
+}
+
 const sampleLivenessAuditJobs = `-- name: SampleLivenessAuditJobs :many
 WITH candidates AS MATERIALIZED (
     SELECT candidate.id FROM jobs candidate

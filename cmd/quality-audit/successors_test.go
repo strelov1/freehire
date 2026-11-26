@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -104,35 +105,62 @@ func TestNameBoard(t *testing.T) {
 	}
 }
 
-type fakeRetirer struct{ retired []string }
-
-func (f *fakeRetirer) Retire(_ context.Context, provider, board, _ string) (boardcatalog.Retirement, error) {
-	f.retired = append(f.retired, provider+"/"+board)
-	return boardcatalog.Retirement{Retired: true, Closed: 4}, nil
+type fakeApplier struct {
+	retired []string
+	stale   map[string]bool // boards that no longer qualify at the write
 }
 
-func TestApplyMovesRetiresOnlyRenamedTenants(t *testing.T) {
-	report := successorReport{Moves: []successorMove{
+func (f *fakeApplier) RetireIfStillMoved(_ context.Context, m successorMove) (boardcatalog.Retirement, bool, error) {
+	if f.stale[m.Board] {
+		return boardcatalog.Retirement{}, false, nil
+	}
+	f.retired = append(f.retired, m.Provider+"/"+m.Board)
+	return boardcatalog.Retirement{Retired: true, Closed: 4}, true, nil
+}
+
+func movesFixture() successorReport {
+	return successorReport{Moves: []successorMove{
 		{Provider: "trakstar", Board: "old", SuccessorProvider: "trakstar", SuccessorBoard: "new", SuccessorStatus: "active", LastError: "GET https://old.hire.trakstar.com/jobfeeds/old: status 404"},
 		{Provider: "trakstar", Board: "sick", SuccessorProvider: "trakstar", SuccessorBoard: "alsosick", SuccessorStatus: "active", SuccessorChronic: true, LastError: "status 404"},
 		{Provider: "icims", Board: "acme", SuccessorProvider: "jibe", SuccessorBoard: "talent.acme.com", SuccessorStatus: "active", LastError: "status 404"},
 		{Provider: "pandape", Board: "a", SuccessorProvider: "pandape", SuccessorBoard: "b", SuccessorStatus: "absent", LastError: "board no longer exists on the platform"},
 		{Provider: "careerplug", Board: "franchise", SuccessorProvider: "careerplug", SuccessorBoard: "network", SuccessorStatus: "active", LastError: "GET https://franchise.careerplug.com/jobs: WAF challenge"},
-		{Provider: "inhire", Board: "x", SuccessorProvider: "inhire", SuccessorBoard: "y", SuccessorStatus: "active", LastError: "pandape: board \"x\": board no longer exists on the platform"},
+		{Provider: "pandape", Board: "x", SuccessorProvider: "pandape", SuccessorBoard: "y", SuccessorStatus: "active", LastError: `pandape: board "x": board no longer exists on the platform`},
+		{Provider: "softgarden", Board: "recovered", SuccessorProvider: "softgarden", SuccessorBoard: "z", SuccessorStatus: "active", LastError: "lookup kariera.example: no such host"},
 	}}
-	repo := &fakeRetirer{}
-	if err := applyMoves(context.Background(), repo, &report, 1, true); err != nil {
+}
+
+// Only a same-provider move to an active, healthy successor, off a board the platform says is
+// gone, is retired; one that no longer holds at the write is left alone.
+func TestApplyMovesRetiresOnlyRenamedTenants(t *testing.T) {
+	report := movesFixture()
+	applier := &fakeApplier{stale: map[string]bool{"recovered": true}}
+	if err := applyMoves(context.Background(), applier, &report, 100, true); err != nil {
 		t.Fatal(err)
 	}
-	if len(repo.retired) != 1 || repo.retired[0] != "trakstar/old" {
-		t.Fatalf("retired %v, want only trakstar/old (cap 1)", repo.retired)
+	if got := strings.Join(applier.retired, " "); got != "trakstar/old pandape/x" {
+		t.Fatalf("retired %q, want trakstar/old pandape/x", got)
 	}
-	if !report.Moves[0].Retired || report.Moves[0].ClosedJobs != 4 || report.Moves[4].Retired || report.Moves[5].Retired {
-		t.Fatalf("moves = %+v", report.Moves)
+	for _, m := range report.Moves {
+		want := m.Board == "old" || m.Board == "x"
+		if m.Retired != want || (want && m.ClosedJobs != 4) {
+			t.Fatalf("%s: retired=%v closed=%d", m.Board, m.Retired, m.ClosedJobs)
+		}
 	}
+}
 
-	dry := &fakeRetirer{}
-	if err := applyMoves(context.Background(), dry, &report, 10, false); err != nil || len(dry.retired) != 0 {
+func TestApplyMovesCapAndDryRun(t *testing.T) {
+	report := movesFixture()
+	capped := &fakeApplier{}
+	if err := applyMoves(context.Background(), capped, &report, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(capped.retired) != 1 {
+		t.Fatalf("cap 1 retired %v", capped.retired)
+	}
+	report = movesFixture()
+	dry := &fakeApplier{}
+	if err := applyMoves(context.Background(), dry, &report, 100, false); err != nil || len(dry.retired) != 0 {
 		t.Fatalf("dry run retired %v (err %v)", dry.retired, err)
 	}
 }
