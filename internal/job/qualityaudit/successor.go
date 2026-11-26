@@ -267,15 +267,16 @@ var scriptRedirects = []*regexp.Regexp{
 	regexp.MustCompile(`location\.(?:replace|assign)\(\s*["']([^"']+)["']`),
 }
 
-// refreshURL is the target in a meta refresh's content ("0; url=/moved").
-var refreshURL = regexp.MustCompile(`(?i)url\s*=\s*['"]?([^'"\s;]+)`)
+// refreshURL is the target in a meta refresh's content ("0; url=/moved"). The URL runs to the end
+// of the content, semicolons included (search;tenant=acme), as browsers read it.
+var refreshURL = regexp.MustCompile(`(?i)url\s*=\s*['"]?([^'"\s]+)`)
 
 // pageRedirects returns the absolute http(s) URLs a page sends the browser to as it loads,
 // resolved against base: a <script>'s location assignment, an onload handler's, or a meta refresh.
 // The page is tokenized as HTML, so an interaction handler (a button's onclick, a Tenstreet
 // posting's Apply button, freehire#5209) is never read, whatever its quoting or content.
 func pageRedirects(base *url.URL, body string) []*url.URL {
-	var code, targets []string
+	var code, targets, refreshes []string
 	z := xhtml.NewTokenizer(strings.NewReader(body))
 	inScript := false
 	for {
@@ -300,7 +301,7 @@ func pageRedirects(base *url.URL, body string) []*url.URL {
 			}
 			if t.Data == "meta" && strings.EqualFold(equiv, "refresh") {
 				if m := refreshURL.FindStringSubmatch(content); m != nil {
-					targets = append(targets, m[1])
+					refreshes = append(refreshes, m[1])
 				}
 			}
 		case xhtml.EndTagToken:
@@ -318,6 +319,8 @@ func pageRedirects(base *url.URL, body string) []*url.URL {
 			}
 		}
 	}
+	// A meta refresh fires after its delay, often as a fallback, so the scripts' targets go first.
+	targets = append(targets, refreshes...)
 	var out []*url.URL
 	for _, raw := range targets {
 		u, err := base.Parse(raw)
