@@ -283,8 +283,13 @@ Running a fit analysis on the synchronous `POST /api/v1/jobs/:slug/match-analysi
 
 #### Scenario: Streaming endpoint enforces the same gate
 
-- **WHEN** a caller who would be refused opens the SSE stream for a job they have not analysed
+- **WHEN** a caller without a paid plan, or at today's fair-use guard, opens the SSE stream for a job they have not analysed
 - **THEN** the system responds `402` before opening the event stream and never invokes the LLM
+
+#### Scenario: Plan cannot be read
+
+- **WHEN** the caller's plan cannot be read for a new analysis on either endpoint
+- **THEN** the system responds `503` and never invokes the LLM
 
 #### Scenario: Failed analysis gives the charge back
 
@@ -293,12 +298,17 @@ Running a fit analysis on the synchronous `POST /api/v1/jobs/:slug/match-analysi
 
 ### Requirement: Allowance state on the read endpoint
 
-The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return the caller's standing on today's fit-analysis allowance as `allowance`, and on the tailoring-session allowance as `tailor_allowance`, without invoking the LLM, so the client can show usage and pre-block a run the server would refuse. Each carries `feature`, `used`, `unlimited`, `enforced`, `resets_at`, and `limit` only when the plan has a real ceiling (an unlimited plan's fair-use guard is never exposed as a limit). The standing is best-effort: when it cannot be read the field is omitted and the read still succeeds.
+The read endpoint `GET /api/v1/jobs/:slug/match-analysis` SHALL return the caller's standing on today's fit-analysis allowance as `allowance`, and on the tailoring-session allowance as `tailor_allowance`, without invoking the LLM, so the client can show usage and pre-block a run the server would refuse. Both are omitted when the caller has no stored CV, since no analysis can run. Each carries `feature`, `used`, `unlimited`, `enforced`, `resets_at`, and `limit` only when the plan has a real ceiling (an unlimited plan's fair-use guard is never exposed as a limit). The standing is best-effort: when it cannot be read the field is omitted and the read still succeeds.
 
 #### Scenario: Allowance reported on read
 
-- **WHEN** a signed-in paid caller reads `GET /api/v1/jobs/:slug/match-analysis`
+- **WHEN** a signed-in paid caller with a stored CV reads `GET /api/v1/jobs/:slug/match-analysis`
 - **THEN** the response includes `allowance` with `feature` `match`, today's `used`, `unlimited` true, and the next midnight UTC as `resets_at`, and no LLM call is made
+
+#### Scenario: No CV stored
+
+- **WHEN** a caller with no stored CV reads the endpoint
+- **THEN** the response omits `allowance` and `tailor_allowance` and reports that no CV is present
 
 #### Scenario: Meter unavailable
 
