@@ -25,7 +25,8 @@ func ogApp(c cache.Cache, est catalogstats.Estimator) *fiber.App {
 
 func doGetImage(t *testing.T, app *fiber.App, target string) *http.Response {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil))
+	// -1: rendering the card can outlast fiber's default 1s test timeout on a busy CI runner
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil), -1)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
