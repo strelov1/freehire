@@ -166,6 +166,7 @@ var blocks = map[string][]string{
 		"linksource", "moderation", "pipeline", "rederive", "screeninganswers", "sources", "sources/aggregators", "sources/ats", "sources/kit", "sourcestats",
 		"submission", "sweep", "telegram",
 	},
+	// availability is the one calendar mentorship, buddy mocks and booking links share.
 	// socialdigest is outbound engagement like broadcast and notify, with a public audience.
 	// It reads the catalogue (job) and the view rollup (application).
 	"engage": {
