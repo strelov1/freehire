@@ -458,6 +458,9 @@
           },
           {
             "$ref": "#/components/parameters/job.work_mode_remote_countries"
+          },
+          {
+            "$ref": "#/components/parameters/job.single_country"
           }
         ],
         "responses": {
@@ -930,6 +933,9 @@
           },
           {
             "$ref": "#/components/parameters/job.work_mode_remote_countries"
+          },
+          {
+            "$ref": "#/components/parameters/job.single_country"
           }
         ],
         "responses": {
@@ -1726,6 +1732,9 @@
           },
           {
             "$ref": "#/components/parameters/job.work_mode_remote_countries"
+          },
+          {
+            "$ref": "#/components/parameters/job.single_country"
           }
         ],
         "responses": {
@@ -4203,6 +4212,14 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "job.single_country": {
+        "name": "single_country",
+        "in": "query",
+        "description": "Only inside the selected countries: true — keep only postings whose whole location resolves to ONE country. `countries` equality matches ANY listed country, so countries=ch alone also returns a posting naming Switzerland and 80 others; this adds a `country_count = 1` fragment ANDed over the location group. A posting with no resolved country never matches.",
+        "schema": {
+          "type": "boolean"
         }
       },
       "company.collections": {

@@ -174,6 +174,11 @@ export class FilterStore {
     });
   }
 
+  /** "Only inside the selected country": setNow like every other discrete toggle. */
+  setSingleCountry(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, singleCountry: on });
+  }
+
   /** The summary chip's remove: one chip stands for the whole salary range, so it
    *  clears both ends. The range itself is dragged in the modal, which stages it. */
   clearSalary() {

@@ -110,6 +110,61 @@ func TestFromJobDefaultsCategoryToOther(t *testing.T) {
 	}
 }
 
+// country_count backs `single_country` (query_filter.go): a posting listing several
+// countries matches `countries = "ch"` on ANY element, so "only inside the country"
+// is asked as a count of one over the merged served countries.
+func TestFromJob_CountryCountTracksServedCountries(t *testing.T) {
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Countries: []string{"ch", "de"}}, "")
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if doc.CountryCount != 2 {
+		t.Errorf("country_count = %d, want 2", doc.CountryCount)
+	}
+
+	// Zero is omitted (omitempty), so a posting with no resolved country never
+	// matches `country_count = 1`.
+	none, err := FromJob(db.Job{ID: 2, PublicSlug: "s2"}, "")
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	raw, err := json.Marshal(none)
+	if err != nil {
+		t.Fatalf("marshal doc: %v", err)
+	}
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &full); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := full["country_count"]; ok {
+		t.Errorf("a posting with no countries carries country_count: %s", raw)
+	}
+
+	// Top level on the document so it is filterable...
+	rawDoc, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("marshal doc: %v", err)
+	}
+	if err := json.Unmarshal(rawDoc, &full); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := full["country_count"]; !ok {
+		t.Errorf("document should carry a top-level country_count field: %s", rawDoc)
+	}
+	// ...but never part of the public wire shape.
+	viewRaw, err := json.Marshal(doc.Job)
+	if err != nil {
+		t.Fatalf("marshal view: %v", err)
+	}
+	var view map[string]json.RawMessage
+	if err := json.Unmarshal(viewRaw, &view); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	if _, ok := view["country_count"]; ok {
+		t.Errorf("country_count leaked into the public job wire shape: %s", viewRaw)
+	}
+}
+
 // A posting with no body is not a listing anyone can act on, so it stays out of the index.
 // Whitespace-only counts as empty — a source that serves "<p> </p>" has published nothing,
 // and sanitizing leaves the markup behind. freehire#1866.

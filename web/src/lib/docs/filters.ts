@@ -227,6 +227,13 @@ export const FILTER_EXTRAS: FilterRow[] = [
     values:
       'ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force',
   },
+  {
+    param: 'single_country',
+    type: 'boolean',
+    label: 'Only inside the selected countries',
+    values:
+      'true — keep only postings whose whole location resolves to ONE country. `countries` equality matches ANY listed country, so countries=ch alone also returns a posting naming Switzerland and 80 others; this adds a `country_count = 1` fragment ANDed over the location group. A posting with no resolved country never matches',
+  },
 ];
 
 /** How the cross-facet modifiers behave — they apply to every string facet. */

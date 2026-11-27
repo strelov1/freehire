@@ -83,6 +83,7 @@ export function emptyFilters(): JobFilters {
     workModeRemoteAnywhere: false,
     workModeRemoteRegions: [],
     workModeRemoteCountries: [],
+    singleCountry: false,
   };
 }
 
@@ -134,6 +135,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
     if (f.workModeRemoteRegions.length) p.set('work_mode_remote_regions', f.workModeRemoteRegions.join(','));
     if (f.workModeRemoteCountries.length) p.set('work_mode_remote_countries', f.workModeRemoteCountries.join(','));
   }
+  if (f.singleCountry) p.set('single_country', 'true');
   return p;
 }
 
@@ -251,6 +253,9 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
     f.workModeRemoteRegions = list('work_mode_remote_regions');
     f.workModeRemoteCountries = list('work_mode_remote_countries');
   }
+  // Read like the server reads it (trimmed, case-insensitive), so a hand-written TRUE
+  // does not silently drop a filter the server would apply.
+  f.singleCountry = p.get('single_country')?.trim().toLowerCase() === 'true';
   return f;
 }
 
@@ -344,6 +349,8 @@ export function activeFilterCount(f: JobFilters): number {
   // The modifier counts only when it changes the answer — off or inert, it narrows
   // nothing and a badge for it would lie.
   if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f)) n += 1;
+  // Always narrowing where set: it keeps single-country postings, whatever else.
+  if (f.singleCountry) n += 1;
   return n;
 }
 

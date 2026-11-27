@@ -392,6 +392,9 @@ func TestNarrows(t *testing.T) {
 		{"posted_within_days=7", true},
 		{"skills_exclude=php", true},
 		{"countries=de&sort=created_at", true},
+		// A filter on its own, not a modifier: single-country postings worldwide.
+		{"single_country=true", true},
+		{"single_country=flase", false},
 		// A modifier alone reads nothing, like every other modifier.
 		{"work_mode_remote_anywhere=true", false},
 		{"work_mode_remote_regions=eu&work_mode_remote_countries=us", false},
@@ -412,6 +415,29 @@ func TestFilterFromValues_MetrosExclude(t *testing.T) {
 	want := [][]string{{`metros != "Detroit (US)"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("metros_exclude: got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_SingleCountry(t *testing.T) {
+	// countries equality matches ANY element, so only inside a country is a count of one
+	// ANDed as its own group, never a member of the location OR.
+	got := normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=CH&single_country=true")))
+	want := [][]string{
+		// regions=eu implies the UK (regionImplies), so the region reads as an IN.
+		{`countries = "CH"`, `regions IN ["eu", "uk"]`},
+		{"country_count = 1"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("single_country: got %v, want %v", got, want)
+	}
+
+	// Anything but a case-insensitive true leaves it unset: the filter reads the
+	// modifier the way isTrue does, and a typo must not emit a fragment.
+	if got := FilterFromValues(vals("single_country=flase")); got != nil {
+		t.Errorf("single_country=flase: got %v, want nil", got)
+	}
+	if got := FilterFromValues(vals("single_country=%20true")); got == nil {
+		t.Errorf("single_country with a leading space produced no filter, but isTrue trims it")
 	}
 }
 

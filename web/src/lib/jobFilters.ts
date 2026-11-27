@@ -160,4 +160,12 @@ export interface JobFilters {
    *  modifier clears them. */
   workModeRemoteRegions: string[];
   workModeRemoteCountries: string[];
+  /** "Only inside the selected country": keep the postings whose whole location
+   *  resolves to ONE country — `countries=ch` alone matches a posting listing
+   *  Switzerland and 80 other countries on ANY element, so the checkbox adds a
+   *  `country_count = 1` fragment the server ANDs over the rest. Serialized as
+   *  `single_country=true`, true-or-absent; a saved search KEEPS it — the server
+   *  reads it from the same filter builder everywhere. Mirrors
+   *  `SingleCountryParam` in internal/search/search/query_filter.go. */
+  singleCountry: boolean;
 }

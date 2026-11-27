@@ -354,6 +354,25 @@ describe('displayQuery', () => {
   });
 });
 
+describe('singleCountry ("Only inside the selected countries")', () => {
+  it('round-trips as single_country=true and is absent when off', () => {
+    expect(filtersToParams(emptyFilters()).has('single_country')).toBe(false);
+    const p = filtersToParams({ ...emptyFilters(), singleCountry: true });
+    expect(p.get('single_country')).toBe('true');
+    expect(filtersFromParams(p).singleCountry).toBe(true);
+    // Read like the server (trimmed, case-insensitive), so a hand-written TRUE applies.
+    expect(filtersFromParams(new URLSearchParams('single_country=%20TRUE')).singleCountry).toBe(true);
+    expect(filtersFromParams(new URLSearchParams('single_country=false')).singleCountry).toBe(false);
+  });
+
+  it('counts as an active filter and reaches a saved search', () => {
+    expect(activeFilterCount({ ...emptyFilters(), singleCountry: true })).toBe(1);
+    const q = savedSearchQuery({ ...emptyFilters(), q: 'go', singleCountry: true });
+    expect(new URLSearchParams(q).get('single_country')).toBe('true');
+    expect(queryNarrows('single_country=true')).toBe(true);
+  });
+});
+
 describe('formerEmployers ("Hiring again")', () => {
   it('round-trips as former_employers=true and is absent when off', () => {
     expect(filtersToParams(emptyFilters()).has('former_employers')).toBe(false);

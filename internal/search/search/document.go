@@ -48,6 +48,12 @@ type JobDocument struct {
 	// the attribute, so omitting it would make source_type_exclude=aggregator drop every
 	// unclassified posting.
 	SourceType string `json:"source_type"`
+	// CountryCount is how many countries the location resolves to (the length of the served
+	// Countries after the dict/LLM merge), backing the `single_country` filter: `countries`
+	// equality matches ANY element, so "only inside a country" is asked as a count of one
+	// (SingleCountryParam). Zero — no resolved country — is omitted, so it never matches.
+	// Not served.
+	CountryCount int `json:"country_count,omitempty"`
 	// AIInterview is true when the company has at least one un-retracted AI-interview report.
 	// Kept beside the count because filtering an integer would be an unguessable range query.
 	// Not served.
@@ -112,6 +118,9 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 		RoleType:    roletype.Derive(j.Title),
 		SourceType:  sourceType,
 		AIInterview: view.AIInterviewReports > 0,
+		// Derived here, not attached by the writers, because a forgotten attach would
+		// silently break the single_country filter the way sourceType's would.
+		CountryCount: len(view.Countries),
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()

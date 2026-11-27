@@ -82,6 +82,7 @@ var checkedScalars = map[string]func(string) bool{
 	// Anything but a case-insensitive true leaves the modifier unset, which widens the
 	// answer, so a mis-spelled value is named.
 	WorkModeRemoteAnywhereParam:             oneOf(boolValues),
+	SingleCountryParam:                      oneOf(boolValues),
 	"visa_sponsorship":                      oneOf(boolValues),
 	SeniorityIncludeUnspecifiedParam:        oneOf(boolValues),
 	ExperienceIncludeUnspecifiedParam:       oneOf(boolValues),

@@ -341,6 +341,12 @@ func filterFromValues(v url.Values, now time.Time) any {
 		groups = append(groups, locationGroup)
 	}
 
+	// Only inside the selected country (or countries): the count fragment is its own AND
+	// group, so it narrows the location group above rather than joining its OR.
+	if isTrue(v, SingleCountryParam) {
+		groups = append(groups, []string{EqNum("country_count", 1)})
+	}
+
 	if raw := strings.ToLower(strings.TrimSpace(v.Get("visa_sponsorship"))); raw == "true" || raw == "false" {
 		groups = append(groups, []string{EqBool("enrichment.visa_sponsorship", raw == "true")})
 	}
@@ -513,6 +519,14 @@ func splitFacetValues(in []string) []string {
 // ApplyQuestionsMaxParam bounds how many required questions a posting's application form
 // may ask beyond the standard fields. The search box's "short form" toggle sends 3.
 const ApplyQuestionsMaxParam = "apply_questions_max"
+
+// SingleCountryParam keeps only postings whose whole location resolves to ONE country:
+// `countries` equality matches ANY array element, so `countries=ch` alone cannot tell a
+// Swiss role from one listing Switzerland and 80 other countries — this adds a
+// `country_count = 1` fragment (JobDocument.CountryCount) ANDed over the rest. Alone it
+// keeps single-country postings worldwide; a posting with no resolved country carries no
+// count and never matches.
+const SingleCountryParam = "single_country"
 
 // applyQuestionsMax reads the apply_questions_max bound: a non-negative integer, or no
 // bound. IgnoredValues names every value this declines, so a caller whose typo widened

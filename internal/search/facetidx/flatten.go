@@ -16,6 +16,7 @@ import (
 var indexedAttrs = []string{
 	"source", "company_slug",
 	"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
+	"country_count",
 	"is_tech", "ai_interview", "auto_apply_available", "ai_archetype", "role_type", "source_type",
 	"requires_clearance", "via_recruiter", "equity", "clearance_levels", "perks", "engagement",
 	"apply_questions",

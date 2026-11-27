@@ -70,6 +70,12 @@ func Gte(attr string, n int) string {
 	return attr + " >= " + strconv.Itoa(n)
 }
 
+// EqNum builds `attr = n`, the numeric form of Eq: unquoted, because the value is
+// ours, never a caller's (see quote).
+func EqNum(attr string, n int) string {
+	return attr + " = " + strconv.Itoa(n)
+}
+
 // Lte builds a `attr <= n` numeric fragment.
 func Lte(attr string, n int) string {
 	return attr + " <= " + strconv.Itoa(n)

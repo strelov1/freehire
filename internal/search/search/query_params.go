@@ -19,6 +19,9 @@ var scalarFilters = []string{
 	"posted_within_days",
 	"open_within_days",
 	ApplyQuestionsMaxParam,
+	// SingleCountryParam is a filter on its own (it keeps single-country postings), not
+	// a modifier of another filter's shape.
+	SingleCountryParam,
 }
 
 // WatchlistParam narrows a search to the caller's own watchlist (internal/engage/companywatch).

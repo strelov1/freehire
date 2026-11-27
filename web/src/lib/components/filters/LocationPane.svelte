@@ -13,13 +13,23 @@
   import { profileStore } from '#lib/profile.svelte.js';
   import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '#lib/eligibleForMe.js';
 
+  /** The job-only "only inside the country" toggle, carried by FilterStore and
+   *  StagedFilters but not by the header's companies store — both members Partial so
+   *  every FacetStore passes unchanged, and the checkbox renders only where the
+   *  store has it. */
+  interface SingleCountryStore {
+    value: { singleCountry: boolean };
+    setSingleCountry(on: boolean): void;
+  }
+
   // Location pane: a region → country tree plus a flat, searchable Cities list.
   // The country tree is built from the exported country→region map, scoped to what
   // actually has jobs via the live facet distribution. Cities are a large LLM-open
   // vocabulary with no reliable country link, so they aren't nested under countries —
   // they live in one clear Cities section (busiest first, the rest via search).
   // Selecting at any level stages the existing regions/countries/cities params.
-  let { store, counts = null }: { store: FacetStore; counts?: FacetCounts | null } = $props();
+  let { store, counts = null }: { store: FacetStore & Partial<SingleCountryStore>; counts?: FacetCounts | null } =
+    $props();
   const locationHelpId = $props.id();
 
   let query = $state('');
@@ -211,6 +221,24 @@
     </button>
   {/if}
 </div>
+
+{#if store.setSingleCountry}
+  {@const selectedCountries = countryF.include.length}
+  <div class="mb-4">
+    <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={store.value?.singleCountry ?? false}
+        onchange={(e) => store.setSingleCountry?.(e.currentTarget.checked)}
+      />
+      <span>Only inside the selected {selectedCountries === 1 ? 'country' : 'countries'}</span>
+    </label>
+    <p class="mt-1 text-xs text-muted-foreground">
+      Keep only roles whose whole location resolves to one country — drop postings that list it alongside others.
+    </p>
+  </div>
+{/if}
 
 <div
   class="mb-4 flex items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring"

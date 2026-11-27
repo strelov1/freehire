@@ -95,12 +95,23 @@
 
     facetGroup('category', 'Specialization');
     facetGroup('ai_archetype', 'AI Specialization');
-    // Location: regions + countries + metros + cities under one heading.
+    // Location: regions + countries + metros + cities under one heading, plus the
+    // "only inside the country" modifier when it is on.
     push('Location', [
       ...facetChips('regions'),
       ...facetChips('countries'),
       ...facetChips('metros'),
       ...facetChips('cities'),
+      ...(f.singleCountry
+        ? [
+            {
+              key: 'single_country',
+              text: 'Only inside the selected countries',
+              exclude: false,
+              remove: () => store.setSingleCountry(false),
+            },
+          ]
+        : []),
     ]);
 
     if (!exclude.includes('seniority')) {

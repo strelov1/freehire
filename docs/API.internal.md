@@ -323,6 +323,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | `work_mode_remote_countries` | Remote arm: countries | ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force |
 
+| `single_country` | Only inside the selected countries | true — keep only postings whose whole location resolves to ONE country. `countries` equality matches ANY listed country, so countries=ch alone also returns a posting naming Switzerland and 80 others; this adds a `country_count = 1` fragment ANDed over the location group. A posting with no resolved country never matches |
+
 ### Recipes
 
 - **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`

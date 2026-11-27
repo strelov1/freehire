@@ -18,6 +18,9 @@ func facetSettings() *meilisearch.Settings {
 			"id", "is_closed", "is_duplicate",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
+			// country_count backs `single_country`: countries equality matches any element,
+			// so "only inside the country" is a count of one (JobDocument.CountryCount).
+			"country_count",
 			// is_tech is served top-level; an unknown value is absent, so it filters as empty.
 			"is_tech",
 			// ai_interview is true-or-absent (written only when the company has an un-retracted
