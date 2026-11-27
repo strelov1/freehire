@@ -19,6 +19,7 @@ var scalarFilters = []string{
 	"posted_within_days",
 	"open_within_days",
 	ApplyQuestionsMaxParam,
+	CountriesOnlyParam,
 }
 
 // WatchlistParam narrows a search to the caller's own watchlist (internal/engage/companywatch).

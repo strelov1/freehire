@@ -87,6 +87,15 @@ var locationFacets = map[string]bool{"regions": true, "countries": true, "cities
 // and supports exclude.
 const RegionUnspecified = "none"
 
+// CountriesOnlyParam keeps only postings whose geography is one place: it drops a posting
+// that names many countries (a worldwide remote role) even when the selected country is
+// among them. Reads the index-time multi_country marker, true-or-absent so documents
+// indexed before the attribute existed are not dropped.
+const CountriesOnlyParam = "countries_only"
+
+// MultiCountryAttr is the index attribute CountriesOnlyParam reads.
+const MultiCountryAttr = "multi_country"
+
 // EquityParam asks what a posting states about equity compensation.
 const EquityParam = "equity"
 
@@ -339,6 +348,12 @@ func filterFromValues(v url.Values, now time.Time) any {
 		groups = append(groups, remoteAnywhereGroup(workModeValues(v), remoteReachGroup(v), locationGroup))
 	} else if len(locationGroup) > 0 {
 		groups = append(groups, locationGroup)
+	}
+	// Geography the caller narrowed to a country may still be a reach list (a worldwide
+	// remote posting that lists the country among many). This keeps only postings bounded to
+	// one country, ANDed with the location group so it cannot widen it.
+	if isTrue(v, CountriesOnlyParam) {
+		groups = append(groups, []string{trueOrAbsentFragment(MultiCountryAttr, "false")})
 	}
 
 	if raw := strings.ToLower(strings.TrimSpace(v.Get("visa_sponsorship"))); raw == "true" || raw == "false" {

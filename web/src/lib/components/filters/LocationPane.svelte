@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, Globe, MapPin, Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { countryLabel, REGION_UNSPECIFIED, type FacetStore } from '#lib/facets.js';
+  import { countryLabel, REGION_UNSPECIFIED, type FacetStore, type JobModifierStore } from '#lib/facets.js';
   import { REGION_LABELS } from '#lib/labels.js';
   import { COUNTRY_REGION_MAP } from '#lib/generated/contracts.js';
   import type { FacetCounts } from '#lib/types.js';
@@ -12,6 +12,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '#lib/eligibleForMe.js';
+  import { countriesOnlyLabel } from '#lib/filters.js';
 
   // Location pane: a region → country tree plus a flat, searchable Cities list.
   // The country tree is built from the exported country→region map, scoped to what
@@ -19,8 +20,17 @@
   // vocabulary with no reliable country link, so they aren't nested under countries —
   // they live in one clear Cities section (busiest first, the rest via search).
   // Selecting at any level stages the existing regions/countries/cities params.
-  let { store, counts = null }: { store: FacetStore; counts?: FacetCounts | null } = $props();
+  let { store, counts = null }: { store: FacetStore & Partial<JobModifierStore>; counts?: FacetCounts | null } =
+    $props();
   const locationHelpId = $props.id();
+
+  // The job stores carry the country-only modifier; the company/talent ones do not, so the
+  // checkbox is simply absent there.
+  const countryOnly = $derived(
+    store.value && store.setCountriesOnly
+      ? { value: store.value, set: (on: boolean) => store.setCountriesOnly?.(on) }
+      : null,
+  );
 
   let query = $state('');
   const expandedRegions = new SvelteSet<string>();
@@ -242,6 +252,27 @@
         </button>
       </Chip>
     {/each}
+  </div>
+{/if}
+
+{#if countryOnly && countryF.include.length > 0}
+  <!-- Only beside an included country: it modifies that facet, and the client never sends
+       it alone (see appliesCountriesOnly). -->
+  <div class="mb-4">
+    <label class="flex cursor-pointer items-start gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="mt-0.5 size-4 rounded border-border"
+        checked={countryOnly.value.countriesOnly}
+        onchange={(e) => countryOnly.set(e.currentTarget.checked)}
+      />
+      <span>
+        {countriesOnlyLabel(countryF.include)}
+        <span class="mt-0.5 block text-xs text-muted-foreground">
+          Hides postings that list many countries, like worldwide remote roles.
+        </span>
+      </span>
+    </label>
   </div>
 {/if}
 

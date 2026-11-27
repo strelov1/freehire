@@ -48,6 +48,11 @@ type JobDocument struct {
 	// the attribute, so omitting it would make source_type_exclude=aggregator drop every
 	// unclassified posting.
 	SourceType string `json:"source_type"`
+	// MultiCountry is true when the posting names more than one country: its geography is a
+	// reach list (a worldwide remote role), not one place. It backs `countries_only`. Written
+	// only when true, so the negative is asked as NOT of the positive (see countries_only in
+	// query_filter.go), which also reaches documents indexed before the attribute existed.
+	MultiCountry bool `json:"multi_country,omitempty"`
 	// AIInterview is true when the company has at least one un-retracted AI-interview report.
 	// Kept beside the count because filtering an integer would be an unguessable range query.
 	// Not served.
@@ -104,14 +109,15 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	// Cap the indexed description; the detail endpoint serves the full text from its own FromRow.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{
-		ID:          j.ID,
-		IsClosed:    j.ClosedAt.Valid,
-		IsDuplicate: j.DuplicateOf.Valid,
-		Job:         view,
-		AIArchetype: aiarchetype.Derive(j.Skills, category),
-		RoleType:    roletype.Derive(j.Title),
-		SourceType:  sourceType,
-		AIInterview: view.AIInterviewReports > 0,
+		ID:           j.ID,
+		IsClosed:     j.ClosedAt.Valid,
+		IsDuplicate:  j.DuplicateOf.Valid,
+		Job:          view,
+		AIArchetype:  aiarchetype.Derive(j.Skills, category),
+		RoleType:     roletype.Derive(j.Title),
+		SourceType:   sourceType,
+		MultiCountry: len(view.Countries) > 1,
+		AIInterview:  view.AIInterviewReports > 0,
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()

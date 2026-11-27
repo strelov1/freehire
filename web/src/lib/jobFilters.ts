@@ -160,4 +160,11 @@ export interface JobFilters {
    *  modifier clears them. */
   workModeRemoteRegions: string[];
   workModeRemoteCountries: string[];
+  /** Keep only postings whose geography is one country, so a worldwide remote posting that
+   *  merely lists the selected country drops out. Serialized as `countries_only=true`.
+   *  Inert without an included country (each read gates on
+   *  `appliesCountriesOnly`), which is why it is never written or counted alone: it is a
+   *  modifier of the countries facet. Mirrors `CountriesOnlyParam` in
+   *  internal/search/search/query_filter.go. */
+  countriesOnly: boolean;
 }

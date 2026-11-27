@@ -86,6 +86,7 @@ var checkedScalars = map[string]func(string) bool{
 	SeniorityIncludeUnspecifiedParam:        oneOf(boolValues),
 	ExperienceIncludeUnspecifiedParam:       oneOf(boolValues),
 	ExperienceOnlySeniorityUnspecifiedParam: oneOf(boolValues),
+	CountriesOnlyParam:                      oneOf(boolValues),
 }
 
 // UnknownFacetValue reports whether value falls outside the closed vocabulary of a facet

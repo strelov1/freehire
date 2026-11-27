@@ -7,6 +7,8 @@
     displayQuery,
     appliesWorkModeRemoteAnywhere,
     workModeRemoteLabel,
+    appliesCountriesOnly,
+    countriesOnlyLabel,
   } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
@@ -95,13 +97,22 @@
 
     facetGroup('category', 'Specialization');
     facetGroup('ai_archetype', 'AI Specialization');
-    // Location: regions + countries + metros + cities under one heading.
-    push('Location', [
+    // Location: regions + countries + metros + cities under one heading, plus the
+    // country-only modifier when it is actually narrowing.
+    const location = [
       ...facetChips('regions'),
       ...facetChips('countries'),
       ...facetChips('metros'),
       ...facetChips('cities'),
-    ]);
+    ];
+    if (appliesCountriesOnly(f))
+      location.push({
+        key: 'countries_only',
+        text: countriesOnlyLabel(f.facets.countries?.include ?? []),
+        exclude: false,
+        remove: () => store.setCountriesOnly(false),
+      });
+    push('Location', location);
 
     if (!exclude.includes('seniority')) {
       const seniority = facetChips('seniority');
