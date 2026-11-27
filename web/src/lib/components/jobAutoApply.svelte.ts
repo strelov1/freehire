@@ -17,6 +17,7 @@ export class JobAutoApply {
   callerStatus = $state<string | null>(null);
   /** The job `callerStatus` was read for; a change of job clears the overlay. */
   private statusSlug: string | null = null;
+  private statusRequest = 0;
   submitting = $state(false);
   error = $state<string | null>(null);
 
@@ -60,11 +61,13 @@ export class JobAutoApply {
     if (this.statusSlug !== slug) {
       this.statusSlug = slug;
       this.callerStatus = null;
+      this.overrideStatus = null; // set for the previous job, not this one
     }
+    const request = ++this.statusRequest;
     try {
       const status = (await api.getJob(slug)).auto_apply_status ?? null;
-      // Drop a response that arrives after navigation to another job.
-      if (this.job().public_slug === slug) this.callerStatus = status;
+      // Only the latest read may land: an older one can describe another job, or an older state.
+      if (request === this.statusRequest) this.callerStatus = status;
     } catch {
       // Best-effort overlay: the button falls back to the server-rendered status.
     }
