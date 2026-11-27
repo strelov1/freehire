@@ -2,6 +2,7 @@ package nudge
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -251,5 +252,20 @@ func TestActionable_AutoApplyReviewReady_OnlyWhileJobOpen(t *testing.T) {
 	row.JobOpen, row.AutoApplyReviewPending = true, false
 	if r.actionable(row) {
 		t.Error("actionable() = true for an entry no longer in review, want false")
+	}
+}
+
+// A stopped attempt's job rows open the application chat; every other kind opens the job.
+func TestJobLinks_StoppedAttemptOpensChat(t *testing.T) {
+	mail, tg := emailCopy{origin: "https://x"}, newTelegramCopy("https://x")
+	blocked := Message{Kind: KindAutoApplyBlocked, Slug: "s", JobTitle: "T"}
+	if got, want := mail.jobURL(blocked), "https://x/my/tracking/s?utm_source=email&tab=auto_apply"; got != want {
+		t.Errorf("email jobURL(blocked) = %q, want %q", got, want)
+	}
+	if got := tg.jobLine(blocked); !strings.Contains(got, `"https://x/my/tracking/s?tab=auto_apply"`) {
+		t.Errorf("telegram jobLine(blocked) = %q, want the chat link", got)
+	}
+	if got, want := mail.jobURL(Message{Kind: KindJobClosed, Slug: "s"}), "https://x/jobs/s?utm_source=email"; got != want {
+		t.Errorf("email jobURL(closed) = %q, want %q", got, want)
 	}
 }

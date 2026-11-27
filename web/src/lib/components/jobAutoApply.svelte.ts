@@ -15,6 +15,8 @@ export class JobAutoApply {
   /** The caller's own status, read in the browser: the server render fetches the job without
    *  the session cookie, so `job.auto_apply_status` is always empty there. */
   callerStatus = $state<string | null>(null);
+  /** The job `callerStatus` was read for; a change of job clears the overlay. */
+  private statusSlug: string | null = null;
   submitting = $state(false);
   error = $state<string | null>(null);
 
@@ -55,8 +57,14 @@ export class JobAutoApply {
   /** Re-reads the caller's status for this job; a failure leaves the last known one. */
   refreshStatus = async () => {
     const { public_slug: slug } = this.job();
+    if (this.statusSlug !== slug) {
+      this.statusSlug = slug;
+      this.callerStatus = null;
+    }
     try {
-      this.callerStatus = (await api.getJob(slug)).auto_apply_status ?? null;
+      const status = (await api.getJob(slug)).auto_apply_status ?? null;
+      // Drop a response that arrives after navigation to another job.
+      if (this.job().public_slug === slug) this.callerStatus = status;
     } catch {
       // Best-effort overlay: the button falls back to the server-rendered status.
     }

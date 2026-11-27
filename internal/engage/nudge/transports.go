@@ -95,7 +95,11 @@ func (n telegramCopy) batchHeadline(kind string, count int) string {
 // jobLine renders one nudged job as a bullet linking to its freehire page.
 func (n telegramCopy) jobLine(m Message) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "• <a href=%q>%s</a>", n.origin+"/jobs/"+m.Slug, html.EscapeString(m.JobTitle))
+	url := n.origin + "/jobs/" + m.Slug
+	if stoppedAttempt(m.Kind) {
+		url = n.origin + "/my/tracking/" + m.Slug + "?tab=auto_apply"
+	}
+	fmt.Fprintf(&b, "• <a href=%q>%s</a>", url, html.EscapeString(m.JobTitle))
 	if m.Company != "" {
 		fmt.Fprintf(&b, " — %s", html.EscapeString(m.Company))
 	}
@@ -319,7 +323,16 @@ func (n emailCopy) batchCTA(kind string) (url, label string) {
 
 // jobURL is the on-platform freehire job page, tagged with an email UTM source.
 func (n emailCopy) jobURL(m Message) string {
+	if stoppedAttempt(m.Kind) {
+		return n.origin + "/my/tracking/" + m.Slug + "?utm_source=email&tab=auto_apply"
+	}
 	return n.origin + "/jobs/" + m.Slug + "?utm_source=email"
+}
+
+// stoppedAttempt is a kind whose job links open the application chat, where a stopped
+// auto-apply attempt is answered and retried, rather than the job page.
+func stoppedAttempt(kind string) bool {
+	return kind == KindAutoApplyBlocked || kind == KindAutoApplyFailed
 }
 
 // nudgeBody is what the body templates render from. Job carries the source data,

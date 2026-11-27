@@ -212,7 +212,7 @@
     saved,
     onSaveClick,
     onReportClick,
-    applyUrl: cta.autoApply?.leads ? job.apply_url || job.url : null,
+    applyUrl: cta.autoApply?.leads || cta.autoApply?.chat ? job.apply_url || job.url : null,
     applyLabel: cta.external.label,
     onApplyClick,
   });
@@ -477,7 +477,7 @@
       </div>
       <div class="pointer-events-auto flex gap-2">
         {@render tailorCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
-        {#if cta.autoApply?.leads}
+        {#if cta.autoApply?.leads || cta.autoApply?.chat}
           {@render autoApplyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
         {:else}
           {@render applyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg', cta.external)}
