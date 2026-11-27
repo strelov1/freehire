@@ -55,12 +55,20 @@ describe('notificationTarget', () => {
 
   // The three auto-apply outcome kinds now deep-link to the specific application's
   // drawer, like auto_apply_ready_for_review already does.
-  it.each(['nudge_auto_apply_submitted', 'nudge_auto_apply_blocked', 'nudge_auto_apply_failed'] as const)(
-    'sends a %s nudge to the specific application',
+  it('sends a nudge_auto_apply_submitted nudge to the specific application', () => {
+    expect(notificationTarget({ kind: 'nudge_auto_apply_submitted', public_slug: 'acme-go-engineer' })).toEqual({
+      kind: 'tracking',
+      slug: 'acme-go-engineer',
+    });
+  });
+
+  it.each(['nudge_auto_apply_blocked', 'nudge_auto_apply_failed'] as const)(
+    'sends a %s nudge to the application chat',
     (kind) => {
       expect(notificationTarget({ kind, public_slug: 'acme-go-engineer' })).toEqual({
         kind: 'tracking',
         slug: 'acme-go-engineer',
+        chat: true,
       });
     },
   );

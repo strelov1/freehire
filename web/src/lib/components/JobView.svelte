@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { resolve } from '$app/paths';
   import { ArrowRight, SquarePen } from '@lucide/svelte';
   import JobActionStrip from './JobActionStrip.svelte';
   import JobSaveButton from './JobSaveButton.svelte';
@@ -195,7 +196,7 @@
   const autoApplyState = $derived(
     autoApplyButtonState(
       job.source,
-      autoApplyQueue.overrideStatus ?? job.auto_apply_status,
+      autoApplyQueue.overrideStatus ?? autoApplyQueue.callerStatus ?? job.auto_apply_status,
       applied,
       autoApplyQueue.isPro,
       closed,
@@ -318,6 +319,16 @@
 {#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
   {#if cta.autoApply}
     {@const autoApply = cta.autoApply}
+    {#if autoApply.chat}
+      <Button
+        variant="secondary"
+        {size}
+        href={resolve('/my/tracking/[id]?tab=auto_apply', { id: job.public_slug })}
+        class={className}
+      >
+        {autoApply.label}
+      </Button>
+    {:else}
     <Button
       variant="secondary"
       {size}
@@ -332,6 +343,7 @@
         </span>
       {/if}
     </Button>
+    {/if}
   {/if}
 {/snippet}
 

@@ -183,9 +183,9 @@ func TestActionable_FailsClosedWhenApplicationGone(t *testing.T) {
 
 // The three auto-apply outcome kinds are the deliberate opposite of
 // TestActionable_FailsClosedWhenApplicationGone above: their condition cannot lapse,
-// so actionable() ignores stage/job-open/application-existence entirely and answers
-// only off the NotificationsEnabled gate.
-func TestActionable_AutoApplyOutcomeKinds_IgnoreEverythingButNotificationsEnabled(t *testing.T) {
+// so actionable() ignores stage/job-open/application-existence entirely. They answer an
+// attempt the candidate started, so the nudge opt-in does not gate them either.
+func TestActionable_AutoApplyOutcomeKinds_IgnoreEverything(t *testing.T) {
 	for _, kind := range []string{KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed} {
 		t.Run(kind, func(t *testing.T) {
 			r := newRunner(&fakeStore{}, &fakeNotifier{})
@@ -194,10 +194,26 @@ func TestActionable_AutoApplyOutcomeKinds_IgnoreEverythingButNotificationsEnable
 				t.Errorf("actionable() = false for %s with notifications enabled, want true", kind)
 			}
 			row.NotificationsEnabled = false
-			if r.actionable(row) {
-				t.Errorf("actionable() = true for %s with notifications disabled, want false", kind)
+			if !r.actionable(row) {
+				t.Errorf("actionable() = false for %s with notifications disabled, want true", kind)
 			}
 		})
+	}
+}
+
+// An account that never enabled a channel still hears about its auto-apply outcome, by
+// email; every other kind keeps the account's own channels.
+func TestChannelsFor_AutoApplyFallsBackToEmail(t *testing.T) {
+	off := db.GetNudgeForDeliveryRow{Kind: KindAutoApplyBlocked}
+	if got := channelsFor(off); len(got) != 1 || got[0] != "email" {
+		t.Errorf("channelsFor(blocked, no rule) = %v, want [email]", got)
+	}
+	tg := db.GetNudgeForDeliveryRow{Kind: KindAutoApplyBlocked, NotificationsEnabled: true, Channels: []string{"telegram"}}
+	if got := channelsFor(tg); len(got) != 1 || got[0] != "telegram" {
+		t.Errorf("channelsFor(blocked, telegram rule) = %v, want [telegram]", got)
+	}
+	if got := channelsFor(db.GetNudgeForDeliveryRow{Kind: KindFollowUp}); len(got) != 0 {
+		t.Errorf("channelsFor(follow-up, no rule) = %v, want none", got)
 	}
 }
 

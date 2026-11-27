@@ -12,6 +12,9 @@ import type { Job, PlanState } from '#lib/types.js';
 export class JobAutoApply {
   /** The status this page set ('queued' once a request succeeds), over the job's own. */
   overrideStatus = $state<string | null>(null);
+  /** The caller's own status, read in the browser: the server render fetches the job without
+   *  the session cookie, so `job.auto_apply_status` is always empty there. */
+  callerStatus = $state<string | null>(null);
   submitting = $state(false);
   error = $state<string | null>(null);
 
@@ -42,7 +45,22 @@ export class JobAutoApply {
         alive = false;
       };
     });
+
+    $effect(() => {
+      if (!this.isPro) return;
+      void this.refreshStatus();
+    });
   }
+
+  /** Re-reads the caller's status for this job; a failure leaves the last known one. */
+  refreshStatus = async () => {
+    const { public_slug: slug } = this.job();
+    try {
+      this.callerStatus = (await api.getJob(slug)).auto_apply_status ?? null;
+    } catch {
+      // Best-effort overlay: the button falls back to the server-rendered status.
+    }
+  };
 
   start = async () => {
     const { public_slug: slug } = this.job();
@@ -53,6 +71,12 @@ export class JobAutoApply {
       this.overrideStatus = 'queued';
       track('job_auto_apply', { slug });
     } catch (err) {
+      // A 409 for an attempt that already exists (stopped, declined) is answered by showing
+      // that attempt's state, not its error text; other 409s (no base CV) keep the message.
+      if (err instanceof ApiError && err.status === 409) {
+        await this.refreshStatus();
+        if (this.callerStatus) return;
+      }
       this.error = err instanceof ApiError ? err.message : 'Something went wrong — please try again.';
     } finally {
       this.submitting = false;

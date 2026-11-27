@@ -153,12 +153,12 @@ func (n telegramCopy) renderOne(m Message) string {
 			title, company, applicationURL)
 	case KindAutoApplyBlocked:
 		return fmt.Sprintf(
-			"⚠️ Auto-apply couldn't finish <b>%s</b> at <b>%s</b> — a required question needs your own answer.\n<a href=\"%s\">Open your application →</a>",
-			title, company, applicationURL)
+			"⚠️ Auto-apply couldn't finish <b>%s</b> at <b>%s</b> — a required question needs your own answer.\n<a href=\"%s\">Answer it in the chat →</a>",
+			title, company, applicationURL+"?tab=auto_apply")
 	case KindAutoApplyFailed:
 		return fmt.Sprintf(
-			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open your application →</a>",
-			title, company, applicationURL)
+			"Auto-apply couldn't submit <b>%s</b> at <b>%s</b>, and won't try again.\n<a href=\"%s\">Open the chat →</a>",
+			title, company, applicationURL+"?tab=auto_apply")
 	case KindAutoApplyReviewReady:
 		return fmt.Sprintf(
 			"📝 Your application to <b>%s</b> at <b>%s</b> is tailored and waiting for your OK.\n<a href=\"%s\">Review and send →</a>",
@@ -361,7 +361,7 @@ var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
 
 {{define "auto_apply_blocked"}}{{template "job-row" .Job}}
 <div style="height:18px;"></div>
-{{template "p" "Auto-apply couldn't finish this application — a required question needs your own answer."}}
+{{template "p" "Auto-apply couldn't finish this application — a required question needs your own answer. Answer it in the chat and auto-apply picks the application back up."}}
 {{template "button" (mailLink .URL .CTA)}}{{end}}
 
 {{define "auto_apply_failed"}}{{template "job-row" .Job}}
@@ -415,14 +415,14 @@ func (n emailCopy) renderOne(m Message, unsubscribe string) (subject, htmlBody, 
 	case KindAutoApplyBlocked:
 		block, head, pre = "auto_apply_blocked", "Needs your attention", "Auto-apply couldn't finish this application"
 		subject = fmt.Sprintf("Needs your attention: %s at %s", m.JobTitle, m.Company)
-		data.URL, data.CTA = applicationURL, "Open your application"
-		textBody = fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.\n\nOpen your application: %s\n",
+		data.URL, data.CTA = applicationURL+"&tab=auto_apply", "Answer it in the chat"
+		textBody = fmt.Sprintf("Auto-apply couldn't finish %s at %s — a required question needs your own answer.\n\nAnswer it in the chat: %s\n",
 			m.JobTitle, m.Company, data.URL)
 	case KindAutoApplyFailed:
 		block, head, pre = "auto_apply_failed", "Auto-apply couldn't submit this application", "Auto-apply couldn't submit this application"
 		subject = fmt.Sprintf("Couldn't submit: %s at %s", m.JobTitle, m.Company)
-		data.URL, data.CTA = applicationURL, "Open your application"
-		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen your application: %s\n",
+		data.URL, data.CTA = applicationURL+"&tab=auto_apply", "Open the chat"
+		textBody = fmt.Sprintf("Auto-apply couldn't submit %s at %s, and won't try again.\n\nOpen the chat: %s\n",
 			m.JobTitle, m.Company, data.URL)
 	case KindAutoApplyReviewReady:
 		block, head, pre = "auto_apply_review_ready", "Ready to send", "Your application is waiting for your OK"
