@@ -5,7 +5,7 @@ import {
   filtersFromParams,
   activeFilterCount,
   appliesCountriesOnly,
-  countriesOnlyLabel,
+  COUNTRIES_ONLY_LABEL,
 } from './facetModel';
 import { savedSearchQuery } from './savedSearchQuery';
 
@@ -35,8 +35,8 @@ describe('countriesOnly', () => {
     expect(activeFilterCount({ ...emptyFilters(), countriesOnly: true })).toBe(0);
   });
 
-  it('labels the country it narrows to', () => {
-    expect(countriesOnlyLabel(['ch'])).toBe('Only jobs located in Switzerland');
+  it('labels the filter without naming a selection it may not enforce', () => {
+    expect(COUNTRIES_ONLY_LABEL).toBe('Only jobs located in one country');
   });
 
   // The digest matcher replays the stored query, so the alert must mail the same set.

@@ -8,7 +8,7 @@
     appliesWorkModeRemoteAnywhere,
     workModeRemoteLabel,
     appliesCountriesOnly,
-    countriesOnlyLabel,
+    COUNTRIES_ONLY_LABEL,
   } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
@@ -108,7 +108,7 @@
     if (appliesCountriesOnly(f))
       location.push({
         key: 'countries_only',
-        text: countriesOnlyLabel(f.facets.countries?.include ?? []),
+        text: COUNTRIES_ONLY_LABEL,
         exclude: false,
         remove: () => store.setCountriesOnly(false),
       });

@@ -232,7 +232,7 @@ export const FILTER_EXTRAS: FilterRow[] = [
     type: 'boolean',
     label: 'Only inside the selected country',
     values:
-      'true — keeps only postings whose geography is one country, dropping a worldwide remote role that merely lists the selected country among many. Pair with `countries` to keep that country; alone it keeps every one-country posting',
+      'true — keeps only postings whose geography is one country, dropping a worldwide remote role that merely lists the selected country among many. Read only beside an included `countries` value; alone it changes nothing',
   },
 ];
 

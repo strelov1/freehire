@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -24,9 +25,9 @@ func TestFilterFromValues_CountriesOnly(t *testing.T) {
 			want: [][]string{{`NOT multi_country = true`}, {`countries = "ch"`}},
 		},
 		{
-			name:  "true alone still narrows to one-country postings",
+			name:  "alone it changes nothing: there is no country to restrict",
 			query: "countries_only=true",
-			want:  [][]string{{`NOT multi_country = true`}},
+			want:  nil,
 		},
 		{
 			name:  "anything else is off",
@@ -63,6 +64,19 @@ func TestFromJob_MultiCountry(t *testing.T) {
 	}
 	if !many.MultiCountry {
 		t.Error("a two-country posting must be multi_country")
+	}
+}
+
+// The closure union widens Countries AFTER FromJob, so the marker must follow it; a
+// collapsed multi-country role would otherwise stay filterable as single-country.
+func TestMergeClosureGeography_RefreshesMultiCountry(t *testing.T) {
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "ch", Countries: []string{"ch"}}, "")
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	doc.MergeClosureGeography(jobview.ClosureGeo{Countries: []string{"de"}})
+	if !doc.MultiCountry {
+		t.Error("a closure that adds a country must set multi_country")
 	}
 }
 

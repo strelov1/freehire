@@ -4217,7 +4217,7 @@
       "job.countries_only": {
         "name": "countries_only",
         "in": "query",
-        "description": "Only inside the selected country: true — keeps only postings whose geography is one country, dropping a worldwide remote role that merely lists the selected country among many. Pair with `countries` to keep that country; alone it keeps every one-country posting.",
+        "description": "Only inside the selected country: true — keeps only postings whose geography is one country, dropping a worldwide remote role that merely lists the selected country among many. Read only beside an included `countries` value; alone it changes nothing.",
         "schema": {
           "type": "boolean"
         }

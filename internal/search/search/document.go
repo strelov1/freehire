@@ -131,6 +131,15 @@ func FromJob(j db.Job, sourceType string) (JobDocument, error) {
 	return doc, nil
 }
 
+// MergeClosureGeography widens the embedded geography and keeps multi_country in step with
+// it: the closure union happens after FromJob, so a union that adds a country must not leave
+// the document marked single-country. It shadows the embedded Job method deliberately, so
+// every writer that merges a closure gets the refreshed marker.
+func (d *JobDocument) MergeClosureGeography(g jobview.ClosureGeo) {
+	d.Job.MergeClosureGeography(g)
+	d.MultiCountry = len(d.Countries) > 1
+}
+
 // AttachApplyQuestions sets the document's apply_questions from a batch's counts
 // (applyform.QuestionCounts, which this package may not import — the writers read them and
 // hand them in). A job missing from counts has no captured form and keeps the key absent:

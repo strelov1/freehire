@@ -287,17 +287,16 @@ export function workModeRemoteLabel(f: JobFilters): string {
 const LOCATION_FACET_PARAMS = ['regions', 'countries', 'cities', 'metros'];
 
 /** Whether the country-only modifier changes the answer: it needs an included country to
- *  modify. Mirrors the guard on `countries_only` in the server's filter, which reads the
- *  modifier on its own but is offered only beside a country. */
+ *  modify. Mirrors the server's guard (`hasCountryInclude` in query_filter.go), which is why
+ *  a lone `countries_only` changes nothing on either side. */
 export function appliesCountriesOnly(f: JobFilters): boolean {
   return f.countriesOnly && (f.facets.countries?.include.length ?? 0) > 0;
 }
 
-/** The modifier's checkbox and chip text: the countries it narrows to. */
-export function countriesOnlyLabel(countries: readonly string[]): string {
-  const names = countries.map((v) => dynamicLabel('countries', v));
-  return names.length === 1 ? `Only jobs located in ${names[0]}` : `Only jobs located in ${names.join(', ')}`;
-}
+/** The modifier's checkbox and chip text. It names what the filter does — keep postings
+ *  bound to one country — rather than the selection, which can be several countries or sit
+ *  beside a region that widens the geography group. */
+export const COUNTRIES_ONLY_LABEL = 'Only jobs located in one country';
 
 export const isPhysicalMode = (m: string) => m === 'hybrid' || m === 'onsite';
 

@@ -12,7 +12,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { eligibleForMeValues, isEligibleForMeOn, resolveGeoSource } from '#lib/eligibleForMe.js';
-  import { countriesOnlyLabel } from '#lib/filters.js';
+  import { COUNTRIES_ONLY_LABEL } from '#lib/filters.js';
 
   // Location pane: a region → country tree plus a flat, searchable Cities list.
   // The country tree is built from the exported country→region map, scoped to what
@@ -267,9 +267,9 @@
         onchange={(e) => countryOnly.set(e.currentTarget.checked)}
       />
       <span>
-        {countriesOnlyLabel(countryF.include)}
+        {COUNTRIES_ONLY_LABEL}
         <span class="mt-0.5 block text-xs text-muted-foreground">
-          Hides postings that list many countries, like worldwide remote roles.
+          Hides postings available in many countries, like worldwide remote roles.
         </span>
       </span>
     </label>

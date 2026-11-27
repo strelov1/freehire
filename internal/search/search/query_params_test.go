@@ -83,7 +83,6 @@ func TestScalarFilters_EachOneStillNarrowsAQuery(t *testing.T) {
 		"posted_within_days":   "7",
 		"open_within_days":     "7",
 		ApplyQuestionsMaxParam: "3",
-		CountriesOnlyParam:     "true",
 	}
 
 	for _, param := range scalarFilters {

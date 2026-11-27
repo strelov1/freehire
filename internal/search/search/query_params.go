@@ -19,7 +19,6 @@ var scalarFilters = []string{
 	"posted_within_days",
 	"open_within_days",
 	ApplyQuestionsMaxParam,
-	CountriesOnlyParam,
 }
 
 // WatchlistParam narrows a search to the caller's own watchlist (internal/engage/companywatch).
@@ -87,6 +86,7 @@ var scalarModifiers = []string{
 	WorkModeRemoteAnywhereParam,
 	WorkModeRemoteRegionsParam,
 	WorkModeRemoteCountriesParam,
+	CountriesOnlyParam,
 }
 
 // qSearchableFields are the fields `q` matches, in the order of the jobs index's
