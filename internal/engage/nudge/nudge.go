@@ -413,7 +413,7 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 // outcomes or removing the application cancel the notification. The auto-apply
 // outcome kinds need no re-derivation: their condition cannot lapse.
 func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
-	if !info.NotificationsEnabled {
+	if !info.NotificationsEnabled && !isAutoApplyOutcome(info.Kind) {
 		return false
 	}
 	stage := ""
@@ -454,7 +454,7 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 // channel with no destination or no notifier is a soft-skip. One successful channel
 // makes the batch delivered.
 func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliveryRow, msgs []Message) (sent int, failedErr error) {
-	for _, ch := range info.Channels {
+	for _, ch := range channelsFor(info) {
 		dest, ok := notify.Recipient(ch, recipientInfo(info))
 		if !ok {
 			continue
@@ -476,6 +476,25 @@ func (r *Runner) deliverChannels(ctx context.Context, info db.GetNudgeForDeliver
 		sent++
 	}
 	return sent, failedErr
+}
+
+// isAutoApplyOutcome reports the kinds that answer an attempt the candidate started
+// themselves. They are transactional notices: sent without the nudge opt-in.
+func isAutoApplyOutcome(kind string) bool {
+	switch kind {
+	case KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed, KindAutoApplyReviewReady:
+		return true
+	}
+	return false
+}
+
+// channelsFor is the account's own channels, or email for an auto-apply outcome when the
+// account never enabled any: without it most auto-apply users would hear nothing.
+func channelsFor(info db.GetNudgeForDeliveryRow) []string {
+	if isAutoApplyOutcome(info.Kind) && (!info.NotificationsEnabled || len(info.Channels) == 0) {
+		return []string{notify.ChannelEmail}
+	}
+	return info.Channels
 }
 
 // recipientInfo is the account-and-channel state the shared Recipient decides on.

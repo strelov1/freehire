@@ -62,7 +62,10 @@
         // A slug opens the same deep-link route the inbox already uses
         // (/my/tracking/[id] — see JobBoard.svelte's own initialId prop) so the
         // board paints with that application's drawer open, not just the board.
-        return t.slug ? resolve('/my/tracking/[id]', { id: t.slug }) : resolve('/my/tracking');
+        if (!t.slug) return resolve('/my/tracking');
+        return t.chat
+          ? resolve('/my/tracking/[id]?tab=auto_apply', { id: t.slug })
+          : resolve('/my/tracking/[id]', { id: t.slug });
       case 'digest':
         return resolve('/my/notifications/[id]/jobs', { id: String(t.id) });
       case 'tailor':

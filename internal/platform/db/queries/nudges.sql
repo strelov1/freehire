@@ -90,6 +90,11 @@ WITH locked AS (
 )
 SELECT count(*) FROM nudges;
 
+-- The four auto-apply outcome scans below do not require notification_settings.enabled:
+-- the candidate started the attempt, so its outcome is a transactional notice, not an
+-- opt-in nudge (most auto-apply users never saved a notification rule). Delivery falls
+-- back to email when they have no channel (Runner.channelsFor).
+
 -- name: ListAutoApplySubmittedCandidates :many
 -- application_events rows auto-apply itself wrote on a successful, unattended
 -- submission (kind='applied', source='auto_apply' — distinct from a candidate's
@@ -100,7 +105,6 @@ SELECT count(*) FROM nudges;
 -- other candidate scans.
 SELECT ev.user_id, ev.job_id, ev.occurred_at
 FROM application_events ev
-JOIN notification_settings ns ON ns.user_id = ev.user_id AND ns.enabled
 WHERE ev.kind = 'applied'
   AND ev.source = 'auto_apply'
   AND ev.retracted_at IS NULL
@@ -121,7 +125,6 @@ WHERE ev.kind = 'applied'
 -- here too — one nudge per attempt, not two contradictory ones.
 SELECT q.user_id, q.job_id, q.blocked_at
 FROM auto_apply_queue q
-JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
 WHERE q.blocked_at IS NOT NULL
   AND q.failed_at IS NULL
   AND q.blocked_at > now() - make_interval(days => sqlc.arg(window_days)::int);
@@ -136,7 +139,6 @@ WHERE q.blocked_at IS NOT NULL
 -- the same first-deploy reason as the other candidate scans.
 SELECT q.user_id, q.job_id, q.failed_at
 FROM auto_apply_queue q
-JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
 WHERE q.failed_at IS NOT NULL
   AND q.failed_at > now() - make_interval(days => sqlc.arg(window_days)::int);
 
@@ -149,7 +151,6 @@ WHERE q.failed_at IS NOT NULL
 SELECT q.user_id, q.job_id, q.created_at
 FROM auto_apply_queue q
 JOIN jobs j ON j.id = q.job_id AND j.closed_at IS NULL
-JOIN notification_settings ns ON ns.user_id = q.user_id AND ns.enabled
 WHERE q.review_decision IS NULL
   AND q.tailored_cv_id IS NOT NULL
   AND q.resolved_preview IS NOT NULL

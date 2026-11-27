@@ -6,7 +6,7 @@ import type { NotificationItem } from './types';
 
 export type NotificationTarget =
   | { kind: 'job'; slug: string }
-  | { kind: 'tracking'; slug?: string }
+  | { kind: 'tracking'; slug?: string; chat?: boolean }
   | { kind: 'digest'; id: number }
   | { kind: 'tailor'; slug: string }
   | { kind: 'mocks' }
@@ -40,12 +40,11 @@ export function notificationTarget(
     if (item.kind === 'nudge_follow_up') {
       return { kind: 'tracking' };
     }
-    if (
-      item.kind === 'nudge_interview_prep' ||
-      item.kind === 'nudge_auto_apply_submitted' ||
-      item.kind === 'nudge_auto_apply_blocked' ||
-      item.kind === 'nudge_auto_apply_failed'
-    ) {
+    // A stopped attempt opens the drawer's chat, where its open questions are answered.
+    if (item.kind === 'nudge_auto_apply_blocked' || item.kind === 'nudge_auto_apply_failed') {
+      return { kind: 'tracking', slug: item.public_slug, chat: true };
+    }
+    if (item.kind === 'nudge_interview_prep' || item.kind === 'nudge_auto_apply_submitted') {
       return { kind: 'tracking', slug: item.public_slug };
     }
     if (item.kind === 'auto_apply_tailor_ready') {
