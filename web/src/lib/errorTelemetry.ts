@@ -204,19 +204,27 @@ type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 // filled the client stream with ~70 events a day and were read as a release regression.
 const EXTENSION_FRAME = /^(?:chrome|moz|safari|safari-web|edge)-extension:\/\//i;
 const NOT_SHIPPED_FRAME = /^https?:\/\/[^/]+\/(?!_app\/)/i;
+//
+// One stack holding our frames is foreign too: the one an extension's code threw from. An
+// extension that wraps a DOM method (Node.prototype.appendChild) sits on top of every call our
+// hydration makes, and on a page whose DOM it already rewrote the wrapped call throws a
+// HierarchyRequestError there, once per page view of that one visitor; dozens of those in a
+// few minutes from a single browser read as a release-wide client error burst. When OUR frame
+// is innermost the stack still reports, whatever extension frames sit below it.
 function fromForeignCodeOnly(error: unknown): boolean {
   if (!(error instanceof Error) || typeof error.stack !== 'string') return false;
-  const frames = error.stack.split('\n').filter((line) => /^\s*at\s+|@\S+:\d+/.test(line));
-  return (
-    frames.length > 0 &&
-    frames.every((line) => {
-      const location = line
+  const locations = error.stack
+    .split('\n')
+    .filter((line) => /^\s*at\s+|@\S+:\d+/.test(line))
+    .map((line) =>
+      line
         .trim()
         .replace(/^at\s+(?:.*?\s+\()?/, '')
-        .replace(/^.*?@/, '');
-      return EXTENSION_FRAME.test(location) || NOT_SHIPPED_FRAME.test(location);
-    })
-  );
+        .replace(/^.*?@/, ''),
+    );
+  if (locations.length === 0) return false;
+  if (EXTENSION_FRAME.test(locations[0])) return true;
+  return locations.every((location) => EXTENSION_FRAME.test(location) || NOT_SHIPPED_FRAME.test(location));
 }
 
 // A parse error reaches the window listener with no frames at all, so the stack cannot
