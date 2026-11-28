@@ -87,6 +87,24 @@ var curatedAliases = map[string]string{
 	// berkeley-research-group company records homepage thinkbrg.com.
 	"thinkbrg": "berkeley-research-group",
 
+	// Short and long forms of one employer's name, split between its own board and aggregator
+	// copies. Each count is shared open roles over the smaller side; the survivor is the slug
+	// whose company record holds the employer's website (company_info is not carried over).
+	"michaels":                 "michaels-stores",               // 1562/1618, michaels.com
+	"truist-bank":              "truist",                        // 595/610, truist.com
+	"c-a-brasil-lojas":         "c-a-brasil",                    // 356/358
+	"verzani":                  "verzani-sandrini",              // 108/109
+	"rhf-talentos-matriz":      "rhf-talentos",                  // 1574/1792, "Matriz" = head office
+	"pradeepit":                "pradeepit-consulting-services", // 20/28
+	"ochsner":                  "ochsner-health",                // 33/51, one Workday tenant
+	"bayada":                   "bayada-home-health-care",       // 16/25
+	"publicis-groupe-holdings": "publicis-groupe",               // 64/152
+	"magna":                    "magna-international",           // 14/34, magna.wd3 tenant
+	"lifestance":               "lifestance-health",             // 7/22, one Workday tenant
+	"greystar-worldwide":       "greystar",                      // 21/98
+	// Only 2/11 by role, admitted on the domain: both records name svetness.com.
+	"svetness": "svetness-personal-training",
+
 	// Numeric board artefacts, each confirmed by shared open titles (the count follows).
 	"aecom2":                   "aecom",         // 1063
 	"nagarro1":                 "nagarro",       // 323

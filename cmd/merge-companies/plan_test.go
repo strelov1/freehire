@@ -477,3 +477,49 @@ func TestNameWords_SpacedPolishFormIsNotNameWords(t *testing.T) {
 		t.Errorf("nameWords = %d, want 1", got)
 	}
 }
+
+func TestPlanMerges_CuratedEntryCannotRetireAFrozenCanon(t *testing.T) {
+	// micron was a frozen canon (micron-sp-z-o-o 301s to it) when a curated entry named it
+	// retiring; honouring the entry would have left that alias pointing at an empty slug.
+	companies := []company{
+		{Slug: "micron", Name: "Micron", JobCount: 40},
+		{Slug: "micron-technology", Name: "Micron Technology", JobCount: 50},
+	}
+	got := planMerges(companies, map[string]bool{"micron": true}, 0, map[string]string{"micron": "micron-technology"})
+	for _, m := range got {
+		for _, a := range m.Aliases {
+			if a.Slug == "micron" {
+				t.Errorf("planned micron -> %q, want it kept: a frozen canon never moves", m.Canonical)
+			}
+		}
+	}
+}
+
+func TestPlanMerges_FrozenCanonNeverRetiresThroughAnyGroup(t *testing.T) {
+	frozen := map[string]bool{"acme": true, "acme-inc": true}
+	cases := map[string]struct {
+		companies []company
+		curated   map[string]string
+	}{
+		// The curated fold pulls frozen acme into acme-inc's group by name.
+		"curated fold": {
+			companies: []company{{Slug: "acme", Name: "Acme", JobCount: 9}, {Slug: "acme-inc", Name: "Acme", JobCount: 5}, {Slug: "acme-1", Name: "Acme 1", JobCount: 1}},
+			curated:   map[string]string{"acme-1": "acme-inc"},
+		},
+		// Two frozen canons share an ordinary fold; electCanonical can keep only one.
+		"two canons in one fold": {
+			companies: []company{{Slug: "acme", Name: "Acme", JobCount: 9}, {Slug: "acme-inc", Name: "Acme Inc", JobCount: 5}},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, m := range planMerges(tc.companies, frozen, 0, tc.curated) {
+				for _, a := range m.Aliases {
+					if frozen[a.Slug] {
+						t.Errorf("planned frozen %q -> %q, want it kept", a.Slug, m.Canonical)
+					}
+				}
+			}
+		})
+	}
+}
