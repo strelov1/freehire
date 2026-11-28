@@ -64,6 +64,7 @@ type contractHandlers struct {
 	*promoHandlers
 	*mentorSuggestionsHandlers
 	*bookingLinkHandlers
+	*availabilityHandlers
 	*mentorshipHandlers
 	*savedSearchHandlers
 	*subscriptionHandlers
@@ -376,6 +377,24 @@ func nilInt64(p *int64) apigen.NilInt64 {
 		return apigen.NilInt64{Null: true}
 	}
 	return apigen.NewNilInt64(*p)
+}
+
+// int4Ptr lifts a nullable int4 column into the *int64 nilInt64 takes: nil when invalid.
+func int4Ptr(n pgtype.Int4) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := int64(n.Int32)
+	return &v
+}
+
+// int32Ptr widens an optional search-document integer into the *int64 nilInt64 takes.
+func int32Ptr(n *int32) *int64 {
+	if n == nil {
+		return nil
+	}
+	v := int64(*n)
+	return &v
 }
 
 // nilFloat32Ptr is an always-present nullable number set from a domain pointer: null for nil.

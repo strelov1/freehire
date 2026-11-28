@@ -21,7 +21,7 @@ package is a best-effort gap-filler, not a guaranteed resolver.
    subtype the anchor set doesn't name directly (`CACI` → "American defense
    contractor") still passes, because it's a `P279*` subclass of one of the six
    anchors. See `design.md`/`proposal.md` under
-   `openspec/changes/company-info-wikipedia-backfill` for why: a spike found the
+   `openspec/changes/archive/2026-09-09-company-info-wikipedia-backfill` for why: a spike found the
    keyword-scan approach produced both false positives and false negatives.
 3. On a confident match, the entity's `enwiki` sitelink (if any) is fetched via
    `wbgetentities` and its Wikipedia summary extract pulled — `Match.Tagline`

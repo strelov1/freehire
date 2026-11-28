@@ -862,11 +862,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search open jobs with their original links (Data plan).
+         * Search open jobs with their original links (API and Data plans).
          * @description The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
          *     each job's `url` (the employer's own posting) and `source_url` where it differs. The public
-         *     job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
-         *     account gets `403`. Never cached: the answer is private to the plan holder.
+         *     job reads leave both out and link only through `apply_url`. Needs a paid API plan (API or
+         *     Data): any other account gets `403`. Never cached: the answer is private to the plan holder.
          */
         get: operations["searchDataJobs"];
         put?: never;
@@ -885,9 +885,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A single job with its original links (Data plan).
-         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
-         *     Data plan: any other account gets `403`.
+         * A single job with its original links (API and Data plans).
+         * @description The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid
+         *     API plan (API or Data): any other account gets `403`.
          */
         get: operations["getDataJob"];
         put?: never;
@@ -2028,24 +2028,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/jobs/{slug}/fit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Alias of `getMatchAnalysis`. */
-        get: operations["getJobFit"];
-        put?: never;
-        /** @description Alias of `runMatchAnalysis`. */
-        post: operations["runJobFit"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/jobs/{slug}/ghost-report": {
         parameters: {
             query?: never;
@@ -2650,6 +2632,106 @@ export interface paths {
          */
         post: operations["runAutofill"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my availability.
+         * @description The caller's availability: hours, zone and booking-link settings.
+         */
+        get: operations["getAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save my booking-link settings.
+         * @description Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration or notice is 422.
+         */
+        put: operations["saveAvailabilityBooking"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a dated override.
+         * @description Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+         */
+        post: operations["addAvailabilityDated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace my weekly hours.
+         * @description Swap the recurring week; dated overrides stay.
+         */
+        put: operations["replaceAvailabilityWeekly"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/availability/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one availability rule.
+         * @description Remove one of the caller's own rules.
+         */
+        delete: operations["deleteAvailabilityEntry"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7256,6 +7338,52 @@ export interface components {
             required: boolean;
             reason: string;
         };
+        AvailabilityBookingBody: {
+            /** @description IANA zone the hours are stated in. */
+            timezone: string;
+            /** Format: int64 */
+            duration_min: number;
+            /** Format: int64 */
+            notice_hours: number;
+        };
+        AvailabilityBookingOut: {
+            /**
+             * Format: int64
+             * @description Meeting length of a booking link: 15, 30, 45 or 60.
+             */
+            duration_min: number;
+            /**
+             * Format: int64
+             * @description Shortest notice before a booking-link meeting, in hours (0 to 168).
+             */
+            notice_hours: number;
+        };
+        AvailabilityOut: {
+            /** @description Weekly rules and dated overrides together. */
+            rules: components["schemas"]["BuddyMockRuleOut"][];
+            /** @description The zone the hours are stated in; null until settings were saved. */
+            timezone: string | null;
+            /** @description False while the user has neither hours nor settings, so booking links still use their default week (Mon-Fri 10-18, 30 min, 12 h). */
+            saved: boolean;
+            booking: components["schemas"]["AvailabilityBookingOut"];
+        };
+        AvailabilityRuleBody: {
+            /** @description 0 (Sunday) through 6; null for a dated override. */
+            weekday?: number | null;
+            /** @description YYYY-MM-DD; null for a weekly rule. */
+            date?: string | null;
+            /** @description HH:MM. */
+            start?: string;
+            /** @description HH:MM; 24:00 means until midnight. */
+            end?: string;
+            /** @description IANA zone the hours are stated in; stored when present, 422 if invalid. */
+            timezone?: string;
+        };
+        AvailabilityWeeklyBody: {
+            rules?: components["schemas"]["BuddyMockRule"][];
+            /** @description IANA zone the hours are stated in; stored when present, 422 if invalid. */
+            timezone?: string;
+        };
         BanRequest: {
             /** @description 1 to 500 characters. */
             reason?: string;
@@ -7878,6 +8006,8 @@ export interface components {
             website: string | null;
             /** @description The company's LinkedIn page; null when unknown. */
             linkedin: string | null;
+            /** @description Headcount; null when unknown. Filter with `employee_count_min` / `employee_count_max`. */
+            employee_count: number | null;
             /** @description Curated company tags; the catalogue card renders the backer marks from these. */
             collections: string[];
             /** Format: int64 */
@@ -7896,6 +8026,8 @@ export interface components {
             jobs?: components["schemas"]["Job"][];
             /** @description Whether an employee referral offer exists for this company. */
             referral_available?: boolean;
+            /** @description Whether an employer account holds this company. */
+            company_claimed?: boolean;
             parent?: components["schemas"]["CompanyRef"];
             /** @description Companies this one owns. Each is a separate employer with its own jobs. Omitted when there are none. */
             subsidiaries?: components["schemas"]["CompanyRef"][];
@@ -8522,7 +8654,10 @@ export interface components {
             meta: components["schemas"]["EmployerApplicationsMeta"];
         };
         EmployerClaim: {
+            /** @description The company's name, for one the catalogue may not list yet. Ignored when `company_slug` is set. */
             company_name?: string;
+            /** @description The slug of a company the catalogue lists (`company_slug` of a job or company page). */
+            company_slug?: string;
             work_email?: string;
         };
         /** @enum {string} */
@@ -9174,7 +9309,7 @@ export interface components {
             company: string;
             company_slug?: string;
             /**
-             * @description The employer's own application URL, as published. Served only by the Data plan's
+             * @description The employer's own application URL, as published. Served only by the paid API plans'
              *     `/data/jobs` endpoints: every other job read leaves it empty wherever `apply_url` is set.
              *     Empty too when `direct_apply` is true: that vacancy has no page elsewhere.
              */
@@ -9198,7 +9333,7 @@ export interface components {
             external_id?: string;
             /**
              * @description The original posting when `url` points at a separately verified application
-             *     destination. Absent when both links are the same, and outside the Data plan's
+             *     destination. Absent when both links are the same, and outside the paid API plans'
              *     `/data/jobs` endpoints.
              */
             source_url?: string;
@@ -12799,6 +12934,7 @@ export interface operations {
                      *           "hq_country": "DE",
                      *           "website": "https://acme.example",
                      *           "linkedin": "https://www.linkedin.com/company/acme",
+                     *           "employee_count": 40,
                      *           "collections": [
                      *             "yc"
                      *           ],
@@ -16734,77 +16870,6 @@ export interface operations {
             };
         };
     };
-    getJobFit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The request has succeeded. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FitAnalysisResponse"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    runJobFit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The request has succeeded. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FitAnalysisResponse"];
-                };
-            };
-            /** @description Client error */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FitRefusal"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
     createGhostReport: {
         parameters: {
             query?: never;
@@ -18535,6 +18600,167 @@ export interface operations {
                         data: unknown;
                     };
                 };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAvailability: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AvailabilityOut"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    saveAvailabilityBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityBookingBody"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AvailabilityBookingOut"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addAvailabilityDated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityRuleBody"];
+            };
+        };
+        responses: {
+            /** @description The request has succeeded and a new resource has been created as a result. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BuddyMockRuleOut"];
+                    };
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    replaceAvailabilityWeekly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailabilityWeeklyBody"];
+            };
+        };
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteAvailabilityEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description There is no content to send for this request, but the headers may be useful. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description An unexpected error response. */
             default: {

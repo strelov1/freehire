@@ -41,9 +41,19 @@ extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
       app.css         Tailwind + freehire-design-system/theme.css import
       main.ts         Svelte 5 mount
   lib/
-    assistant/        the chat: SSE reader, wire types, chat + deck reducers,
-                      tool formatters, the session store, and the API and turn
-                      clients (+ tests). Ported from the freehire web assistant.
+    assistant/        the chat, ported from the freehire web assistant (see Conventions):
+                      sse.ts            the SSE reader over a fetch response body
+                      wire.ts           TurnEvent, StoredMessage, eventsFromTranscript
+                      chat.ts           reduceTurnEvent: events -> the message list
+                      deck.ts           splitting a message's calls into job decks
+                      tool-formatters.ts  a call's label and detail line (NOT a port)
+                      api.ts / client.ts  the session API and one streamed turn
+                      session.ts        which conversation + page the panel remembers
+                      conversationRestore.ts  replaying it on open, race-free
+                      jobCache.ts       job cards' fetch cache
+                      pageIdentity.ts   the posting a conversation belongs to
+                      pageRead.ts       which page a read_current_page call touched
+                      (+ a .test.ts beside most of them)
     tools/            browser-tool executor: the wire contract, the executeTool
                       dispatch (+ tests), the ToolChannel socket to hire's relay,
                       and the PageBridge that reaches the tab's frames.
@@ -168,14 +178,18 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   is read — this extension is the only side that sees a url before scraping it. The
   panel then names the page each read touched, minus query and fragment, which is
   where session tokens live. That display lives in `lib/assistant/pageRead.ts`
-  rather than in `tool-formatters.ts`, precisely because the latter is a verbatim
-  port and `read_current_page` cannot occur in the web app.
+  rather than in `tool-formatters.ts`, which formats every other call and would
+  otherwise be its natural home: `read_current_page` cannot occur in the web app,
+  whose formatters that file follows.
 - **`lib/assistant/` mirrors the freehire web assistant** (`web/src/lib/assistant`
-  in this repo). `sse`, `wire`, `chat`, `deck` and `tool-formatters` are
-  verbatim ports — keep them aligned. Three files diverge, and they say so
-  at the top: `api.ts`/`client.ts` (absolute origin + Bearer, since extension code
-  has no cookie) and `jobCache.ts` (reads the token the web's cookie made
-  implicit).
+  in this repo). `sse`, `wire`, `chat` and `deck` are verbatim ports, tests
+  included — keep them aligned; `pnpm check:ports` at the repo root (the pre-commit
+  hook, the `web` and `extension` CI jobs) diffs the pairs after rewriting import
+  paths, and fails on a port that drifted. `tool-formatters` is not one: the web
+  labels through its i18n messages, this side through a flat `LABELS` map that also
+  carries `read_current_page`. `api.ts`/`client.ts` (absolute origin + Bearer, since
+  extension code has no cookie) and `jobCache.ts` (reads the token the web's cookie
+  made implicit) diverge too, and say so at the top.
 - **Test the logic, not the transport.** `scraper`, `form`, `protocol`, the
   assistant's reducers and its API clients are tested (vitest); the chrome message
   plumbing, the live socket and `storage.local` helpers are thin glue.

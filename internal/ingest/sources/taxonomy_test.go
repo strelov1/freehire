@@ -9,7 +9,7 @@ import (
 // ones the two registries disagree about. The WhatJobs providers come from whatjobsMarkets
 // so a new market is covered automatically.
 var keyedProviders = func() []string {
-	out := []string{"reed", "usajobs", "francetravail", "arc", "adzuna"}
+	out := []string{"reed", "usajobs", "francetravail", "arc", "adzuna", "careerjet", "jooble"}
 	for _, m := range whatjobsMarkets {
 		out = append(out, m.provider)
 	}
@@ -26,6 +26,9 @@ func clearCrawlCredentials(t *testing.T) {
 	t.Setenv("FRANCE_TRAVAIL_CLIENT_SECRET", "")
 	t.Setenv("ADZUNA_APP_ID", "")
 	t.Setenv("ADZUNA_APP_KEY", "")
+	t.Setenv("CAREERJET_API_KEY", "")
+	t.Setenv("CAREERJET_USER_IP", "")
+	t.Setenv("JOOBLE_API_KEY", "")
 	t.Setenv("WHATJOBS_PUBLISHER_IDS", "")
 	t.Setenv(arcSessionEnv, "")
 }

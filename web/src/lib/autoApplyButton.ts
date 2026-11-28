@@ -21,7 +21,7 @@ export type AutoApplyButtonState =
   | { kind: 'queued' } // a live, undecided attempt already exists
   | { kind: 'declined' } // the candidate's own prior decision, permanent
   | { kind: 'applied' } // a completed auto-apply already submitted this job for real
-  | { kind: 'failed' }; // cmd/auto-apply gave up on this attempt (dead-lettered or parked)
+  | { kind: 'failed' }; // cmd/auto-apply stopped this attempt (parked on a question or dead-lettered)
 
 /** Decides the auto-apply button's state from the job's source, the caller's own
  *  auto_apply_status (undefined/null for no attempt or an anonymous caller), whether they
@@ -71,6 +71,9 @@ export type JobCtaPlan = {
     /** Renders the `Pro` marker naming the plan the action requires. */
     pro: boolean;
     disabled: boolean;
+    /** Opens the attempt's chat on the tracking board instead of starting an attempt: a
+     *  stopped attempt is finished there, by answering its open questions. */
+    chat?: boolean;
   } | null;
   /** The link out to the posting's own site, an outline button in every state. Reads
    *  `Apply on company site` while auto-apply is doing the applying — the word is the
@@ -130,6 +133,9 @@ export function jobCtaPlan(state: AutoApplyButtonState): JobCtaPlan {
     case 'declined':
       return { autoApply: quiet('Auto-apply declined'), external: apply };
     case 'failed':
-      return { autoApply: quiet("Auto-apply couldn't complete"), external: apply };
+      return {
+        autoApply: { label: 'Finish in chat', leads: false, pro: false, disabled: false, chat: true },
+        external: apply,
+      };
   }
 }

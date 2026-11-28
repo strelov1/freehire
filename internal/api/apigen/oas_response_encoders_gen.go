@@ -39,6 +39,19 @@ func encodeAddAtomResponse(response *AddAtomCreated, w http.ResponseWriter) erro
 	return nil
 }
 
+func encodeAddAvailabilityDatedResponse(response *AddAvailabilityDatedCreated, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(201)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeAddAvailabilityOverrideResponse(response *AddAvailabilityOverrideCreated, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(201)
@@ -1108,6 +1121,12 @@ func encodeDeleteAtomResponse(response *DeleteAtomNoContent, w http.ResponseWrit
 	return nil
 }
 
+func encodeDeleteAvailabilityEntryResponse(response *DeleteAvailabilityEntryNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeDeleteAvailabilityRuleResponse(response *DeleteAvailabilityRuleNoContent, w http.ResponseWriter) error {
 	w.WriteHeader(204)
 
@@ -1589,6 +1608,19 @@ func encodeGetAutofillProfileResponse(response *GetAutofillProfileOK, w http.Res
 	return nil
 }
 
+func encodeGetAvailabilityResponse(response *GetAvailabilityOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
+
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
+	}
+
+	return nil
+}
+
 func encodeGetBillingAttemptsResponse(response *BillingAttemptsHeaders, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	// Encoding response headers.
@@ -1999,19 +2031,6 @@ func encodeGetInviteResponse(response *GetInviteOK, w http.ResponseWriter) error
 }
 
 func encodeGetJobResponse(response *GetJobOK, w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(200)
-
-	e := new(jx.Encoder)
-	response.Encode(e)
-	if _, err := e.WriteTo(w); err != nil {
-		return errors.Wrap(err, "write")
-	}
-
-	return nil
-}
-
-func encodeGetJobFitResponse(response *FitAnalysisResponse, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 
@@ -4418,6 +4437,12 @@ func encodeReopenEmployerVacancyResponse(response *ReopenEmployerVacancyOK, w ht
 	return nil
 }
 
+func encodeReplaceAvailabilityWeeklyResponse(response *ReplaceAvailabilityWeeklyNoContent, w http.ResponseWriter) error {
+	w.WriteHeader(204)
+
+	return nil
+}
+
 func encodeReplaceResumeContactsFromCvResponse(response *ReplaceResumeContactsFromCvOK, w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -4738,7 +4763,7 @@ func encodeRunAutofillResponse(response *RunAutofillOK, w http.ResponseWriter) e
 	return nil
 }
 
-func encodeRunJobFitResponse(response RunJobFitRes, w http.ResponseWriter) error {
+func encodeRunMatchAnalysisResponse(response RunMatchAnalysisRes, w http.ResponseWriter) error {
 	switch response := response.(type) {
 	case *FitAnalysisResponse:
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -4769,35 +4794,17 @@ func encodeRunJobFitResponse(response RunJobFitRes, w http.ResponseWriter) error
 	}
 }
 
-func encodeRunMatchAnalysisResponse(response RunMatchAnalysisRes, w http.ResponseWriter) error {
-	switch response := response.(type) {
-	case *FitAnalysisResponse:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(200)
+func encodeSaveAvailabilityBookingResponse(response *SaveAvailabilityBookingOK, w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(200)
 
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	case *FitRefusal:
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(402)
-
-		e := new(jx.Encoder)
-		response.Encode(e)
-		if _, err := e.WriteTo(w); err != nil {
-			return errors.Wrap(err, "write")
-		}
-
-		return nil
-
-	default:
-		return errors.Errorf("unexpected response type: %T", response)
+	e := new(jx.Encoder)
+	response.Encode(e)
+	if _, err := e.WriteTo(w); err != nil {
+		return errors.Wrap(err, "write")
 	}
+
+	return nil
 }
 
 func encodeSaveBankedAnswerResponse(response *SaveBankedAnswerOK, w http.ResponseWriter) error {

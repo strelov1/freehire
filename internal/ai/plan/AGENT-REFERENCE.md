@@ -248,9 +248,10 @@ transaction. `store.go` is the transaction around it and nothing else.
   action is a model call whose cost we absorb, so an unmeasured one is a rounding error.
   auto-apply drives a browser and submits a REAL application to a REAL employer under
   somebody's name — an unmeasured one is not ours to absorb, and it is not undoable. The
-  honest answer to "we could not tell whether you may" is to say so, so `chargeAutoApply`
-  answers 503 both when the charge errors and when the meter is absent. Nothing else in this
-  package may copy that without an argument of the same shape.
+  honest answer to "we could not tell whether you may" is to say so, so the enqueue use case's
+  charge (`autoapply.Enqueuer.charge`, behind `PostJobAutoApply`) answers 503 when the meter is
+  absent and a reported 500 when the charge errors — never a pass-through. Nothing else in
+  this package may copy that without an argument of the same shape.
 
   recruiter-contact has one: each first view of a job can be a lookup we pay a third party
   for, and its real daily ceilings (pro 5, ultra 20) are what the two plans differ on, so an

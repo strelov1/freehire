@@ -183,6 +183,14 @@ pre-commit:
     doc-links:
       run: node scripts/check-doc-links.mjs
 
+    # extension/lib/assistant holds verbatim ports of the web assistant, and nothing
+    # compared the two sides: each was tested against the file beside it, so the server's
+    # `queued` event, attachments and `system` notes reached the web and never the panel.
+    # No glob for the same reason as doc-links — what breaks a port is editing EITHER
+    # side, under web/ or under extension/.
+    assistant-ports:
+      run: node scripts/check-assistant-ports.mjs
+
     # Staged files over the token limit (scripts/check-file-size.mjs holds the limit, the
     # ignore list and the splitting instructions). The file-size CI job runs it over every file.
     file-size:

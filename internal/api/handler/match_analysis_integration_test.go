@@ -1,8 +1,8 @@
 //go:build integration
 
 // Integration test for the on-demand LLM fit endpoints:
-// GET /api/v1/jobs/:slug/fit serves the cached analysis (or a null one), and
-// POST computes the three-stage chain, caches it per (user, job), and returns it
+// GET /api/v1/jobs/:slug/match-analysis serves the cached analysis (or a null one), and
+// POST on the same path computes the three-stage chain, caches it per (user, job), and returns it
 // fresh. The job/company lookup and the cache hit a real Postgres; the LLM is a
 // canned model and the CV a fake blob store. Run with:
 //
@@ -160,7 +160,7 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 
 	do := func(t *testing.T, app *fiber.App, method, slug, tok string) (int, fitBody) {
 		t.Helper()
-		req := httptest.NewRequest(method, "/api/v1/jobs/"+slug+"/fit", nil)
+		req := httptest.NewRequestWithContext(context.Background(), method, "/api/v1/jobs/"+slug+"/match-analysis", nil)
 		if tok != "" {
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})
 		}
@@ -176,8 +176,8 @@ func TestMatchAnalysisEndpoints(t *testing.T) {
 		h := fitAPI(pool, queries, iss, store, an)
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
-		app.Get("/api/v1/jobs/:slug/fit", g, newContract(contractHandlers{matchHandlers: h}))
-		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
+		app.Get("/api/v1/jobs/:slug/match-analysis", g, newContract(contractHandlers{matchHandlers: h}))
+		app.Post("/api/v1/jobs/:slug/match-analysis", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
 		return app
 	}
 
@@ -320,14 +320,14 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 		g := auth.RequireAuth(iss, testVersions)
-		app.Get("/api/v1/jobs/:slug/fit", g, newContract(contractHandlers{matchHandlers: h}))
-		app.Post("/api/v1/jobs/:slug/fit", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
-		app.Get("/api/v1/jobs/:slug/fit/stream", g, markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+		app.Get("/api/v1/jobs/:slug/match-analysis", g, newContract(contractHandlers{matchHandlers: h}))
+		app.Post("/api/v1/jobs/:slug/match-analysis", g, markPaidAI(plan.FeatureFit), newContract(contractHandlers{matchHandlers: h}))
+		app.Get("/api/v1/jobs/:slug/match-analysis/stream", g, markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 		return app
 	}
 	postFit := func(t *testing.T, app *fiber.App, slug, tok string) (int, fitBody) {
 		t.Helper()
-		req := httptest.NewRequest(fiber.MethodPost, "/api/v1/jobs/"+slug+"/fit", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/jobs/"+slug+"/match-analysis", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tok})
 		resp, err := app.Test(req)
 		if err != nil {
@@ -393,7 +393,7 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(newModel())), 2)
 
 		// GET before compute: the whole day's allowance untouched.
-		greq := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/spend-1/fit", nil)
+		greq := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/spend-1/match-analysis", nil)
 		greq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 		gresp, _ := app.Test(greq)
 		var gbody struct {
@@ -432,7 +432,7 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 		model := newModel()
 		app := appFor(storeWithCVFor(t, userID), matchanalysis.NewAnalyzer(llm.NewWithModel(model)), 0)
 
-		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/sb-new/fit/stream", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/sb-new/match-analysis/stream", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 		// The SPA's EventSource shape: a same-origin cookie request stamps Fetch Metadata,
 		// and the route refuses a cookie request without it.

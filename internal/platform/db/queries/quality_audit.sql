@@ -80,3 +80,24 @@ ORDER BY source;
 -- When the remote check last judged anything, NULL when it never has.
 SELECT max(judged_at)::timestamptz AS judged_at
 FROM remote_audit_judgements;
+
+-- name: SuccessorAuditBoardJobs :one
+-- One chronic board's postings for the successor pass (qualityaudit.FindSuccessors): how many
+-- are still open, and the newest one's URL, the page the pass probes for a move. The board is
+-- matched by its external_id prefix (externalid.BoardPattern), which jobs_source_extid_pattern_idx
+-- serves.
+SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
+       coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
+FROM jobs
+WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(board_pattern) AND NOT is_private;
+
+-- name: LockSuccessorAuditBoardHealth :one
+-- The old board's crawl evidence, locked for the transaction that retires it (cmd/quality-audit
+-- -apply-moved), so a crawl recording a success meanwhile waits and the retirement re-checks what
+-- the network pass saw minutes earlier. last_seen is the last success, or first sight for a board
+-- that never succeeded, as ListChronicBoards measures it.
+SELECT coalesce(last_success_at, first_seen_at)::timestamptz AS last_seen,
+       coalesce(last_error, '')::text AS last_error
+FROM board_health
+WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board)) AND region = sqlc.arg(region)
+FOR UPDATE;

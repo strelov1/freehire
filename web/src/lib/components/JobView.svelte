@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { ArrowRight, SquarePen } from '@lucide/svelte';
   import JobActionStrip from './JobActionStrip.svelte';
+  import JobAutoApplyButton from './JobAutoApplyButton.svelte';
   import JobSaveButton from './JobSaveButton.svelte';
   import JobAsides from './JobAsides.svelte';
   import JobTitle from './JobTitle.svelte';
@@ -188,14 +189,14 @@
     showReport = true;
   }
 
-  // Auto-apply (openspec/changes/auto-apply-submit-trigger): Pro (or above) and one of the
+  // Auto-apply (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger): Pro (or above) and one of the
   // ATS providers auto-apply can queue against — both are gated on VISIBILITY (the plan JobAutoApply reads),
   // not just what happens on click.
   const autoApplyQueue = new JobAutoApply(() => job);
   const autoApplyState = $derived(
     autoApplyButtonState(
       job.source,
-      autoApplyQueue.overrideStatus ?? job.auto_apply_status,
+      autoApplyQueue.overrideStatus ?? autoApplyQueue.callerStatus ?? job.auto_apply_status,
       applied,
       autoApplyQueue.isPro,
       closed,
@@ -211,7 +212,7 @@
     saved,
     onSaveClick,
     onReportClick,
-    applyUrl: cta.autoApply?.leads ? job.apply_url || job.url : null,
+    applyUrl: cta.autoApply?.leads || cta.autoApply?.chat ? job.apply_url || job.url : null,
     applyLabel: cta.external.label,
     onApplyClick,
   });
@@ -303,35 +304,16 @@
   {/if}
 {/snippet}
 
-<!-- Auto-apply (openspec/changes/auto-apply-submit-trigger): beside the apply link, not a
-     replacement for it — auto-apply still goes through the same ATS in the end, this
-     button only starts the tailor-then-review sequence. What it SAYS comes from the CTA
-     plan; how loud it is does not vary, the brand fill belonging to `Tailor my CV`. The
-     only thing decided here is that a submission already in flight also disables it, which
-     is a fact about THIS component's request rather than about the posting.
-     The `Pro` marker is a span, not the `Badge` primitive: Badge's variants carry their own
-     background and foreground, none of which read as a plan marker. It takes the PAGE's
-     `foreground` for its fill and `background` for its text — near-black on white in the
-     light theme, near-white on black in the dark one — so it stays the highest contrast
-     thing on the button in either. A tint of the button's own foreground was the first try
-     and it dissolved into the fill. -->
 {#snippet autoApplyCta(size: 'md' | 'lg', className: string)}
   {#if cta.autoApply}
-    {@const autoApply = cta.autoApply}
-    <Button
-      variant="secondary"
+    <JobAutoApplyButton
+      autoApply={cta.autoApply}
+      slug={job.public_slug}
       {size}
-      disabled={autoApply.disabled || autoApplyQueue.submitting}
+      {className}
+      busy={autoApplyQueue.submitting}
       onclick={onAutoApplyClick}
-      class={className}
-    >
-      {autoApply.label}
-      {#if autoApply.pro}
-        <span class="rounded-sm bg-foreground px-1.5 py-0.5 text-xs font-semibold leading-none text-background">
-          Pro
-        </span>
-      {/if}
-    </Button>
+    />
   {/if}
 {/snippet}
 
@@ -495,7 +477,7 @@
       </div>
       <div class="pointer-events-auto flex gap-2">
         {@render tailorCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
-        {#if cta.autoApply?.leads}
+        {#if cta.autoApply?.leads || cta.autoApply?.chat}
           {@render autoApplyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
         {:else}
           {@render applyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg', cta.external)}

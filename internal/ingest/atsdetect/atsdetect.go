@@ -73,6 +73,8 @@ var vendorDomains = []string{
 	"phenom.com", "phenompeople.com",
 	"jibe.com", "jibeapply.com",
 	"teamtailor.com",
+	// Recruitee's own site names Teamtailor, and a dead tenant on a custom domain is sent there.
+	"recruitee.com",
 	"bizneo.com", "bizneo.cloud",
 	"eightfold.ai",
 }

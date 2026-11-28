@@ -64,6 +64,7 @@
       slug={data.slug}
       currentPage={data.pageNumber}
       referralAvailable={data.referralAvailable}
+      claimed={data.claimed}
       parent={data.parent}
       subsidiaries={data.subsidiaries}
     />

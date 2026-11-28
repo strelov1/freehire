@@ -11,12 +11,16 @@ type StopReason = 'end_turn' | 'max_steps' | 'cancelled' | 'error' | (string & {
 
 /** One streamed frame of a turn. */
 export type TurnEvent =
-  | { type: 'user_prompt'; text: string }
+  // The turn has not started: it is waiting for the one in flight in this session. Sent
+  // ahead of the turn's own frames so a wait does not read as a stalled connection.
+  | { type: 'queued' }
+  // `attachments` names the documents attached to the prompt — names only, never their text.
+  | { type: 'user_prompt'; text: string; attachments?: string[] }
   | { type: 'assistant_text'; text: string }
   | { type: 'assistant_thought'; text: string }
   | { type: 'tool_use'; name: string; input?: unknown }
   | { type: 'tool_result'; name: string; result?: string; is_error?: boolean }
-  | { type: 'usage'; input_tokens?: number; output_tokens?: number }
+  | { type: 'usage'; input_tokens?: number; cached_input_tokens?: number; output_tokens?: number }
   | { type: 'result'; stop_reason?: StopReason; is_error?: boolean };
 
 /** A conversation in the session rail. */
@@ -26,18 +30,23 @@ export interface SessionSummary {
   label: string;
   cv_id?: number;
   job_id?: number;
+  search_context?: { query: string; brief: string };
 }
 
 /** One stored transcript message. `content` is role-specific: a prompt, one model
- *  turn (text plus the tool calls it asked for), or one tool's result. */
+ *  turn (text plus the tool calls it asked for), one tool's result, or a status note
+ *  freehire handed the model (`system`) — which is never shown. */
 export interface StoredMessage {
   seq: number;
-  role: 'user' | 'assistant' | 'tool';
+  role: 'user' | 'assistant' | 'tool' | 'system';
   content: unknown;
 }
 
 interface UserContent {
   text?: string;
+  /** Documents attached to the prompt. The stored row carries their extracted text too;
+   *  the chat only ever shows the name. */
+  attachments?: { name?: string }[];
 }
 interface AssistantContent {
   text?: string;
@@ -68,9 +77,21 @@ export function eventsFromTranscript(messages: StoredMessage[]): TurnEvent[] {
   };
 
   for (const message of messages) {
+    // A status note begins a turn the way a prompt does, but it is freehire's words, not the
+    // candidate's, so nothing of it is shown.
+    if (message.role === 'system') {
+      close();
+      continue;
+    }
     if (message.role === 'user') {
       close();
-      out.push({ type: 'user_prompt', text: (message.content as UserContent)?.text ?? '' });
+      const content = (message.content ?? {}) as UserContent;
+      const attachments = (content.attachments ?? []).map((a) => a.name ?? '').filter(Boolean);
+      out.push({
+        type: 'user_prompt',
+        text: content.text ?? '',
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
       continue;
     }
     if (message.role === 'assistant') {

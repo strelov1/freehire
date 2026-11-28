@@ -11,11 +11,11 @@ Implements `internal/application/autoapply.SidecarClient` — the one caller is 
 change this package belongs to originally proposed one; a follow-up spike found chromedp + a
 real Chrome install matched or beat Patchright on every automation-detection signal measured,
 at the cost of no second language, process, or deploy artifact. See
-`openspec/changes/auto-apply-worker/design.md`'s "chromedp, not a Python/Patchright sidecar"
+`openspec/changes/archive/2026-11-25-auto-apply-worker/design.md`'s "chromedp, not a Python/Patchright sidecar"
 decision for the measurements and its caveats.
 
 **Every submission now goes through a second backend, the browser-use.com cloud agent API** (`browseruse_fill.go`,
-`openspec/changes/add-browseruse-atsapply-fallback`). This does not reopen the decision
+`openspec/changes/archive/2026-09-07-add-browseruse-atsapply-fallback`). This does not reopen the decision
 above — it is a plain HTTP client (`internal/platform/browseruse`), no second language or
 process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
 - **`browserUseProviders` is Ashby, Workable, Lever and Greenhouse; `fillProviders` is
@@ -119,7 +119,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   when no live fetcher exists or its fetch fails. **This does not make
   Recruitee submit** — see this file's own note on `browserUseProviders`, above: reaching a
   `Plan` is not the same as having anything to hand it to. See
-  `openspec/changes/atsapply-recruitee-stored-schema`.
+  `openspec/changes/archive/2026-11-25-atsapply-recruitee-stored-schema`.
 - **A posting whose form cannot be scanned parks with a named reason instead of
   erroring.** `ScanForm`'s selector comes from the layout, and Greenhouse's
   (`#application-form`) only ever matched the vanilla `job-boards.greenhouse.io` template.
@@ -143,7 +143,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   reliability margin. If either park reason ever spikes among providers that were previously
   filling fine, treat it as a possible regression in the vanilla template's own DOM shape (or
   this detection itself), not as expected background noise. See
-  `openspec/changes/auto-apply-whitelabel-greenhouse`. Scope stays detection-only: this does
+  `openspec/changes/archive/2026-09-02-auto-apply-whitelabel-greenhouse`. Scope stays detection-only: this does
   not add fill/submit coverage for a white-label domain's own bespoke form — an attempt still
   parks even when its layout IS eventually recognized as "just not ours to fill."
 - **Only the résumé file field resolves; everything else does not.**
@@ -189,7 +189,11 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   drafting go away — it only ever runs where `resolve` reaches `ResolveWithDrafting` at all
   (every provider `Client.submits` names: `fillProviders`, plus the browser-use
   providers while that executor is wired and enforcing), same as `LLMDrafter` itself. See
-  `openspec/changes/autoapply-reuse-cover-letter`.
+  `openspec/changes/archive/2026-11-25-autoapply-reuse-cover-letter`.
+- **A banked answer to a choice is mapped onto an offered option.** People answer "about 3
+  years" where forms offer "2 to 4 years": `bankedChoice` (`draft.go`) gives the `Drafter`
+  only the banked words, `matchOption` still accepts only an offered option, no fit parks.
+  Unlabeled and sensitive fields stay verbatim-only.
 - **A geography/residency question (`geography.go`) parks before drafting too, for a
   different reason than the sensitive gate.** `sensitiveTerms` (`sensitive.go`) parks a
   question on POLICY grounds — compensation, EEO/demographic, work authorization/visa —
@@ -201,7 +205,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   US-states-only dropdown) reached the drafter and was saved from a wrong submission only
   because the candidate's non-US address happened to match none of the offered options —
   `isGeographyLabel` makes that a designed park instead of an accident of one form's own
-  option list (`openspec/changes/add-auto-apply-eligibility-gate`). Checked in
+  option list (`openspec/changes/archive/2026-09-06-add-auto-apply-eligibility-gate`). Checked in
   `draftable` (`draft.go`) alongside `isSensitiveLabel`, before the drafter is ever
   invoked; a geography-labeled field already resolvable from a known answer (e.g.
   `location`) is unaffected and fills exactly as before.
@@ -232,7 +236,7 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   — bound fresh per attempt (`llmkey.Bind`, in `Client.resolve`), never shared across
   attempts. `cmd/auto-apply` is one of exactly two binaries allowed to resolve a per-user
   LLM credential at all (`internal/ai/llmkey/scope_test.go`'s allowlist, alongside
-  `cmd/server`) — see `openspec/changes/auto-apply-llm-drafting/design.md`'s "cmd/auto-apply
+  `cmd/server`) — see `openspec/changes/archive/2026-11-25-auto-apply-llm-drafting/design.md`'s "cmd/auto-apply
   becomes a second per-user LLM caller" decision for why.
 - **The fill/submit path (`fill.go`, `browser.go`) is the least-verified part of this
   package.** No unit tests exercise it — a real browser session cannot be faked usefully, and

@@ -15,7 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-func TestDataPlanGateAdmitsOnlyTheDataPlan(t *testing.T) {
+func TestDataPlanGateAdmitsThePaidAPIPlans(t *testing.T) {
 	future := pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
 	for _, tc := range []struct {
 		name   string
@@ -25,7 +25,7 @@ func TestDataPlanGateAdmitsOnlyTheDataPlan(t *testing.T) {
 	}{
 		{"anonymous", false, db.GetUserAPIEntitlementRow{}, http.StatusUnauthorized},
 		{"no plan", true, db.GetUserAPIEntitlementRow{}, http.StatusForbidden},
-		{"api tier", true, db.GetUserAPIEntitlementRow{ApiUntilStripe: future}, http.StatusForbidden},
+		{"api tier", true, db.GetUserAPIEntitlementRow{ApiUntilStripe: future}, http.StatusOK},
 		{"data", true, db.GetUserAPIEntitlementRow{ApiDataUntilStripe: future}, http.StatusOK},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

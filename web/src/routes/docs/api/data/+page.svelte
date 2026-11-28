@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The Data plan's API reference: the job reads that carry the employer's own links and the
+  // The paid API plans' extra reference: the job reads that carry the employer's own links and the
   // catalogue export, gathered apart from the full /docs/api so a plan holder finds them first.
   import { page } from '$app/state';
   import ScalarReference from '#lib/components/ScalarReference.svelte';
@@ -12,8 +12,8 @@
 </script>
 
 <Seo
-  title="freehire Data plan API — original job links and catalogue export"
-  description="The freehire Data plan endpoints: job search and single-job reads with each posting's original employer link, and the full-catalogue export, at 6,000 requests a minute."
+  title="freehire API — original job links and catalogue export"
+  description="The freehire API and Data plan endpoints: job search and single-job reads with each posting's original employer link, and the Data plan's full-catalogue export."
   {canonical}
 />
 

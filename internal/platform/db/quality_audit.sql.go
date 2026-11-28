@@ -132,6 +132,36 @@ func (q *Queries) ListLivenessAuditSources(ctx context.Context, minOpen int64) (
 	return items, nil
 }
 
+const lockSuccessorAuditBoardHealth = `-- name: LockSuccessorAuditBoardHealth :one
+SELECT coalesce(last_success_at, first_seen_at)::timestamptz AS last_seen,
+       coalesce(last_error, '')::text AS last_error
+FROM board_health
+WHERE provider = $1 AND lower(board) = lower($2) AND region = $3
+FOR UPDATE
+`
+
+type LockSuccessorAuditBoardHealthParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+	Region   string `json:"region"`
+}
+
+type LockSuccessorAuditBoardHealthRow struct {
+	LastSeen  pgtype.Timestamptz `json:"last_seen"`
+	LastError string             `json:"last_error"`
+}
+
+// The old board's crawl evidence, locked for the transaction that retires it (cmd/quality-audit
+// -apply-moved), so a crawl recording a success meanwhile waits and the retirement re-checks what
+// the network pass saw minutes earlier. last_seen is the last success, or first sight for a board
+// that never succeeded, as ListChronicBoards measures it.
+func (q *Queries) LockSuccessorAuditBoardHealth(ctx context.Context, arg LockSuccessorAuditBoardHealthParams) (LockSuccessorAuditBoardHealthRow, error) {
+	row := q.db.QueryRow(ctx, lockSuccessorAuditBoardHealth, arg.Provider, arg.Board, arg.Region)
+	var i LockSuccessorAuditBoardHealthRow
+	err := row.Scan(&i.LastSeen, &i.LastError)
+	return i, err
+}
+
 const sampleLivenessAuditJobs = `-- name: SampleLivenessAuditJobs :many
 WITH candidates AS MATERIALIZED (
     SELECT candidate.id FROM jobs candidate
@@ -250,6 +280,34 @@ func (q *Queries) SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAud
 		return nil, err
 	}
 	return items, nil
+}
+
+const successorAuditBoardJobs = `-- name: SuccessorAuditBoardJobs :one
+SELECT count(*) FILTER (WHERE closed_at IS NULL)::bigint AS open_jobs,
+       coalesce((array_agg(url ORDER BY id DESC) FILTER (WHERE url <> ''))[1], '')::text AS latest_url
+FROM jobs
+WHERE source = $1 AND external_id LIKE $2 AND NOT is_private
+`
+
+type SuccessorAuditBoardJobsParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+}
+
+type SuccessorAuditBoardJobsRow struct {
+	OpenJobs  int64  `json:"open_jobs"`
+	LatestUrl string `json:"latest_url"`
+}
+
+// One chronic board's postings for the successor pass (qualityaudit.FindSuccessors): how many
+// are still open, and the newest one's URL, the page the pass probes for a move. The board is
+// matched by its external_id prefix (externalid.BoardPattern), which jobs_source_extid_pattern_idx
+// serves.
+func (q *Queries) SuccessorAuditBoardJobs(ctx context.Context, arg SuccessorAuditBoardJobsParams) (SuccessorAuditBoardJobsRow, error) {
+	row := q.db.QueryRow(ctx, successorAuditBoardJobs, arg.Source, arg.BoardPattern)
+	var i SuccessorAuditBoardJobsRow
+	err := row.Scan(&i.OpenJobs, &i.LatestUrl)
+	return i, err
 }
 
 const tallyRemoteAuditJudgements = `-- name: TallyRemoteAuditJudgements :many

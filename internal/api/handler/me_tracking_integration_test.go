@@ -353,7 +353,7 @@ func TestTrackedBoardKeepsAnApplicationWhosePostingWasPruned(t *testing.T) {
 	}
 }
 
-// TestListMyJobs_AutoApplyStatusBadge covers openspec/changes/auto-apply-review-tracking:
+// TestListMyJobs_AutoApplyStatusBadge covers openspec/changes/archive/2026-09-05-auto-apply-review-tracking:
 // the board list's own cheap status field (behind the card's "needs your review" badge),
 // derived from the same raw columns the drawer's own, richer read uses — never a second,
 // drifting derivation.

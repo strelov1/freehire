@@ -18,6 +18,16 @@ not one. They share the company key and nothing else.
 
 ## Always true
 
+- **Hours and busy time are shared across products (`engage/availability`).** One
+  `user_availability` calendar (weekly rules, dated overrides) plus `user_availability_settings`
+  (zone, booking-link meeting length and notice) per user; mentorship, buddy mocks and booking
+  links all read it, and `ListUserBusy` unions their meetings (mentor sessions as mentor or
+  seeker, mocks, booking-link meetings, application interviews, synced Google busy), so a
+  meeting in one blocks the same time in the others. A settings row, once saved, decides the
+  zone, and setting it rewrites every product zone to match; the product zone applies before that. A race across products is NOT closed: each `Book`
+  re-derives its slot, which narrows the window, but no cross-table constraint stops two
+  products booking the same time at once. `mentor_availability` and
+  `buddy_mock_availability` are no longer read; a follow-up migration drops them.
 - **A stored availability time carries no zone and no date.** It is resolved through the
   mentor's own IANA zone, per date, and only then becomes an instant. Convert once and
   repeat weekly and every slot moves by an hour for half the year, silently, and no mentor

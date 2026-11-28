@@ -1,6 +1,6 @@
 # Implementation plan: discord-contribution-bot
 
-Source of truth for requirements: `openspec/changes/discord-contribution-bot/{proposal.md,design.md,tasks.md,specs/**/*.md}`
+Source of truth for requirements: `openspec/changes/archive/2026-09-04-discord-contribution-bot/{proposal.md,design.md,tasks.md,specs/**/*.md}`
 in this worktree. Every task below assumes those files have been read.
 
 ## Global Constraints
@@ -280,7 +280,7 @@ in the test with `ed25519.GenerateKey`, configure the handler with the public ke
 with the private key) since, unlike Telegram's static shared-secret header, Discord interactions
 must carry a valid signature to reach the handler at all.
 
-Cover, per `openspec/changes/discord-contribution-bot/specs/**/*.md`'s scenarios:
+Cover, per `openspec/changes/archive/2026-09-04-discord-contribution-bot/specs/**/*.md`'s scenarios:
 - Linked user's `/contribute` on a readable-vacancy link: full flow, deferred ack then a
   follow-up `EditOriginalResponse` call with a link to the posting (assert on the stub server
   receiving the PATCH).

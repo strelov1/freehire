@@ -123,6 +123,7 @@ func (a *API) mountRoutes(app *fiber.App, api fiber.Router, mw middleware, contr
 	h.mentorSuggestionsHandlers.register(api, mw, contract)
 	// The candidate booking link and its anonymous public page (see bookingLinkHandlers).
 	h.bookingLinkHandlers.register(api, mw, contract)
+	h.availabilityHandlers.register(api, mw, contract)
 
 	// Job reports + review queue (see reportHandlers).
 	h.reportHandlers.register(api, mw, contract)

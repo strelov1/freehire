@@ -56,3 +56,9 @@ RETURNING *;
 -- not a way to un-revoke.
 DELETE FROM company_accounts
 WHERE user_id = @user_id AND status = 'pending';
+
+-- name: CompanyIsClaimed :one
+-- Whether an account of any status holds the slug. UNIQUE(company_slug) reserves it from the
+-- pending claim on, so a further claim would only end in a 409. Caller-independent, so the
+-- public pages that show it stay cacheable.
+SELECT EXISTS (SELECT 1 FROM company_accounts WHERE company_slug = @company_slug)::boolean AS claimed;

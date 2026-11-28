@@ -18,8 +18,9 @@ Base URL: `https://freehire.me/api/v1`
 - [Filtering jobs](#filtering-jobs)
 - [Onboarding](#onboarding)
 - [Booking links](#booking-links)
+- [Availability](#availability)
 - [Catalogue export](#catalogue-export)
-- [Data plan](#data-plan)
+- [Original job links](#original-job-links)
 - [Jobs](#jobs)
 - [Fit](#fit)
 - [Companies](#companies)
@@ -89,9 +90,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+The API plan allows 1,200 requests per 60-second window. On the original-link endpoints (`/data/jobs/search`, `/data/jobs/{slug}`) each plan is counted apart: 1,200 for the API plan, 6,000 for the Data plan, which holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
 
-Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The `/data/jobs` endpoints serve both to either paid API plan. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -186,13 +187,11 @@ This reference covers every endpoint you can call. A handful are deliberately le
 
 Managing API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.
 
-The `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.
-
 Most of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.
 
 ## External vs internal endpoints
 
-This reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal). The Data plan’s endpoints are also gathered on their own at [freehire.me/docs/api/data](https://freehire.me/docs/api/data).
+This reference covers every endpoint a client can call from outside the browser: public reads, and endpoints that also accept a personal API key. Endpoints that require the browser’s own session cookie — saved searches, notifications, moderator tools, the browser extension — are not reachable with a key alone and are documented separately at [freehire.me/docs/api/internal](https://freehire.me/docs/api/internal). The original-link and catalogue endpoints are also gathered on their own at [freehire.me/docs/api/data](https://freehire.me/docs/api/data).
 
 ## Filtering jobs
 
@@ -419,6 +418,99 @@ A link's free slots from now to its horizon, in the viewer's zone (UTC when unkn
 curl "https://freehire.me/api/v1/booking/<token>/slots"
 ```
 
+## Availability
+
+### `GET /me/availability`
+
+**Auth:** Session or API key
+
+Get my availability.
+
+The caller's availability: hours, zone and booking-link settings.
+
+```bash
+curl "https://freehire.me/api/v1/me/availability" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `PUT /me/availability/booking`
+
+**Auth:** Session or API key
+
+Save my booking-link settings.
+
+Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration or notice is 422.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `timezone` | string | yes | IANA zone the hours are stated in. |
+| `duration_min` | integer (int64) | yes |  |
+| `notice_hours` | integer (int64) | yes |  |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/availability/booking" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /me/availability/overrides`
+
+**Auth:** Session or API key
+
+Add a dated override.
+
+Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `weekday` | integer (int64) \| null | no | 0 (Sunday) through 6; null for a dated override. |
+| `date` | string \| null | no | YYYY-MM-DD; null for a weekly rule. |
+| `start` | string | no | HH:MM. |
+| `end` | string | no | HH:MM; 24:00 means until midnight. |
+| `timezone` | string | no | IANA zone the hours are stated in; stored when present, 422 if invalid. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/availability/overrides" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `PUT /me/availability/weekly`
+
+**Auth:** Session or API key
+
+Replace my weekly hours.
+
+Swap the recurring week; dated overrides stay.
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `rules` | BuddyMockRule[] | no |  |
+| `timezone` | string | no | IANA zone the hours are stated in; stored when present, 422 if invalid. |
+
+```bash
+curl -X PUT "https://freehire.me/api/v1/me/availability/weekly" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `DELETE /me/availability/{id}`
+
+**Auth:** Session or API key
+
+Delete one availability rule.
+
+Remove one of the caller's own rules.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string | yes |  |
+
+```bash
+curl -X DELETE "https://freehire.me/api/v1/me/availability/<id>" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
 ## Catalogue export
 
 Full-catalogue files for the Data plan (`api_data`). A snapshot is one gzip file, `jobs.jsonl.gz`: UTF-8 JSON Lines, one job per line, each in the same wire shape as `GET /data/jobs/{slug}` (full `description` and `url` included), covering the open, canonical, public postings the search index lists. The file is streamed, so it is not one JSON document; read it line by line. Every snapshot has a `schema_version`, a row count, a byte size and a SHA-256 to verify the download. Snapshots are named by UTC day and the last few are kept. How often a new one appears is set by the operator timer, not by this API: read `date` and `generated_at` rather than assuming a schedule. To stay current between snapshots, re-fetch single jobs with `GET /data/jobs/{slug}`. The licence is the API plan's: show the data in your own product, do not resell it as a dataset or feed, and stop showing it when the plan ends — see /terms#data-licence.
@@ -454,20 +546,20 @@ curl "https://freehire.me/api/v1/catalogue/snapshots" -H "Authorization: Bearer 
 }
 ```
 
-## Data plan
+## Original job links
 
-Job reads for the Data plan (`api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The plan's 6,000-request window applies here only (see API plans). Session or API key; any other account gets `403`.
+Job reads for the paid API plans (`api`, `api_data`) that carry each posting's original links: `url`, where the application goes, and `source_url`, the original posting when it differs. Other job reads drop both when `apply_url`, a freehire redirect, is set; Adzuna postings keep `url`. The API plan holds its 1,200-request window here, counted apart; the Data plan's 6,000-request window applies here only (see API plans). Session or API key; any account without a paid API plan gets `403`.
 
 ### `GET /data/jobs/search`
 
 **Auth:** Session or API key
 
-Search open jobs with their original links (Data plan).
+Search open jobs with their original links (API and Data plans).
 
 The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with
 each job's `url` (the employer's own posting) and `source_url` where it differs. The public
-job reads leave both out and link only through `apply_url`. Needs the Data plan: any other
-account gets `403`. Never cached: the answer is private to the plan holder.
+job reads leave both out and link only through `apply_url`. Needs a paid API plan (API or
+Data): any other account gets `403`. Never cached: the answer is private to the plan holder.
 
 **Query parameters**
 
@@ -489,10 +581,10 @@ curl "https://freehire.me/api/v1/data/jobs/search" -H "Authorization: Bearer $FR
 
 **Auth:** Session or API key
 
-A single job with its original links (Data plan).
+A single job with its original links (API and Data plans).
 
-The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the
-Data plan: any other account gets `403`.
+The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid
+API plan (API or Data): any other account gets `403`.
 
 **Path parameters**
 
@@ -1242,6 +1334,7 @@ curl "https://freehire.me/api/v1/companies"
       "hq_country": "DE",
       "website": "https://acme.example",
       "linkedin": "https://www.linkedin.com/company/acme",
+      "employee_count": 40,
       "collections": [
         "yc"
       ],

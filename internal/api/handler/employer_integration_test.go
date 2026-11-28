@@ -546,4 +546,60 @@ func TestEmployerEndToEnd(t *testing.T) {
 			t.Errorf("post-revoke create status = %d, want 403", resp.StatusCode)
 		}
 	})
+	t.Run("a claim by slug lands on the catalogue's company, and the company page reports it", func(t *testing.T) {
+		var userDID int64
+		if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('founder@delta.test') RETURNING id`).Scan(&userDID); err != nil {
+			t.Fatalf("seed user: %v", err)
+		}
+		userDCookie, _ := iss.Issue(userDID, testTokenVersion)
+		for _, slug := range []string{"delta", "echo"} {
+			if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name) VALUES ($1, $2)`, slug, "Co "+slug); err != nil {
+				t.Fatalf("seed company %s: %v", slug, err)
+			}
+		}
+		app.Get("/api/v1/companies/:slug", (&companiesHandlers{queries: queries}).GetCompany)
+		claimed := func(slug string) bool {
+			resp := do(t, req(fiber.MethodGet, "/api/v1/companies/"+slug, "", ""))
+			defer resp.Body.Close()
+			var out struct {
+				Company bool `json:"company_claimed"`
+			}
+			decodeData(t, resp, &out)
+			return out.Company
+		}
+		if claimed("delta") {
+			t.Fatal("company_claimed = true before any claim")
+		}
+
+		resp := do(t, req(fiber.MethodPost, "/api/v1/employer/claim", userDCookie,
+			`{"company_slug":"nope","work_email":"founder@delta.test"}`))
+		_ = resp.Body.Close()
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("unknown slug status = %d, want 400", resp.StatusCode)
+		}
+
+		// The typed name is ignored once a slug names the company.
+		resp = do(t, req(fiber.MethodPost, "/api/v1/employer/claim", userDCookie,
+			`{"company_slug":"delta","company_name":"Something Else","work_email":"founder@delta.test"}`))
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusCreated {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("claim by slug status = %d, want 201 (body %s)", resp.StatusCode, b)
+		}
+		var acc struct {
+			CompanySlug string `json:"company_slug"`
+			CompanyName string `json:"company_name"`
+		}
+		decodeData(t, resp, &acc)
+		if acc.CompanySlug != "delta" || acc.CompanyName != "Co delta" {
+			t.Fatalf("account = %+v, want the catalogue's delta", acc)
+		}
+
+		if !claimed("delta") {
+			t.Error("company_claimed = false once a pending claim holds the company")
+		}
+		if claimed("echo") {
+			t.Error("company_claimed = true for a company nobody claimed")
+		}
+	})
 }

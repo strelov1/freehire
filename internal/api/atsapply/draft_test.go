@@ -3,8 +3,10 @@ package atsapply
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 )
 
@@ -13,10 +15,15 @@ type fakeDrafter struct {
 	ok     bool
 	err    error
 	calls  []string // question ids Draft was called for
+	facts  []string // the grounding claims of the last call
 }
 
 func (f *fakeDrafter) Draft(ctx context.Context, question MergedField, grounding GroundingContext) (string, bool, error) {
 	f.calls = append(f.calls, question.ID)
+	f.facts = f.facts[:0]
+	for _, a := range grounding.Atoms {
+		f.facts = append(f.facts, a.Claim)
+	}
 	return f.answer, f.ok, f.err
 }
 
@@ -214,5 +221,95 @@ func TestResolveWithDrafting_AFieldWithNoLabelIsNeverDrafted(t *testing.T) {
 	}
 	if len(plan.Unmapped) != 1 || plan.Unmapped[0].ID != "42736" {
 		t.Fatalf("unmapped = %+v, want the unlabeled field parked", plan.Unmapped)
+	}
+}
+
+// A person answers a choice in their own words ("about 3 years"), which never equals an
+// option label; the banked words are mapped onto an option — even on a checkbox group, which
+// is never drafted from the experience bank.
+func TestResolveWithDrafting_MapsABankedAnswerOntoAnOfferedOption(t *testing.T) {
+	f := MergedField{
+		ID: "pm_years", Label: "How many years of experience do you have in product management?", Kind: "checkbox_group", Multi: true, Required: true,
+		Options: []applyform.Option{{Label: "Less than 2 years", Value: "a"}, {Label: "2 to 4 years", Value: "b"}},
+	}
+	key, ok := matchBankAnswerKey(f)
+	if !ok {
+		t.Fatal("question has no bank key")
+	}
+	drafter := &fakeDrafter{answer: "2 to 4 years", ok: true}
+
+	plan, err := ResolveWithDrafting(context.Background(), []MergedField{f}, map[string]string{key: "about 3 years"}, drafter,
+		GroundingContext{Atoms: []experience.Atom{{Claim: "Led a team"}}}, false, nil, 0, 0)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(plan.Fields) != 1 || plan.Fields[0].Value != "b" || len(plan.Unmapped) != 0 {
+		t.Fatalf("plan = %+v, want the 2-to-4 option resolved", plan)
+	}
+	if len(drafter.facts) != 1 || !strings.Contains(drafter.facts[0], "about 3 years") {
+		t.Fatalf("grounding = %q, want only the banked answer", drafter.facts)
+	}
+
+	preview := PreviewAnswers([]MergedField{f}, map[string]string{key: "about 3 years"}, false)
+	if len(preview.Pending) != 1 || !preview.Pending[0].WillDraftAtSubmission {
+		t.Fatalf("preview.Pending = %+v, want it marked as answered at submission", preview.Pending)
+	}
+}
+
+// A banked answer no option fits parks the question rather than drafting a different one.
+func TestResolveWithDrafting_ABankedAnswerNoOptionFitsParks(t *testing.T) {
+	f := MergedField{
+		ID: "pm_years", Label: "How many years of experience do you have in product management?", Kind: "select", Required: true,
+		Options: []applyform.Option{{Label: "Less than 2 years", Value: "a"}, {Label: "2 to 4 years", Value: "b"}},
+	}
+	key, _ := matchBankAnswerKey(f)
+	drafter := &fakeDrafter{answer: "", ok: false}
+
+	plan, err := ResolveWithDrafting(context.Background(), []MergedField{f}, map[string]string{key: "it depends"}, drafter, GroundingContext{}, false, nil, 0, 0)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(plan.Fields) != 0 || len(plan.Unmapped) != 1 || len(drafter.calls) != 1 {
+		t.Fatalf("plan = %+v, calls = %v; want one mapping attempt and the field parked", plan, drafter.calls)
+	}
+}
+
+// The sensitive gate wins over a banked answer too: only a verbatim option fills it.
+func TestResolveWithDrafting_NeverMapsABankedAnswerToASensitiveChoice(t *testing.T) {
+	f := MergedField{
+		ID: "gender", Label: "What is your gender?", Kind: "select", Required: true,
+		Options: []applyform.Option{{Label: "Male", Value: "m"}, {Label: "Female", Value: "f"}},
+	}
+	key, ok := matchBankAnswerKey(f)
+	if !ok {
+		t.Fatal("question has no bank key")
+	}
+	drafter := &fakeDrafter{answer: "Male", ok: true}
+	plan, err := ResolveWithDrafting(context.Background(), []MergedField{f}, map[string]string{key: "I am a man"}, drafter, GroundingContext{}, false, nil, 0, 0)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(drafter.calls) != 0 || len(plan.Unmapped) != 1 {
+		t.Fatalf("calls = %v, plan = %+v; want no model call and the field parked", drafter.calls, plan)
+	}
+}
+
+// A DOM-only field with options but no label cannot be verified non-sensitive: fail closed.
+func TestResolveWithDrafting_NeverMapsABankedAnswerToAnUnlabeledChoice(t *testing.T) {
+	f := MergedField{
+		ID: "gender", Kind: "select", Required: true,
+		Options: []applyform.Option{{Label: "Male", Value: "m"}, {Label: "Female", Value: "f"}},
+	}
+	key, ok := matchBankAnswerKey(f)
+	if !ok {
+		t.Fatal("question has no bank key")
+	}
+	drafter := &fakeDrafter{answer: "Male", ok: true}
+	plan, err := ResolveWithDrafting(context.Background(), []MergedField{f}, map[string]string{key: "I am a man"}, drafter, GroundingContext{}, false, nil, 0, 0)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(drafter.calls) != 0 || len(plan.Unmapped) != 1 {
+		t.Fatalf("calls = %v, plan = %+v; want no model call and the field parked", drafter.calls, plan)
 	}
 }

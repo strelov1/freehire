@@ -4,6 +4,7 @@
 // company's site and LinkedIn page on every row, and the hq_country filter (where the
 // company is headquartered, as opposed to `countries`, where its open jobs are). Only a
 // real Postgres exercises the company_info projection and the case-folded comparison.
+// The employee_count bounds filter the company's own headcount the same way.
 // Run with: go test -tags=integration ./internal/api/handler/
 package handler
 
@@ -112,6 +113,34 @@ func TestListCompaniesIdentityAndHQ(t *testing.T) {
 		got := slugsOf(list(t, "/api/v1/companies?countries=au"))
 		if !slices.Equal(got, []string{"atlassian", "canva", "dollar-tree", "unknown-hq"}) {
 			t.Errorf("countries=au → %v", got)
+		}
+	})
+
+	t.Run("employee_count bounds are inclusive and skip an unknown headcount", func(t *testing.T) {
+		for slug, n := range map[string]int{"canva": 4000, "atlassian": 11, "dollar-tree": 50} {
+			if _, err := pool.Exec(ctx, `UPDATE companies SET employee_count = $2 WHERE slug = $1`, slug, n); err != nil {
+				t.Fatalf("set headcount %q: %v", slug, err)
+			}
+		}
+		for url, want := range map[string][]string{
+			"/api/v1/companies?employee_count_min=11&employee_count_max=50": {"atlassian", "dollar-tree"},
+			"/api/v1/companies?employee_count_min=51":                       {"canva"},
+			"/api/v1/companies?employee_count_max=11":                       {"atlassian"},
+			"/api/v1/companies?employee_count_min=0&hq_country=au":          {"atlassian", "canva"},
+		} {
+			if got := slugsOf(list(t, url)); !slices.Equal(got, want) {
+				t.Errorf("%s → %v, want %v", url, got, want)
+			}
+		}
+		for _, url := range []string{"/api/v1/companies?employee_count_min=-1", "/api/v1/companies?employee_count_max=ten"} {
+			resp, err := app.Test(httptest.NewRequestWithContext(ctx, "GET", url, nil), -1)
+			if err != nil {
+				t.Fatalf("request %q: %v", url, err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != fiber.StatusBadRequest {
+				t.Errorf("%s: status = %d, want 400", url, resp.StatusCode)
+			}
 		}
 	})
 }

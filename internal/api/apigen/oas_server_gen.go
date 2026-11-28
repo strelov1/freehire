@@ -26,6 +26,12 @@ type Handler interface {
 	//
 	// POST /me/experience/atoms
 	AddAtom(ctx context.Context, req jx.Raw) (*AddAtomCreated, error)
+	// AddAvailabilityDated implements addAvailabilityDated operation.
+	//
+	// Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+	//
+	// POST /me/availability/overrides
+	AddAvailabilityDated(ctx context.Context, req *AvailabilityRuleBody) (*AddAvailabilityDatedCreated, error)
 	// AddAvailabilityOverride implements addAvailabilityOverride operation.
 	//
 	// POST /me/mentorship/availability/overrides
@@ -496,6 +502,12 @@ type Handler interface {
 	//
 	// DELETE /me/experience/atoms/{id}
 	DeleteAtom(ctx context.Context, params DeleteAtomParams) error
+	// DeleteAvailabilityEntry implements deleteAvailabilityEntry operation.
+	//
+	// Remove one of the caller's own rules.
+	//
+	// DELETE /me/availability/{id}
+	DeleteAvailabilityEntry(ctx context.Context, params DeleteAvailabilityEntryParams) error
 	// DeleteAvailabilityRule implements deleteAvailabilityRule operation.
 	//
 	// DELETE /me/mentorship/availability/{id}
@@ -740,6 +752,12 @@ type Handler interface {
 	//
 	// GET /me/autofill-profile
 	GetAutofillProfile(ctx context.Context) (*GetAutofillProfileOK, error)
+	// GetAvailability implements getAvailability operation.
+	//
+	// The caller's availability: hours, zone and booking-link settings.
+	//
+	// GET /me/availability
+	GetAvailability(ctx context.Context) (*GetAvailabilityOK, error)
 	// GetBillingAttempts implements getBillingAttempts operation.
 	//
 	// The caller's 20 most recent Stripe charge attempts, newest first, including failed first purchases
@@ -829,8 +847,8 @@ type Handler interface {
 	GetCVTailorContext(ctx context.Context, params GetCVTailorContextParams) (*GetCVTailorContextOK, error)
 	// GetDataJob implements getDataJob operation.
 	//
-	// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the Data plan:
-	// any other account gets `403`.
+	// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid API plan
+	// (API or Data): any other account gets `403`.
 	//
 	// GET /data/jobs/{slug}
 	GetDataJob(ctx context.Context, params GetDataJobParams) (*GetDataJobOK, error)
@@ -945,12 +963,6 @@ type Handler interface {
 	//
 	// GET /jobs/{slug}
 	GetJob(ctx context.Context, params GetJobParams) (*GetJobOK, error)
-	// GetJobFit implements getJobFit operation.
-	//
-	// Alias of `getMatchAnalysis`.
-	//
-	// GET /jobs/{slug}/fit
-	GetJobFit(ctx context.Context, params GetJobFitParams) (*FitAnalysisResponse, error)
 	// GetJobMatch implements getJobMatch operation.
 	//
 	// How well the job’s skills are covered by your profile skills — exact, adjacent, and missing,
@@ -2097,6 +2109,12 @@ type Handler interface {
 	//
 	// POST /employer/jobs/{slug}/reopen
 	ReopenEmployerVacancy(ctx context.Context, params ReopenEmployerVacancyParams) (*ReopenEmployerVacancyOK, error)
+	// ReplaceAvailabilityWeekly implements replaceAvailabilityWeekly operation.
+	//
+	// Swap the recurring week; dated overrides stay.
+	//
+	// PUT /me/availability/weekly
+	ReplaceAvailabilityWeekly(ctx context.Context, req *AvailabilityWeeklyBody) error
 	// ReplaceResumeContactsFromCv implements replaceResumeContactsFromCv operation.
 	//
 	// A full reset, not just identity fields — every owned field is replaced from the current structured
@@ -2279,12 +2297,6 @@ type Handler interface {
 	//
 	// POST /me/autofill/run
 	RunAutofill(ctx context.Context) (*RunAutofillOK, error)
-	// RunJobFit implements runJobFit operation.
-	//
-	// Alias of `runMatchAnalysis`.
-	//
-	// POST /jobs/{slug}/fit
-	RunJobFit(ctx context.Context, params RunJobFitParams) (RunJobFitRes, error)
 	// RunMatchAnalysis implements runMatchAnalysis operation.
 	//
 	// Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh
@@ -2294,6 +2306,13 @@ type Handler interface {
 	//
 	// POST /jobs/{slug}/match-analysis
 	RunMatchAnalysis(ctx context.Context, params RunMatchAnalysisParams) (RunMatchAnalysisRes, error)
+	// SaveAvailabilityBooking implements saveAvailabilityBooking operation.
+	//
+	// Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration
+	// or notice is 422.
+	//
+	// PUT /me/availability/booking
+	SaveAvailabilityBooking(ctx context.Context, req *AvailabilityBookingBody) (*SaveAvailabilityBookingOK, error)
 	// SaveBankedAnswer implements saveBankedAnswer operation.
 	//
 	// Saves under the question's topic, replacing the answer already there.
@@ -2325,8 +2344,8 @@ type Handler interface {
 	//
 	// The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with each
 	// job's `url` (the employer's own posting) and `source_url` where it differs. The public job reads
-	// leave both out and link only through `apply_url`. Needs the Data plan: any other account gets `403`.
-	// Never cached: the answer is private to the plan holder.
+	// leave both out and link only through `apply_url`. Needs a paid API plan (API or Data): any other
+	// account gets `403`. Never cached: the answer is private to the plan holder.
 	//
 	// GET /data/jobs/search
 	SearchDataJobs(ctx context.Context, params SearchDataJobsParams) (*JobSearchPageHeaders, error)

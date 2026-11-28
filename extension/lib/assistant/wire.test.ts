@@ -9,9 +9,32 @@ const msg = (seq: number, role: StoredMessage['role'], content: unknown): Stored
 });
 
 describe('eventsFromTranscript', () => {
+  it('never shows a status note, and starts a new answer after one', () => {
+    // A note is freehire telling the model what happened to the application. It is not the
+    // candidate's message and must not render as one — but it does begin a new turn, so the
+    // narration after it is a separate answer, not more of the one before.
+    const events = eventsFromTranscript([
+      msg(1, 'assistant', { text: 'Your CV is being tailored.' }),
+      msg(2, 'system', { text: 'blocked on 2 questions' }),
+      msg(3, 'assistant', { text: 'Two questions are open: 1) … 2) …' }),
+    ]);
+    expect(events.map((e) => e.type)).toEqual(['assistant_text', 'result', 'assistant_text', 'result']);
+    expect(events.some((e) => e.type === 'user_prompt')).toBe(false);
+  });
+
   it('replays a plain exchange as a prompt, an answer and a close', () => {
     const events = eventsFromTranscript([msg(1, 'user', { text: 'hi' }), msg(2, 'assistant', { text: 'hello' })]);
     expect(events.map((e) => e.type)).toEqual(['user_prompt', 'assistant_text', 'result']);
+  });
+
+  it('replays the names of attached documents, never their text', () => {
+    const events = eventsFromTranscript([
+      msg(1, 'user', { text: '', attachments: [{ name: 'cv.pdf', text: 'Jane Doe, Go engineer' }] }),
+    ]);
+    expect(events[0]).toEqual({ type: 'user_prompt', text: '', attachments: ['cv.pdf'] });
+    const chat = events.reduce(reduceTurnEvent, initChat());
+    expect(chat.messages[0]?.attachments).toEqual(['cv.pdf']);
+    expect(chat.messages[0]?.text).toBe('');
   });
 
   it('replays a tool round in order', () => {

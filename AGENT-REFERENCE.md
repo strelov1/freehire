@@ -113,7 +113,7 @@ if missing. A real finding means **revoke the credential**.
 (`pnpm check:sql`, `Migration-Edit:` trailer), duplicate migration numbers
 (`pnpm check:migration-numbers`), sqlc drift, knip dead JS incl. unused exports
 (`pnpm check:dead`), Go `deadcode`, actionlint + zizmor (SHA-pinned actions), agnix (32 KiB
-cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), oasdiff on
+cap per AGENTS.md), rumdl, ast-grep, Markdown links (`pnpm check:links`), the extension's assistant ports (`pnpm check:ports`), oasdiff on
 `web/static/openapi.yaml` (`API-Break:` trailer), Schemathesis over the TypeSpec contract, the official MCP conformance suite over OJCP's MCP, changed-line coverage (diff-cover, Go
 ≥ 60%), shellcheck/hadolint, shared JS deps (`pnpm check:deps`), Ruff on Python, Betterleaks.
 

@@ -43,9 +43,9 @@ The public read endpoints answer without a key for personal and non-commercial u
 
 Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
-The API plan allows 1,200 requests per 60-second window. The Data plan allows 6,000 on its own endpoints (`/data/jobs/search`, `/data/jobs/{slug}`), counted apart, and holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
+The API plan allows 1,200 requests per 60-second window. On the original-link endpoints (`/data/jobs/search`, `/data/jobs/{slug}`) each plan is counted apart: 1,200 for the API plan, 6,000 for the Data plan, which holds the API plan's 1,200 everywhere else. Neither paid API plan has a daily request cap.
 
-Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The Data plan's endpoints serve both. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
+Job reads do not carry the employer's own links: `url` is empty and `source_url` absent wherever `apply_url`, the freehire redirect to the same page, is set. The `/data/jobs` endpoints serve both to either paid API plan. The account shares one budget across its full-access API keys and OAuth connections, including public REST reads and agent search. A browser session cookie does not select the paid API rate.
 
 The limit counts HTTP requests, not returned listings or unique vacancies. A page containing 100 listings costs one request. Re-fetching the same page or vacancy costs another request, including when the data has not changed. There is no separate cooldown for refreshing a vacancy.
 
@@ -139,8 +139,6 @@ Endpoints marked “Session or API key” accept either; endpoints marked “Ses
 This reference covers every endpoint you can call. A handful are deliberately left out because calling them directly is meaningless: the Gmail and calendar consent redirects (`/me/gmail/connect`, `/me/calendar/connect`, and their callbacks), which only a browser can complete; the Telegram bot webhook; the browser-tool websocket relay; the sitemap-cursor helpers behind `/sitemap.xml`; and the `/og/*.png` social-preview cards, which render an image rather than answer with JSON.
 
 Managing API keys (`POST`, `GET` and `DELETE` on `/me/api-keys`) is not documented here, because no API client can call it. Those endpoints accept only the browser session cookie, and additionally require a freshly proven identity — a password re-entry or a sign-in-provider check — that a script has no way to supply. Create and revoke keys in your account instead, at [freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is shown exactly once, at creation, so store it then.
-
-The `/jobs/{slug}/fit` endpoints are pre-rename aliases of `/jobs/{slug}/match-analysis` and hit the same handlers. They still work, so existing clients do not break — use the match-analysis paths in new code.
 
 Most of this API is also a CLI. If you are writing an agent rather than an integration, `freehire` covers the same surface with less ceremony — search, tracking, the inbox and CV tailoring — over one API key.
 """)

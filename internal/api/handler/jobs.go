@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/api/apigen"
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -64,7 +65,7 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware, contract fiber.
 	api.Get("/jobs/:slug/copies", contract)
 	api.Get("/jobs/:slug/apply-form", contract)
 	api.Get("/jobs/:slug/skill-fit", contract)
-	// The Data plan's reads with the employer links the public ones hide (data_jobs.go).
+	// The paid API plans' reads with the employer links the public ones hide (data_jobs.go).
 	api.Get("/data/jobs/search", mw.key, mw.dataPlan, contract)
 	api.Get("/data/jobs/:slug", mw.key, mw.dataPlan, contract)
 	registerInterviewPrep(api, mw, contract)
@@ -236,13 +237,14 @@ func (h *jobsHandlers) GetJob(ctx context.Context, params apigen.GetJobParams) (
 	}
 
 	// Caller's own auto-apply status, a signed-in-only overlay like MyVote above. No row is
-	// the common case (nil, not logged); a lookup failure also degrades to nil. Scoped to
-	// autoApplyEnqueueSources so other jobs skip a query that could only come back empty.
-	if userID, ok := auth.UserIDFromContext(ctx); ok && autoApplyEnqueueSources[job.Source] {
+	// the common case (nil, not logged); a lookup failure also degrades to nil. Scoped to the
+	// sources auto-apply can queue (autoapply.Queueable, the enqueue gate) so other jobs skip
+	// a query that could only come back empty.
+	if userID, ok := auth.UserIDFromContext(ctx); ok && autoapply.Queueable(job.Source) {
 		if entry, err := h.queries.GetAutoApplyQueueEntryForJob(ctx, db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
 		}); err == nil {
-			status := autoApplyEntryStatus(entry.ReviewDecision, entry.FailedAt, entry.BlockedAt)
+			status := string(autoapply.EntryStatusOf(entry.ReviewDecision, entry.FailedAt, entry.BlockedAt))
 			view.AutoApplyStatus = &status
 		}
 	}

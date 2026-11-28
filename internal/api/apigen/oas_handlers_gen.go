@@ -223,6 +223,101 @@ func (s *Server) handleAddAtomRequest(args [0]string, argsEscaped bool, w http.R
 	}
 }
 
+// handleAddAvailabilityDatedRequest handles addAvailabilityDated operation.
+//
+// Add one dated override: a narrowed day, an extra day, or (equal start and end) a closure.
+//
+// POST /me/availability/overrides
+func (s *Server) handleAddAvailabilityDatedRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: AddAvailabilityDatedOperation,
+			ID:   "addAvailabilityDated",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeAddAvailabilityDatedRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *AddAvailabilityDatedCreated
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    AddAvailabilityDatedOperation,
+			OperationSummary: "Add a dated override.",
+			OperationID:      "addAvailabilityDated",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *AvailabilityRuleBody
+			Params   = struct{}
+			Response = *AddAvailabilityDatedCreated
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.AddAvailabilityDated(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.AddAvailabilityDated(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeAddAvailabilityDatedResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleAddAvailabilityOverrideRequest handles addAvailabilityOverride operation.
 //
 // POST /me/mentorship/availability/overrides
@@ -8022,6 +8117,101 @@ func (s *Server) handleDeleteAtomRequest(args [1]string, argsEscaped bool, w htt
 	}
 }
 
+// handleDeleteAvailabilityEntryRequest handles deleteAvailabilityEntry operation.
+//
+// Remove one of the caller's own rules.
+//
+// DELETE /me/availability/{id}
+func (s *Server) handleDeleteAvailabilityEntryRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: DeleteAvailabilityEntryOperation,
+			ID:   "deleteAvailabilityEntry",
+		}
+	)
+	params, err := decodeDeleteAvailabilityEntryParams(args, argsEscaped, r)
+	if err != nil {
+		err = &ogenerrors.DecodeParamsError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeParams", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+
+	var rawBody []byte
+
+	var response *DeleteAvailabilityEntryNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    DeleteAvailabilityEntryOperation,
+			OperationSummary: "Delete one availability rule.",
+			OperationID:      "deleteAvailabilityEntry",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params: middleware.Parameters{
+				{
+					Name: "id",
+					In:   "path",
+				}: params.ID,
+			},
+			Raw: r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = DeleteAvailabilityEntryParams
+			Response = *DeleteAvailabilityEntryNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			unpackDeleteAvailabilityEntryParams,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.DeleteAvailabilityEntry(ctx, params)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.DeleteAvailabilityEntry(ctx, params)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeDeleteAvailabilityEntryResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleDeleteAvailabilityRuleRequest handles deleteAvailabilityRule operation.
 //
 // DELETE /me/mentorship/availability/{id}
@@ -11403,6 +11593,82 @@ func (s *Server) handleGetAutofillProfileRequest(args [0]string, argsEscaped boo
 	}
 }
 
+// handleGetAvailabilityRequest handles getAvailability operation.
+//
+// The caller's availability: hours, zone and booking-link settings.
+//
+// GET /me/availability
+func (s *Server) handleGetAvailabilityRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err error
+	)
+
+	var rawBody []byte
+
+	var response *GetAvailabilityOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    GetAvailabilityOperation,
+			OperationSummary: "Get my availability.",
+			OperationID:      "getAvailability",
+			Body:             nil,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = struct{}
+			Params   = struct{}
+			Response = *GetAvailabilityOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.GetAvailability(ctx)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.GetAvailability(ctx)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeGetAvailabilityResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleGetBillingAttemptsRequest handles getBillingAttempts operation.
 //
 // The caller's 20 most recent Stripe charge attempts, newest first, including failed first purchases
@@ -12488,8 +12754,8 @@ func (s *Server) handleGetCVTailorContextRequest(args [1]string, argsEscaped boo
 
 // handleGetDataJobRequest handles getDataJob operation.
 //
-// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs the Data plan:
-// any other account gets `403`.
+// The same answer as `GET /jobs/{slug}`, with the job's `url` and `source_url`. Needs a paid API plan
+// (API or Data): any other account gets `403`.
 //
 // GET /data/jobs/{slug}
 func (s *Server) handleGetDataJobRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -12522,7 +12788,7 @@ func (s *Server) handleGetDataJobRequest(args [1]string, argsEscaped bool, w htt
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    GetDataJobOperation,
-			OperationSummary: "A single job with its original links (Data plan).",
+			OperationSummary: "A single job with its original links (API and Data plans).",
 			OperationID:      "getDataJob",
 			Body:             nil,
 			RawBody:          rawBody,
@@ -13996,101 +14262,6 @@ func (s *Server) handleGetJobRequest(args [1]string, argsEscaped bool, w http.Re
 	}
 
 	if err := encodeGetJobResponse(response, w); err != nil {
-		defer recordError("EncodeResponse", err)
-		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-		}
-		return
-	}
-}
-
-// handleGetJobFitRequest handles getJobFit operation.
-//
-// Alias of `getMatchAnalysis`.
-//
-// GET /jobs/{slug}/fit
-func (s *Server) handleGetJobFitRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
-	statusWriter := &codeRecorder{ResponseWriter: w}
-	w = statusWriter
-	ctx := r.Context()
-
-	var (
-		err          error
-		opErrContext = ogenerrors.OperationContext{
-			Name: GetJobFitOperation,
-			ID:   "getJobFit",
-		}
-	)
-	params, err := decodeGetJobFitParams(args, argsEscaped, r)
-	if err != nil {
-		err = &ogenerrors.DecodeParamsError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeParams", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	var rawBody []byte
-
-	var response *FitAnalysisResponse
-	if m := s.cfg.Middleware; m != nil {
-		mreq := middleware.Request{
-			Context:          ctx,
-			OperationName:    GetJobFitOperation,
-			OperationSummary: "",
-			OperationID:      "getJobFit",
-			Body:             nil,
-			RawBody:          rawBody,
-			Params: middleware.Parameters{
-				{
-					Name: "slug",
-					In:   "path",
-				}: params.Slug,
-			},
-			Raw: r,
-		}
-
-		type (
-			Request  = struct{}
-			Params   = GetJobFitParams
-			Response = *FitAnalysisResponse
-		)
-		response, err = middleware.HookMiddleware[
-			Request,
-			Params,
-			Response,
-		](
-			m,
-			mreq,
-			unpackGetJobFitParams,
-			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.GetJobFit(ctx, params)
-				return response, err
-			},
-		)
-	} else {
-		response, err = s.h.GetJobFit(ctx, params)
-	}
-	if err != nil {
-		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
-			if err := encodeErrorResponse(errRes, w); err != nil {
-				defer recordError("Internal", err)
-			}
-			return
-		}
-		if errors.Is(err, ht.ErrNotImplemented) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-			return
-		}
-		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
-			defer recordError("Internal", err)
-		}
-		return
-	}
-
-	if err := encodeGetJobFitResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -29422,6 +29593,101 @@ func (s *Server) handleReopenEmployerVacancyRequest(args [1]string, argsEscaped 
 	}
 }
 
+// handleReplaceAvailabilityWeeklyRequest handles replaceAvailabilityWeekly operation.
+//
+// Swap the recurring week; dated overrides stay.
+//
+// PUT /me/availability/weekly
+func (s *Server) handleReplaceAvailabilityWeeklyRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: ReplaceAvailabilityWeeklyOperation,
+			ID:   "replaceAvailabilityWeekly",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeReplaceAvailabilityWeeklyRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *ReplaceAvailabilityWeeklyNoContent
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    ReplaceAvailabilityWeeklyOperation,
+			OperationSummary: "Replace my weekly hours.",
+			OperationID:      "replaceAvailabilityWeekly",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *AvailabilityWeeklyBody
+			Params   = struct{}
+			Response = *ReplaceAvailabilityWeeklyNoContent
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				err = s.h.ReplaceAvailabilityWeekly(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		err = s.h.ReplaceAvailabilityWeekly(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeReplaceAvailabilityWeeklyResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
 // handleReplaceResumeContactsFromCvRequest handles replaceResumeContactsFromCv operation.
 //
 // A full reset, not just identity fields — every owned field is replaced from the current structured
@@ -31972,101 +32238,6 @@ func (s *Server) handleRunAutofillRequest(args [0]string, argsEscaped bool, w ht
 	}
 }
 
-// handleRunJobFitRequest handles runJobFit operation.
-//
-// Alias of `runMatchAnalysis`.
-//
-// POST /jobs/{slug}/fit
-func (s *Server) handleRunJobFitRequest(args [1]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
-	statusWriter := &codeRecorder{ResponseWriter: w}
-	w = statusWriter
-	ctx := r.Context()
-
-	var (
-		err          error
-		opErrContext = ogenerrors.OperationContext{
-			Name: RunJobFitOperation,
-			ID:   "runJobFit",
-		}
-	)
-	params, err := decodeRunJobFitParams(args, argsEscaped, r)
-	if err != nil {
-		err = &ogenerrors.DecodeParamsError{
-			OperationContext: opErrContext,
-			Err:              err,
-		}
-		defer recordError("DecodeParams", err)
-		s.cfg.ErrorHandler(ctx, w, r, err)
-		return
-	}
-
-	var rawBody []byte
-
-	var response RunJobFitRes
-	if m := s.cfg.Middleware; m != nil {
-		mreq := middleware.Request{
-			Context:          ctx,
-			OperationName:    RunJobFitOperation,
-			OperationSummary: "",
-			OperationID:      "runJobFit",
-			Body:             nil,
-			RawBody:          rawBody,
-			Params: middleware.Parameters{
-				{
-					Name: "slug",
-					In:   "path",
-				}: params.Slug,
-			},
-			Raw: r,
-		}
-
-		type (
-			Request  = struct{}
-			Params   = RunJobFitParams
-			Response = RunJobFitRes
-		)
-		response, err = middleware.HookMiddleware[
-			Request,
-			Params,
-			Response,
-		](
-			m,
-			mreq,
-			unpackRunJobFitParams,
-			func(ctx context.Context, request Request, params Params) (response Response, err error) {
-				response, err = s.h.RunJobFit(ctx, params)
-				return response, err
-			},
-		)
-	} else {
-		response, err = s.h.RunJobFit(ctx, params)
-	}
-	if err != nil {
-		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
-			if err := encodeErrorResponse(errRes, w); err != nil {
-				defer recordError("Internal", err)
-			}
-			return
-		}
-		if errors.Is(err, ht.ErrNotImplemented) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-			return
-		}
-		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
-			defer recordError("Internal", err)
-		}
-		return
-	}
-
-	if err := encodeRunJobFitResponse(response, w); err != nil {
-		defer recordError("EncodeResponse", err)
-		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
-			s.cfg.ErrorHandler(ctx, w, r, err)
-		}
-		return
-	}
-}
-
 // handleRunMatchAnalysisRequest handles runMatchAnalysis operation.
 //
 // Runs the match prompt-chain over your stored CV and the job, caches the result, and returns it fresh
@@ -32157,6 +32328,102 @@ func (s *Server) handleRunMatchAnalysisRequest(args [1]string, argsEscaped bool,
 	}
 
 	if err := encodeRunMatchAnalysisResponse(response, w); err != nil {
+		defer recordError("EncodeResponse", err)
+		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+		}
+		return
+	}
+}
+
+// handleSaveAvailabilityBookingRequest handles saveAvailabilityBooking operation.
+//
+// Save the zone, meeting length and notice of booking links. Pro or Ultra only (402); a bad duration
+// or notice is 422.
+//
+// PUT /me/availability/booking
+func (s *Server) handleSaveAvailabilityBookingRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
+	statusWriter := &codeRecorder{ResponseWriter: w}
+	w = statusWriter
+	ctx := r.Context()
+
+	var (
+		err          error
+		opErrContext = ogenerrors.OperationContext{
+			Name: SaveAvailabilityBookingOperation,
+			ID:   "saveAvailabilityBooking",
+		}
+	)
+
+	var rawBody []byte
+	request, rawBody, close, err := s.decodeSaveAvailabilityBookingRequest(r)
+	if err != nil {
+		err = &ogenerrors.DecodeRequestError{
+			OperationContext: opErrContext,
+			Err:              err,
+		}
+		defer recordError("DecodeRequest", err)
+		s.cfg.ErrorHandler(ctx, w, r, err)
+		return
+	}
+	defer func() {
+		if err := close(); err != nil {
+			recordError("CloseRequest", err)
+		}
+	}()
+
+	var response *SaveAvailabilityBookingOK
+	if m := s.cfg.Middleware; m != nil {
+		mreq := middleware.Request{
+			Context:          ctx,
+			OperationName:    SaveAvailabilityBookingOperation,
+			OperationSummary: "Save my booking-link settings.",
+			OperationID:      "saveAvailabilityBooking",
+			Body:             request,
+			RawBody:          rawBody,
+			Params:           middleware.Parameters{},
+			Raw:              r,
+		}
+
+		type (
+			Request  = *AvailabilityBookingBody
+			Params   = struct{}
+			Response = *SaveAvailabilityBookingOK
+		)
+		response, err = middleware.HookMiddleware[
+			Request,
+			Params,
+			Response,
+		](
+			m,
+			mreq,
+			nil,
+			func(ctx context.Context, request Request, params Params) (response Response, err error) {
+				response, err = s.h.SaveAvailabilityBooking(ctx, request)
+				return response, err
+			},
+		)
+	} else {
+		response, err = s.h.SaveAvailabilityBooking(ctx, request)
+	}
+	if err != nil {
+		if errRes, ok := errors.Into[*ProblemStatusCode](err); ok {
+			if err := encodeErrorResponse(errRes, w); err != nil {
+				defer recordError("Internal", err)
+			}
+			return
+		}
+		if errors.Is(err, ht.ErrNotImplemented) {
+			s.cfg.ErrorHandler(ctx, w, r, err)
+			return
+		}
+		if err := encodeErrorResponse(s.h.NewError(ctx, err), w); err != nil {
+			defer recordError("Internal", err)
+		}
+		return
+	}
+
+	if err := encodeSaveAvailabilityBookingResponse(response, w); err != nil {
 		defer recordError("EncodeResponse", err)
 		if !errors.Is(err, ht.ErrInternalServerErrorResponse) {
 			s.cfg.ErrorHandler(ctx, w, r, err)
@@ -32571,8 +32838,8 @@ func (s *Server) handleSearchCitiesRequest(args [0]string, argsEscaped bool, w h
 //
 // The same text query and filters as `GET /jobs/search` (the "Filtering jobs" section), with each
 // job's `url` (the employer's own posting) and `source_url` where it differs. The public job reads
-// leave both out and link only through `apply_url`. Needs the Data plan: any other account gets `403`.
-// Never cached: the answer is private to the plan holder.
+// leave both out and link only through `apply_url`. Needs a paid API plan (API or Data): any other
+// account gets `403`. Never cached: the answer is private to the plan holder.
 //
 // GET /data/jobs/search
 func (s *Server) handleSearchDataJobsRequest(args [0]string, argsEscaped bool, w http.ResponseWriter, r *http.Request) {
@@ -32605,7 +32872,7 @@ func (s *Server) handleSearchDataJobsRequest(args [0]string, argsEscaped bool, w
 		mreq := middleware.Request{
 			Context:          ctx,
 			OperationName:    SearchDataJobsOperation,
-			OperationSummary: "Search open jobs with their original links (Data plan).",
+			OperationSummary: "Search open jobs with their original links (API and Data plans).",
 			OperationID:      "searchDataJobs",
 			Body:             nil,
 			RawBody:          rawBody,

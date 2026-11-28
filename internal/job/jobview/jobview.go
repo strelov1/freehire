@@ -33,7 +33,7 @@ type Job struct {
 	ManuallyAdded bool   `json:"manually_added"`
 	ExternalID    string `json:"external_id"`
 	// URL is the employer's own application URL, as stored: the canonical address the
-	// extension matches pages against. Served to the public only on the Data plan's
+	// extension matches pages against. Served to the public only on the paid API plans' /data/jobs
 	// endpoints; every other surface drops it with HideOrigin.
 	URL string `json:"url"`
 	// ApplyURL is the freehire redirect to URL (outboundurl.ApplyURL, src=web), which counts
@@ -174,7 +174,7 @@ type Job struct {
 	// the feature is configured and its company has a website on record. Detail handler only.
 	RecruiterContactsAvailable bool `json:"recruiter_contacts_available,omitempty"`
 	// AutoApplyStatus is the caller's own auto-apply status for this job: "queued", "failed"
-	// or "declined" (see autoApplyEntryStatus in internal/api/handler), nil for no attempt or
+	// or "declined" (see autoapply.EntryStatus), nil for no attempt or
 	// an anonymous caller. Caller-scoped like MyVote: only the detail handler overlays it,
 	// keyed by (caller_id, job_id), so the shared job query stays free of it.
 	AutoApplyStatus *string `json:"auto_apply_status,omitempty"`

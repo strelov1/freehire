@@ -1,5 +1,6 @@
 <script lang="ts">
   import AIInterviewBadge from './AIInterviewBadge.svelte';
+  import ClaimCompanyLink from './ClaimCompanyLink.svelte';
   import { Star } from '@lucide/svelte';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
@@ -18,7 +19,7 @@
   // live in a separate CompanyFacts card (jobs sidebar on desktop, under the header on
   // mobile), so this stays compact. The card is always shown, even for an unenriched
   // company (just the identity row) — the tagline and the meta divider are present-only.
-  let { company, slug }: { company: Company; slug: string } = $props();
+  let { company, slug, claimed = true }: { company: Company; slug: string; claimed?: boolean } = $props();
 
   // The feedback list dialog (star ratings + category + text), opened from the
   // rating badge below. Before any feedback exists there's nothing to list, so the
@@ -182,6 +183,7 @@
       {@render feedback('ml-auto flex flex-wrap items-center gap-x-4 gap-y-2')}
     </div>
   {/if}
+  <ClaimCompanyLink {slug} {claimed} />
 </section>
 
 {#if showFeedbackList}

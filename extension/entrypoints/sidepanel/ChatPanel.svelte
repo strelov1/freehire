@@ -52,12 +52,24 @@
       {#if split.rest.length > 0}
         <ToolGroupList calls={split.rest} />
       {/if}
-      {#if message.text || message.streaming}
+      {#if message.text || message.streaming || message.attachments.length > 0}
         <div class="message {message.role}" class:errored={message.errored}>
           {message.text}{#if message.streaming && !message.text}<span class="dots">…</span>{/if}
+          {#if message.attachments.length > 0}
+            <ul class="attachments" aria-label="Attached files">
+              {#each message.attachments as name, ai (ai)}
+                <li>{name}</li>
+              {/each}
+            </ul>
+          {/if}
         </div>
       {/if}
     {/each}
+    <!-- The server sends nothing else until the turn ahead of this one ends, which can be
+       a minute: without this the panel would read as a dead stream. -->
+    {#if chat.queued}
+      <div class="message system" role="status">Waiting for the current turn to finish…</div>
+    {/if}
     {#if chatError}
       <div class="message system err">{chatError}</div>
     {/if}
@@ -154,6 +166,13 @@
     align-self: flex-start;
     background: var(--muted);
     color: var(--foreground);
+  }
+
+  .attachments {
+    margin-top: 4px;
+    padding-left: 16px;
+    font-size: 12px;
+    list-style: disc;
   }
 
   .message.system {

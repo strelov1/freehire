@@ -99,8 +99,11 @@ describe('jobCtaPlan', () => {
       autoApply: { label: 'Auto-apply declined', leads: false, pro: false, disabled: true },
       external: { label: 'Apply' },
     });
+  });
+
+  it('sends a stopped attempt to its chat rather than offering a new one', () => {
     expect(plan('failed')).toEqual({
-      autoApply: { label: "Auto-apply couldn't complete", leads: false, pro: false, disabled: true },
+      autoApply: { label: 'Finish in chat', leads: false, pro: false, disabled: false, chat: true },
       external: { label: 'Apply' },
     });
   });

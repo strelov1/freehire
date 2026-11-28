@@ -3,6 +3,7 @@ package search
 import (
 	"fmt"
 	"net/url"
+	"reflect"
 	"testing"
 )
 
@@ -144,5 +145,16 @@ func TestCompanyFilterFromValues_HQCountry(t *testing.T) {
 	g := groups(t, CompanyFilterFromValues(url.Values{"hq_country": {"AU,nz"}}))
 	if !hasGroup(g, Eq("hq_country", "AU"), Eq("hq_country", "nz")) || len(g) != 1 {
 		t.Errorf("filter = %v, want one hq_country group", g)
+	}
+}
+
+func TestCompanyFilterFromValues_EmployeeRange(t *testing.T) {
+	g := groups(t, CompanyFilterFromValues(url.Values{"employee_count_min": {"11"}, "employee_count_max": {"50"}}))
+	want := [][]string{{"employee_count >= 11"}, {"employee_count <= 50"}}
+	if !reflect.DeepEqual(g, want) {
+		t.Fatalf("got %v, want %v", g, want)
+	}
+	if f := CompanyFilterFromValues(url.Values{"employee_count_min": {"1; DROP"}}); f != nil {
+		t.Fatalf("non-integer bound must be skipped, got %v", f)
 	}
 }

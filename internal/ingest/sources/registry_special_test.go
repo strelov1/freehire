@@ -9,6 +9,7 @@ func TestCrawlRegistryRequiresCompleteCredentialPairs(t *testing.T) {
 		secretEnv string
 	}{
 		{"adzuna", "ADZUNA_APP_ID", "ADZUNA_APP_KEY"},
+		{"careerjet", "CAREERJET_API_KEY", "CAREERJET_USER_IP"},
 		{"francetravail", "FRANCE_TRAVAIL_CLIENT_ID", "FRANCE_TRAVAIL_CLIENT_SECRET"},
 	}
 	cases := []struct {
@@ -36,5 +37,14 @@ func TestCrawlRegistryRequiresCompleteCredentialPairs(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestCrawlRegistryRequiresJoobleKey(t *testing.T) {
+	for key, want := range map[string]bool{"": false, "test-key": true} {
+		t.Setenv("JOOBLE_API_KEY", key)
+		if _, registered := All(NewClient())["jooble"]; registered != want {
+			t.Errorf("All(client) registered jooble with key %q = %t, want %t", key, registered, want)
+		}
 	}
 }

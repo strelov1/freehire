@@ -141,25 +141,29 @@ WHERE job_count > 0
   AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
   AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
   AND (coalesce(cardinality($16::text[]), 0) = 0 OR lower(hq_country) = ANY($16::text[]))
+  AND ($17::int IS NULL OR employee_count >= $17::int)
+  AND ($18::int IS NULL OR employee_count <= $18::int)
 `
 
 type CountCompaniesParams struct {
-	Search        string   `json:"search"`
-	Collections   []string `json:"collections"`
-	Regions       []string `json:"regions"`
-	Countries     []string `json:"countries"`
-	Domains       []string `json:"domains"`
-	Industries    []string `json:"industries"`
-	CompanyTypes  []string `json:"company_types"`
-	CompanySizes  []string `json:"company_sizes"`
-	RemoteRegions []string `json:"remote_regions"`
-	YcBatch       []string `json:"yc_batch"`
-	YcStatus      []string `json:"yc_status"`
-	YcStage       []string `json:"yc_stage"`
-	YcFlags       []string `json:"yc_flags"`
-	Maturity      []string `json:"maturity"`
-	Subindustries []string `json:"subindustries"`
-	HqCountries   []string `json:"hq_countries"`
+	Search           string      `json:"search"`
+	Collections      []string    `json:"collections"`
+	Regions          []string    `json:"regions"`
+	Countries        []string    `json:"countries"`
+	Domains          []string    `json:"domains"`
+	Industries       []string    `json:"industries"`
+	CompanyTypes     []string    `json:"company_types"`
+	CompanySizes     []string    `json:"company_sizes"`
+	RemoteRegions    []string    `json:"remote_regions"`
+	YcBatch          []string    `json:"yc_batch"`
+	YcStatus         []string    `json:"yc_status"`
+	YcStage          []string    `json:"yc_stage"`
+	YcFlags          []string    `json:"yc_flags"`
+	Maturity         []string    `json:"maturity"`
+	Subindustries    []string    `json:"subindustries"`
+	HqCountries      []string    `json:"hq_countries"`
+	EmployeeCountMin pgtype.Int4 `json:"employee_count_min"`
+	EmployeeCountMax pgtype.Int4 `json:"employee_count_max"`
 }
 
 // Total companies matching the same optional name + facet filters as ListCompanies,
@@ -183,6 +187,8 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.Maturity,
 		arg.Subindustries,
 		arg.HqCountries,
+		arg.EmployeeCountMin,
+		arg.EmployeeCountMax,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -327,7 +333,7 @@ func (q *Queries) InsertMissingCompaniesForSlugs(ctx context.Context, slugs []st
 
 const listCompanies = `-- name: ListCompanies :many
 SELECT slug, name, job_count, tagline, industries, hq_country, collections,
-       feedback_count, feedback_rating_avg, ai_interview_reports,
+       feedback_count, feedback_rating_avg, ai_interview_reports, employee_count,
        COALESCE(NULLIF(regexp_replace(company_info ->> 'website', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), NULLIF(regexp_replace(company_info ->> 'homepage', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), ''), '')::text AS website,
        COALESCE(regexp_replace(company_info ->> 'linkedin', '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '')::text AS linkedin
 FROM companies
@@ -366,32 +372,38 @@ WHERE job_count > 0
   -- are). A NULLABLE SCALAR stored in mixed case ("US", "us"): the handler lowercases the
   -- requested codes and the column is lowered here; NULL matches none.
   AND (coalesce(cardinality($16::text[]), 0) = 0 OR lower(hq_country) = ANY($16::text[]))
+  -- employee_count is the company's own headcount (` + "`" + `company_size` + "`" + ` is the size bands of its
+  -- postings). Both bounds are inclusive; a NULL headcount matches no range.
+  AND ($17::int IS NULL OR employee_count >= $17::int)
+  AND ($18::int IS NULL OR employee_count <= $18::int)
 ORDER BY
-  CASE WHEN $17::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
+  CASE WHEN $19::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
   job_count DESC, name
-LIMIT $19 OFFSET $18
+LIMIT $21 OFFSET $20
 `
 
 type ListCompaniesParams struct {
-	Search        string   `json:"search"`
-	Collections   []string `json:"collections"`
-	Regions       []string `json:"regions"`
-	Countries     []string `json:"countries"`
-	Domains       []string `json:"domains"`
-	Industries    []string `json:"industries"`
-	CompanyTypes  []string `json:"company_types"`
-	CompanySizes  []string `json:"company_sizes"`
-	RemoteRegions []string `json:"remote_regions"`
-	YcBatch       []string `json:"yc_batch"`
-	YcStatus      []string `json:"yc_status"`
-	YcStage       []string `json:"yc_stage"`
-	YcFlags       []string `json:"yc_flags"`
-	Maturity      []string `json:"maturity"`
-	Subindustries []string `json:"subindustries"`
-	HqCountries   []string `json:"hq_countries"`
-	Sort          string   `json:"sort"`
-	Offset        int32    `json:"offset"`
-	Limit         int32    `json:"limit"`
+	Search           string      `json:"search"`
+	Collections      []string    `json:"collections"`
+	Regions          []string    `json:"regions"`
+	Countries        []string    `json:"countries"`
+	Domains          []string    `json:"domains"`
+	Industries       []string    `json:"industries"`
+	CompanyTypes     []string    `json:"company_types"`
+	CompanySizes     []string    `json:"company_sizes"`
+	RemoteRegions    []string    `json:"remote_regions"`
+	YcBatch          []string    `json:"yc_batch"`
+	YcStatus         []string    `json:"yc_status"`
+	YcStage          []string    `json:"yc_stage"`
+	YcFlags          []string    `json:"yc_flags"`
+	Maturity         []string    `json:"maturity"`
+	Subindustries    []string    `json:"subindustries"`
+	HqCountries      []string    `json:"hq_countries"`
+	EmployeeCountMin pgtype.Int4 `json:"employee_count_min"`
+	EmployeeCountMax pgtype.Int4 `json:"employee_count_max"`
+	Sort             string      `json:"sort"`
+	Offset           int32       `json:"offset"`
+	Limit            int32       `json:"limit"`
 }
 
 type ListCompaniesRow struct {
@@ -405,6 +417,7 @@ type ListCompaniesRow struct {
 	FeedbackCount      int32         `json:"feedback_count"`
 	FeedbackRatingAvg  pgtype.Float4 `json:"feedback_rating_avg"`
 	AiInterviewReports int32         `json:"ai_interview_reports"`
+	EmployeeCount      pgtype.Int4   `json:"employee_count"`
 	Website            string        `json:"website"`
 	Linkedin           string        `json:"linkedin"`
 }
@@ -459,6 +472,8 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.Maturity,
 		arg.Subindustries,
 		arg.HqCountries,
+		arg.EmployeeCountMin,
+		arg.EmployeeCountMax,
 		arg.Sort,
 		arg.Offset,
 		arg.Limit,
@@ -481,6 +496,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 			&i.FeedbackCount,
 			&i.FeedbackRatingAvg,
 			&i.AiInterviewReports,
+			&i.EmployeeCount,
 			&i.Website,
 			&i.Linkedin,
 		); err != nil {

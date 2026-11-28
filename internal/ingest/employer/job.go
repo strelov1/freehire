@@ -323,7 +323,9 @@ func (s *Service) UpdateVacancy(ctx context.Context, userID int64, slug string, 
 		postedAt = patch.PostedAt
 	}
 
-	f, err := deriveEmployer(curF.ExternalID, title, curF.Company, location, description, remote)
+	// The posting keeps the company it was created under: reading it from the account here
+	// would let an edit that races a change of team write another company's name and slug.
+	f, err := deriveEmployer(curF.ExternalID, title, curF.Company, curF.CompanySlug, location, description, remote)
 	if err != nil {
 		return job.Job{}, job.Extras{}, err
 	}
@@ -419,7 +421,7 @@ func (s *Service) ReopenVacancy(ctx context.Context, userID int64, slug string) 
 // function itself, which stays scoped to moderation's own CreateInput/UpdatePatch shapes.
 // An edit carries no structured facet overrides: every facet re-derives from content, the
 // same as moderation.Service.Update's own edit path.
-func deriveEmployer(externalID, title, company, location, description string, remote bool) (job.Fields, error) {
+func deriveEmployer(externalID, title, company, companySlug, location, description string, remote bool) (job.Fields, error) {
 	workMode := ""
 	if remote {
 		workMode = "remote"
@@ -434,6 +436,8 @@ func deriveEmployer(externalID, title, company, location, description string, re
 			Description: description,
 			WorkMode:    workMode,
 		},
+		// The account's own company identity, never re-derived from its display name.
+		CanonicalCompanySlug: companySlug,
 	})
 	if err != nil {
 		return job.Fields{}, err

@@ -57,7 +57,7 @@ func (r *fakeJobRepo) BySlug(_ context.Context, actorID int64, slug string) (job
 	j, err := job.New(job.Draft{Input: jobderive.Input{
 		Source: f.Source, ExternalID: f.ExternalID, Title: f.Title, Company: f.Company,
 		Location: f.Location, Description: f.Description,
-	}})
+	}, CanonicalCompanySlug: f.CompanySlug})
 	return j, job.Extras{}, err
 }
 

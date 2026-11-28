@@ -1,7 +1,7 @@
 //go:build integration
 
 // Integration tests for the candidate-facing auto-apply trigger
-// (openspec/changes/auto-apply-submit-trigger): the enqueue endpoint's eligibility gates,
+// (openspec/changes/archive/2026-11-25-auto-apply-submit-trigger): the enqueue endpoint's eligibility gates,
 // its dedup/decline-is-terminal contract, the event publish, and the job detail response's
 // own auto-apply status overlay.
 // Run with: go test -tags=integration ./internal/api/handler/
@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
@@ -142,17 +143,18 @@ func TestPostJobAutoApply_RefusesAnUnsupportedSource(t *testing.T) {
 }
 
 // TestPostJobAutoApply_AcceptsEveryQueueableSource covers every ATS auto-apply can queue an
-// attempt against today — Greenhouse is the only one that can currently SUBMIT (fillProviders
-// in internal/api/atsapply), but Ashby/Workable/Lever/Recruitee attempts still tailor and
-// review, then park honestly (see auto_apply_tailor_integration_test.go's own park-reason
-// coverage) rather than being refused at the door.
+// attempt against, read from the set's one owner (autoapply.QueueableSources) rather than a
+// list copied here, which would keep passing after the two drifted. Attempts on a provider
+// the executor cannot submit still tailor and review, then park honestly (see
+// auto_apply_tailor_integration_test.go's own park-reason coverage) rather than being
+// refused at the door.
 func TestPostJobAutoApply_AcceptsEveryQueueableSource(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyEnqueueTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
 
-	for _, source := range []string{"greenhouse", "ashby", "workable", "lever", "recruitee"} {
+	for _, source := range autoapply.QueueableSources() {
 		t.Run(source, func(t *testing.T) {
 			userID, cookie := autoApplyTailorUser(t, pool, iss, source+"@example.test")
 			makePro(t, pool, userID)
