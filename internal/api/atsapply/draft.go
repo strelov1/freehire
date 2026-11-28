@@ -71,9 +71,10 @@ func draftable(f MergedField) bool {
 // bankedChoice returns the answer the candidate banked for an option field when that answer
 // is what Resolve tried and it named no option verbatim: a person types "about 3 years",
 // the form offers "2 to 4 years". A typed fact that answers the field first is left alone,
-// and a sensitive question never reaches the model even to map the candidate's own words.
+// and an unlabeled or sensitive question never reaches the model even to map the candidate's
+// own words: an unlabeled one cannot be verified non-sensitive, as in draftable.
 func bankedChoice(f MergedField, answers map[string]string) (string, bool) {
-	if len(f.Options) == 0 || isSensitiveLabel(f.Label) {
+	if len(f.Options) == 0 || f.Label == "" || isSensitiveLabel(f.Label) {
 		return "", false
 	}
 	bankKey, ok := matchBankAnswerKey(f)

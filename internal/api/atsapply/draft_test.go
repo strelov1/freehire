@@ -293,3 +293,23 @@ func TestResolveWithDrafting_NeverMapsABankedAnswerToASensitiveChoice(t *testing
 		t.Fatalf("calls = %v, plan = %+v; want no model call and the field parked", drafter.calls, plan)
 	}
 }
+
+// A DOM-only field with options but no label cannot be verified non-sensitive: fail closed.
+func TestResolveWithDrafting_NeverMapsABankedAnswerToAnUnlabeledChoice(t *testing.T) {
+	f := MergedField{
+		ID: "gender", Kind: "select", Required: true,
+		Options: []applyform.Option{{Label: "Male", Value: "m"}, {Label: "Female", Value: "f"}},
+	}
+	key, ok := matchBankAnswerKey(f)
+	if !ok {
+		t.Fatal("question has no bank key")
+	}
+	drafter := &fakeDrafter{answer: "Male", ok: true}
+	plan, err := ResolveWithDrafting(context.Background(), []MergedField{f}, map[string]string{key: "I am a man"}, drafter, GroundingContext{}, false, nil, 0, 0)
+	if err != nil {
+		t.Fatalf("ResolveWithDrafting: %v", err)
+	}
+	if len(drafter.calls) != 0 || len(plan.Unmapped) != 1 {
+		t.Fatalf("calls = %v, plan = %+v; want no model call and the field parked", drafter.calls, plan)
+	}
+}
