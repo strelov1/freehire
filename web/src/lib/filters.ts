@@ -174,6 +174,12 @@ export class FilterStore {
     });
   }
 
+  /** The country-only modifier. setNow: a discrete toggle that re-filters the whole feed,
+   *  like its sibling modifiers above. */
+  setCountriesOnly(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, countriesOnly: on });
+  }
+
   /** The summary chip's remove: one chip stands for the whole salary range, so it
    *  clears both ends. The range itself is dragged in the modal, which stages it. */
   clearSalary() {

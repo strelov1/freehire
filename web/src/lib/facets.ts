@@ -110,6 +110,14 @@ export interface FacetStore {
   setMatchAll(param: string, on: boolean): void;
 }
 
+/** The job-filter store's surface for controls that are not value sets: the geography
+ *  modifier that keeps only postings bounded to one country. Optional on a FacetStore, so
+ *  stores with no job geography (companies, Talent Network) are unaware of it. */
+export interface JobModifierStore {
+  value: { countriesOnly: boolean };
+  setCountriesOnly(on: boolean): void;
+}
+
 export interface FacetDef {
   param: string;
   label: string;

@@ -227,6 +227,13 @@ export const FILTER_EXTRAS: FilterRow[] = [
     values:
       'ISO 3166-1 alpha-2 codes, as countries — bound the remote arm of work_mode_remote_anywhere, ORed with work_mode_remote_regions. Read only while it is in force',
   },
+  {
+    param: 'countries_only',
+    type: 'boolean',
+    label: 'Only inside the selected country',
+    values:
+      'true — keeps only postings whose geography is one country, dropping a worldwide remote role that merely lists the selected country among many. Read only beside an included `countries` value; alone it changes nothing',
+  },
 ];
 
 /** How the cross-facet modifiers behave — they apply to every string facet. */

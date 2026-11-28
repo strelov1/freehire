@@ -18,6 +18,9 @@ func facetSettings() *meilisearch.Settings {
 			"id", "is_closed", "is_duplicate",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
+			// multi_country is derived at index time from the posting's country list; it backs
+			// the "only inside the country" filter (see CountriesOnlyParam in query_filter.go).
+			"multi_country",
 			// is_tech is served top-level; an unknown value is absent, so it filters as empty.
 			"is_tech",
 			// ai_interview is true-or-absent (written only when the company has an un-retracted

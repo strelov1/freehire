@@ -86,6 +86,7 @@ var scalarModifiers = []string{
 	WorkModeRemoteAnywhereParam,
 	WorkModeRemoteRegionsParam,
 	WorkModeRemoteCountriesParam,
+	CountriesOnlyParam,
 }
 
 // qSearchableFields are the fields `q` matches, in the order of the jobs index's

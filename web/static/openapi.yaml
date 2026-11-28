@@ -458,6 +458,9 @@
           },
           {
             "$ref": "#/components/parameters/job.work_mode_remote_countries"
+          },
+          {
+            "$ref": "#/components/parameters/job.countries_only"
           }
         ],
         "responses": {
@@ -930,6 +933,9 @@
           },
           {
             "$ref": "#/components/parameters/job.work_mode_remote_countries"
+          },
+          {
+            "$ref": "#/components/parameters/job.countries_only"
           }
         ],
         "responses": {
@@ -1726,6 +1732,9 @@
           },
           {
             "$ref": "#/components/parameters/job.work_mode_remote_countries"
+          },
+          {
+            "$ref": "#/components/parameters/job.countries_only"
           }
         ],
         "responses": {
@@ -4203,6 +4212,14 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "job.countries_only": {
+        "name": "countries_only",
+        "in": "query",
+        "description": "Only inside the selected country: true — keeps only postings whose geography is one country, dropping a worldwide remote role that merely lists the selected country among many. Read only beside an included `countries` value; alone it changes nothing.",
+        "schema": {
+          "type": "boolean"
         }
       },
       "company.collections": {

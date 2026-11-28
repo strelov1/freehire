@@ -83,6 +83,7 @@ export function emptyFilters(): JobFilters {
     workModeRemoteAnywhere: false,
     workModeRemoteRegions: [],
     workModeRemoteCountries: [],
+    countriesOnly: false,
   };
 }
 
@@ -134,6 +135,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
     if (f.workModeRemoteRegions.length) p.set('work_mode_remote_regions', f.workModeRemoteRegions.join(','));
     if (f.workModeRemoteCountries.length) p.set('work_mode_remote_countries', f.workModeRemoteCountries.join(','));
   }
+  if (appliesCountriesOnly(f)) p.set('countries_only', 'true');
   return p;
 }
 
@@ -251,6 +253,10 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
     f.workModeRemoteRegions = list('work_mode_remote_regions');
     f.workModeRemoteCountries = list('work_mode_remote_countries');
   }
+  f.countriesOnly = p.get('countries_only')?.trim().toLowerCase() === 'true';
+  // It modifies the countries facet; without an included country it narrows nothing, and a
+  // saved link carrying it alone must not silently filter the feed.
+  if (!appliesCountriesOnly(f)) f.countriesOnly = false;
   return f;
 }
 
@@ -279,6 +285,18 @@ export function workModeRemoteLabel(f: JobFilters): string {
 
 /** The location facets that share one ORed group on the server (`locationFacets`). */
 const LOCATION_FACET_PARAMS = ['regions', 'countries', 'cities', 'metros'];
+
+/** Whether the country-only modifier changes the answer: it needs an included country to
+ *  modify. Mirrors the server's guard (`hasCountryInclude` in query_filter.go), which is why
+ *  a lone `countries_only` changes nothing on either side. */
+export function appliesCountriesOnly(f: JobFilters): boolean {
+  return f.countriesOnly && (f.facets.countries?.include.length ?? 0) > 0;
+}
+
+/** The modifier's checkbox and chip text. It names what the filter does — keep postings
+ *  bound to one country — rather than the selection, which can be several countries or sit
+ *  beside a region that widens the geography group. */
+export const COUNTRIES_ONLY_LABEL = 'Only jobs located in one country';
 
 export const isPhysicalMode = (m: string) => m === 'hybrid' || m === 'onsite';
 
@@ -344,6 +362,7 @@ export function activeFilterCount(f: JobFilters): number {
   // The modifier counts only when it changes the answer — off or inert, it narrows
   // nothing and a badge for it would lie.
   if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f)) n += 1;
+  if (appliesCountriesOnly(f)) n += 1;
   return n;
 }
 

@@ -152,6 +152,10 @@ export class StagedFilters implements FacetStore {
     };
   }
 
+  setCountriesOnly(on: boolean): void {
+    this.#f = { ...this.#f, countriesOnly: on };
+  }
+
   /** Reset every staged filter. */
   clear(): void {
     this.#f = emptyFilters();
