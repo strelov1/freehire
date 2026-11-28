@@ -139,6 +139,7 @@ func (p *parseState) cleanToken(tok string) (_ string, parenthetical, ok bool) {
 	}
 	tok = stripCityPrefix(tok)
 	tok = stripAreaWords(tok)
+	tok = stripStoreCode(tok)
 	tok = stripPostalPrefix(tok)
 	if p.foreignPostcodes {
 		// The postcode alone, or after its town ("Saint-Denis 97400, La Réunion").
