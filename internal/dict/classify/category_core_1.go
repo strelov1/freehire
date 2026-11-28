@@ -60,11 +60,27 @@ var coreCategoryTable1 = []aliasEntry{
 	{"computer vision engineer", "ml_ai"},
 	{"nlp engineer", "ml_ai"},
 	{"ml engineer", "ml_ai"},
+	{"computational linguist", "ml_ai"},
+	{"ai benchmark engineer", "ml_ai"},
+	{"research scientist, speech & audio", "ml_ai"},
 	// Redundant for tagging, needed by search: the label reads "ML Engineer" and the query
 	// "machine learning engineer" reached nothing.
 	{"machine learning engineer", "ml_ai"},
 	{"ml/ai", "ml_ai"},
 	{"ai/ml", "ml_ai"},
+	// Human annotation is data production. The engineering roles above take precedence.
+	{"ai annotator", "operations"},
+	{"ai video annotator", "operations"},
+	{"ai video qc annotator", "operations"},
+	{"annotation/labelling", "operations"},
+	{"data ai annotator", "operations"},
+	{"data annotator", "operations"},
+	{"data annotation analyst", "operations"},
+	{"data annotation specialist", "operations"},
+	{"data labeler", "operations"},
+	{"data labeller", "operations"},
+	{"data labeling specialist", "operations"},
+	{"data labelling specialist", "operations"},
 	// AI-application terms (RAG/agents/LLM/prompt/applied AI) → ai_engineering.
 	{"generative ai", "ai_engineering"},
 	{"genai", "ai_engineering"},

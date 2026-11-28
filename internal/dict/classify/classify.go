@@ -32,7 +32,7 @@ func Parse(title string) Classification {
 //
 // The Brazilian-Portuguese gender parentheticals are folded first, as IsNonTech folds them: "Operador(a) de Caixa" must not be recognised as non-technical yet filed nowhere.
 func matchCategory(lower string) string {
-	lower = unchefFrench(ptGenderSuffix.Replace(lower))
+	lower = collapseCategorySpaces(unchefFrench(ptGenderSuffix.Replace(lower)))
 	c := matchOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
 	if c == "" {
 		// Nothing in the main table: try the German (german.go), Dutch, Danish, Spanish, Portuguese (unless the Spanish table vetoed the title), French, Polish, Croatian/Serbian (bcs.go), Turkish (turkish.go) and Vietnamese (vietnamese.go) heads in that order.
@@ -167,10 +167,19 @@ var (
 //
 // A blind alias contributes nothing: categoryNone is not a category.
 func Categories(text string) []string {
-	lower := strings.ToLower(text)
+	lower := collapseCategorySpaces(strings.ToLower(text))
 	out := matchAllOrdered(koreanCategoryNoise.Replace(cutBackEndShifts(lower)), categoryTable)
 	out = slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
 	return appendVietnameseCategories(out, lower)
+}
+
+var repeatedCategorySpaces = regexp.MustCompile(` {2,}`)
+
+func collapseCategorySpaces(text string) string {
+	if strings.Contains(text, "  ") {
+		return repeatedCategorySpaces.ReplaceAllString(text, " ")
+	}
+	return text
 }
 
 // matchAllOrdered returns the distinct canonical values of every alias, in priority order, that occurs as a whole word in title. Aliases sharing a canonical ("backend"/"back-end") are deduplicated, first seen wins.

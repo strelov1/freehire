@@ -240,13 +240,15 @@ func compilePhraseMatcher(canonical, alias string) phraseMatcher {
 }
 
 // phraseMatchers compiles phraseAliases once at startup.
-var phraseMatchers = func() []phraseMatcher {
-	out := make([]phraseMatcher, 0, len(phraseAliases))
-	for _, p := range phraseAliases {
+var phraseMatchers = compilePhraseMatchers(phraseAliases)
+
+func compilePhraseMatchers(aliases []phraseAlias) []phraseMatcher {
+	out := make([]phraseMatcher, 0, len(aliases))
+	for _, p := range aliases {
 		out = append(out, compilePhraseMatcher(p.canonical, strings.ToLower(p.alias)))
 	}
 	return out
-}()
+}
 
 // nonEmpty drops empty segments (a leading/trailing separator splits to "").
 func nonEmpty(in []string) []string {
@@ -271,6 +273,12 @@ type options struct {
 	resumeAcronyms  bool
 	acronymCategory string
 	skillList       bool
+	jobTitle        string
+}
+
+// WithJobTitle also checks the title for language-work phrases.
+func WithJobTitle(title string) Option {
+	return func(o *options) { o.jobTitle = title }
 }
 
 // WithResumeAcronyms enables the résumé-scoped acronym tier (resumeAcronyms, e.g.
@@ -353,6 +361,9 @@ func Parse(text string, opts ...Option) []string {
 	}
 
 	norm := normalize(maskIndustrialAPI(text))
+	if o.jobTitle != "" {
+		tagLanguageWorkTitle(o.jobTitle, standalone)
+	}
 	for _, m := range phraseMatchers {
 		phraseText := norm
 		if m.canonical == "reliability-engineering" {

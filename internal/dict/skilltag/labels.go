@@ -29,6 +29,7 @@ import (
 // Everything else is deliberately absent: "data-engineering" → "Data Engineering" needs
 // no curation, and listing it here would only be one more line to keep true.
 var displayNames = map[string]string{
+	"linguistic-qa":   "Linguistic QA",
 	"dotnet-maui":     ".NET MAUI",
 	"sop-development": "SOP Development",
 	"pos-terminals":   "POS Terminals",
