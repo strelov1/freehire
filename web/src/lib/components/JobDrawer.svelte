@@ -217,6 +217,8 @@
   let tab = $state<Tab>(initialTab === 'auto_apply' && !item.job ? 'application' : initialTab);
 
   let applyChatStarted = $state(false);
+  // The chat fills body and footer, keeping its composer on screen.
+  const chatOpen = $derived(tab === 'auto_apply' && applyChatStarted && !emailsError);
   $effect(() => {
     if (tab === 'auto_apply' && emails !== null && !emailsError) applyChatStarted = true;
   });
@@ -403,17 +405,17 @@
     </div>
   </div>
 
-  <!-- Scrolling tab body -->
-  <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+  <!-- Scrolling tab body; the chat scrolls itself (nested, its composer fell off a phone). -->
+  <div class={['min-h-0 flex-1 overscroll-contain', chatOpen ? 'flex flex-col' : 'overflow-y-auto']}>
     <div
       role="tabpanel"
       id="jobdrawer-tabpanel"
       aria-labelledby="jobdrawer-tab-{tab}"
       tabindex="0"
-      class="mx-auto w-full max-w-2xl px-5 py-5 sm:px-6"
+      class={['mx-auto w-full max-w-2xl px-5 sm:px-6', chatOpen ? 'flex min-h-0 flex-1 flex-col pt-3 pb-safe' : 'py-5']}
     >
       {#if applyChatStarted}
-        <div hidden={tab !== 'auto_apply' || !!emailsError}>
+        <div class="flex min-h-0 flex-1 flex-col" hidden={!chatOpen}>
           <JobDrawerAutoApply slug={item.job?.public_slug ?? null} onTurnComplete={() => void loadEmails(true)} />
         </div>
       {/if}
@@ -505,7 +507,7 @@
   <!-- Pinned footer: remove-from-board (destructive card action). A flex sibling of the
        scrolling body, not an overlay, so it never sits over the notes editor. The bottom
        padding leaves room for both the button and the home indicator. -->
-  <div class="shrink-0 border-t border-border">
+  <div class="shrink-0 border-t border-border" hidden={chatOpen}>
     <div
       class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-6"
     >
