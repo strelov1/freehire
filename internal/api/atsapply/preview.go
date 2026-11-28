@@ -32,9 +32,11 @@ func PreviewAnswers(fields []MergedField, answers map[string]string, hasApproved
 	// must share one function.
 	for _, u := range plan.Unmapped {
 		f := byID[u.ID]
+		// A banked answer to a choice is mapped onto an option at submission (ResolveWithDrafting).
+		_, banked := bankedChoice(f, answers)
 		preview.Pending = append(preview.Pending, autoapply.PreviewPending{
 			Label:                 questionText(f),
-			WillDraftAtSubmission: draftable(f),
+			WillDraftAtSubmission: draftable(f) || banked,
 		})
 	}
 	return preview

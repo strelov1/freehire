@@ -8,6 +8,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/candidate/coverletter"
+	"github.com/strelov1/freehire/internal/candidate/experience"
 )
 
 // Drafter drafts a free-text answer for one question, grounded in grounding. ok is false
@@ -67,6 +68,26 @@ func draftable(f MergedField) bool {
 	return !isSensitiveLabel(f.Label) && !isGeographyLabel(f.Label)
 }
 
+// bankedChoice returns the answer the candidate banked for an option field when that answer
+// is what Resolve tried and it named no option verbatim: a person types "about 3 years",
+// the form offers "2 to 4 years". A typed fact that answers the field first is left alone,
+// and an unlabeled or sensitive question never reaches the model even to map the candidate's
+// own words: an unlabeled one cannot be verified non-sensitive, as in draftable.
+func bankedChoice(f MergedField, answers map[string]string) (string, bool) {
+	if len(f.Options) == 0 || f.Label == "" || isSensitiveLabel(f.Label) {
+		return "", false
+	}
+	bankKey, ok := matchBankAnswerKey(f)
+	if !ok {
+		return "", false
+	}
+	value, stated := firstStated(answers, answerKeysFor(f))
+	if !stated || value != strings.TrimSpace(answers[bankKey]) {
+		return "", false
+	}
+	return value, true
+}
+
 // ResolveWithDrafting runs the deterministic Resolve pass, then offers drafter the
 // required, non-sensitive, free-text-or-single-choice fields it left unmapped. A drafted
 // answer is checked against the field's options like a deterministic one (matchOption);
@@ -89,6 +110,23 @@ func ResolveWithDrafting(ctx context.Context, fields []MergedField, answers map[
 	stillUnmapped := make([]autoapply.UnmappedField, 0, len(plan.Unmapped))
 	for _, u := range plan.Unmapped {
 		f, known := byID[u.ID]
+		// The candidate already answered this choice in their own words: map those words onto
+		// an offered option, grounded on that answer alone. Never drafted from the experience
+		// bank instead — that could contradict what they said.
+		if banked, ok := bankedChoice(f, answers); ok {
+			picked, drafted, err := drafter.Draft(ctx, f, GroundingContext{Atoms: []experience.Atom{{
+				Claim: fmt.Sprintf("Asked %q, the candidate answered: %s", questionText(f), banked),
+			}}})
+			if err != nil {
+				return Plan{}, fmt.Errorf("map banked answer for %q: %w", f.ID, err)
+			}
+			if value, matched := matchOption(f, picked); drafted && matched {
+				plan.Fields = append(plan.Fields, ResolvedField{ID: f.ID, Kind: f.Kind, Multi: f.Multi, Value: value})
+			} else {
+				stillUnmapped = append(stillUnmapped, u)
+			}
+			continue
+		}
 		if !known || !draftable(f) {
 			stillUnmapped = append(stillUnmapped, u)
 			continue
