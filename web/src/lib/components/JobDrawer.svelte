@@ -412,7 +412,7 @@
       id="jobdrawer-tabpanel"
       aria-labelledby="jobdrawer-tab-{tab}"
       tabindex="0"
-      class={['mx-auto w-full max-w-2xl px-5 sm:px-6', chatOpen ? 'flex min-h-0 flex-1 flex-col pt-3 pb-[env(safe-area-inset-bottom)]' : 'py-5']}
+      class={['mx-auto w-full max-w-2xl px-5 sm:px-6', chatOpen ? 'flex min-h-0 flex-1 flex-col pt-3 pb-safe' : 'py-5']}
     >
       {#if applyChatStarted}
         <div class="flex min-h-0 flex-1 flex-col" hidden={!chatOpen}>
