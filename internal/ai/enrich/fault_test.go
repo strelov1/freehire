@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // The classifier decides whether a failed entry spends its attempt budget or waits out
@@ -56,6 +58,19 @@ func TestPostingAtFault(t *testing.T) {
 			err:  fmt.Errorf("enrich: llm: generate: %w", errors.New("API returned unexpected status code: 401: Authentication")),
 			want: false,
 			why:  "a credential misconfiguration is ours, and it was fixed",
+		},
+		{
+			name: "content refused by the provider filter",
+			err: fmt.Errorf("enrich: llm: generate: %w: %w", llm.ErrContentRefused,
+				errors.New("API returned unexpected status code: 400: System detected potentially unsafe or sensitive content in input or generation.")),
+			want: true,
+			why:  "the filter judged THIS posting's text; it refused the same posting nine times in a row",
+		},
+		{
+			name: "plain 400 without a refusal",
+			err:  fmt.Errorf("enrich: llm: generate: %w", errors.New("API returned unexpected status code: 400: invalid response_format")),
+			want: false,
+			why:  "a malformed request is our bug, not the posting's; it must not bury postings",
 		},
 		{
 			name: "request timeout",

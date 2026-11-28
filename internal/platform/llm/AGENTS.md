@@ -50,6 +50,10 @@ backfills, and `internal/ai/enrich`, `matchanalysis`, `resumeextract`, `atscheck
   built via `internal/platform/llmschema`) constrains generation, but a gateway that stops honouring
   a schema answers 200 with ordinary JSON — every caller-side sanitiser and validator stays
   exactly where it was.
+- **A provider content refusal is marked `ErrContentRefused`** (llm.go, `markRefusal`). langchaingo
+  reports it only as `unexpected status code: 400: <provider text>`, and a bare 400 is also what a
+  malformed request (our bug) gets, so the mark keys on the filter's own wording, not the status.
+  Callers decide what a refusal means; enrichment counts it as the posting's fault.
 - **Background work never re-credentials.** Only calls made FOR a signed-in user go through
   `As`; enrichment, Telegram, and embeddings keep the service credential. See
   internal/ai/llmkey/AGENTS.md for the credential-resolution side (lazy minting, feature tags,
