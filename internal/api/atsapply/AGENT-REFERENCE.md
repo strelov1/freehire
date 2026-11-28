@@ -190,6 +190,14 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   (every provider `Client.submits` names: `fillProviders`, plus the browser-use
   providers while that executor is wired and enforcing), same as `LLMDrafter` itself. See
   `openspec/changes/archive/2026-11-25-autoapply-reuse-cover-letter`.
+- **A banked answer to a choice is mapped onto an offered option, not matched verbatim.**
+  A person answers "about 3 years" where the form offers "2 to 4 years", so `bankedChoice`
+  (`draft.go`) sends the candidate's own banked words — and nothing from the experience
+  bank — to the `Drafter`, and `matchOption` still accepts only an offered option. Runs for
+  any option field (checkbox groups and geography questions included, since the answer is
+  the candidate's, not inferred), except a sensitive one, which still needs a verbatim
+  option. No fit parks the question; it is never drafted from the experience bank instead.
+  `PreviewAnswers` marks such a question as answered at submission.
 - **A geography/residency question (`geography.go`) parks before drafting too, for a
   different reason than the sensitive gate.** `sensitiveTerms` (`sensitive.go`) parks a
   question on POLICY grounds — compensation, EEO/demographic, work authorization/visa —
